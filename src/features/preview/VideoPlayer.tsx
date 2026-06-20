@@ -1,0 +1,303 @@
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { interpolateSpeed } from '@/lib/curveMath';
+import { useEditorStore } from '@/store/editorStore';
+import type { Segment } from '@/types/editor';
+import { formatTime } from './formatTime';
+
+function getActiveSegment(segments: Segment[], time: number) {
+  return segments.find((s) => time >= s.startTime && time <= s.endTime) ?? null;
+}
+
+function getSegmentSpeedAtTime(segment: Segment, time: number) {
+  const duration = segment.endTime - segment.startTime;
+  if (duration <= 0) return 1;
+  return interpolateSpeed(segment.curve, (time - segment.startTime) / duration);
+}
+
+/** Returns true when any segment has a speed range wider than the threshold. */
+function segmentsHaveSpeedRamp(segments: Segment[], threshold = 0.35): boolean {
+  return segments.some((seg) => {
+    const speeds = seg.curve.points.map((p) => p.speed);
+    return Math.max(...speeds) - Math.min(...speeds) > threshold;
+  });
+}
+
+export function VideoPlayer() {
+  const project         = useEditorStore((s) => s.project);
+  const isPlaying       = useEditorStore((s) => s.isPlaying);
+  const playheadTime    = useEditorStore((s) => s.playheadTime);
+  const isPro           = useEditorStore((s) => s.isPro);
+  const setPlaying      = useEditorStore((s) => s.setPlaying);
+  const setPlayheadTime = useEditorStore((s) => s.setPlayheadTime);
+  const openUpgrade     = useEditorStore((s) => s.setUpgradeModalOpen);
+
+  const videoRef      = useRef<HTMLVideoElement>(null);
+  const rafRef        = useRef<number>(0);
+  const fromVideoRef  = useRef(false);
+  const lastSpeedRef  = useRef(1);
+
+  // ── Playback rate sync ────────────────────────────────────────────────────
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !project) return;
+    const segment = getActiveSegment(project.segments, playheadTime);
+    const speed   = segment ? getSegmentSpeedAtTime(segment, playheadTime) : 1;
+    const clamped = Math.max(0.0625, Math.min(16, speed));
+    if (clamped !== lastSpeedRef.current) {
+      lastSpeedRef.current = clamped;
+      video.playbackRate = clamped;
+    }
+  }, [project, playheadTime]);
+
+  // ── Play/pause sync ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (isPlaying) video.play().catch(() => setPlaying(false));
+    else video.pause();
+  }, [isPlaying, setPlaying]);
+
+  // ── Mirror video.currentTime → store ─────────────────────────────────────
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onTimeUpdate = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        fromVideoRef.current = true;
+        setPlayheadTime(video.currentTime);
+      });
+    };
+    const onEnded = () => setPlaying(false);
+    video.addEventListener('timeupdate', onTimeUpdate);
+    video.addEventListener('ended', onEnded);
+    return () => {
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('ended', onEnded);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [setPlayheadTime, setPlaying]);
+
+  // ── Seek on external playhead changes ────────────────────────────────────
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (fromVideoRef.current) { fromVideoRef.current = false; return; }
+    video.currentTime = playheadTime;
+  }, [playheadTime]);
+
+  const togglePlay = useCallback(() => setPlaying(!isPlaying), [isPlaying, setPlaying]);
+
+  // ── Motion blur hint ──────────────────────────────────────────────────────
+  const hasSpeedRamp = useMemo(
+    () => !isPro && !!project && segmentsHaveSpeedRamp(project.segments),
+    [isPro, project],
+  );
+
+  const activeSegment = project
+    ? getActiveSegment(project.segments, playheadTime)
+    : null;
+  const rawSpeed    = activeSegment ? getSegmentSpeedAtTime(activeSegment, playheadTime) : 1;
+  const clamped     = Math.max(0.0625, Math.min(16, rawSpeed));
+  const speedWarn   = clamped !== rawSpeed;
+  const blurPx      = hasSpeedRamp ? Math.min(4, Math.abs(rawSpeed - 1) * 1.8) : 0;
+
+  if (!project) return null;
+
+  const duration = project.file.duration;
+  const progress = Number.isFinite(duration) && duration > 0 ? playheadTime / duration : 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', backgroundColor: '#000' }}>
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <video
+          ref={videoRef}
+          src={project.file.url}
+          style={{
+            maxWidth: '100%',
+            maxHeight: '100%',
+            display: 'block',
+            // CSS blur simulates the motion blur the user gets on Pro export
+            filter: blurPx > 0.15 ? `blur(${blurPx.toFixed(1)}px)` : undefined,
+            transition: 'filter 0.08s linear',
+          }}
+          onClick={togglePlay}
+        />
+
+        {/* Play button overlay */}
+        {!isPlaying && (
+          <button
+            onClick={togglePlay}
+            aria-label="Play"
+            style={{
+              position: 'absolute', inset: 0, margin: 'auto',
+              width: 58, height: 58, borderRadius: '50%',
+              backgroundColor: 'rgba(0,0,0,0.58)',
+              border: '2px solid rgba(255,255,255,0.2)',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+          </button>
+        )}
+
+        {/* Speed + warning badges — top-left */}
+        <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Badge>{clamped.toFixed(2)}x</Badge>
+          {speedWarn && <Badge tone="warning">preview clamped</Badge>}
+        </div>
+
+        {/* Time badge — bottom-right */}
+        <div style={{ position: 'absolute', right: 12, bottom: 12 }}>
+          <Badge>{formatTime(playheadTime)} / {formatTime(duration)}</Badge>
+        </div>
+
+        {/* Pro blur hint — bottom strip, shown for free users with a speed ramp */}
+        {hasSpeedRamp && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              padding: '6px 14px',
+              background: 'linear-gradient(0deg, rgba(0,0,0,0.72) 0%, transparent 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
+              Preview only — export with Pro for real motion blur
+            </span>
+            <button
+              type="button"
+              onClick={() => openUpgrade(true)}
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#A898FF',
+                background: 'rgba(139,111,255,0.18)',
+                border: '1px solid rgba(139,111,255,0.35)',
+                borderRadius: 5,
+                padding: '2px 8px',
+                cursor: 'pointer',
+                letterSpacing: '0.01em',
+              }}
+            >
+              Upgrade
+            </button>
+          </div>
+        )}
+      </div>
+
+      <TransportBar
+        isPlaying={isPlaying}
+        playheadTime={playheadTime}
+        duration={duration}
+        progress={progress}
+        onTogglePlay={togglePlay}
+        onSeek={(time) => setPlayheadTime(time)}
+      />
+    </div>
+  );
+}
+
+// ─── TransportBar ─────────────────────────────────────────────────────────────
+
+interface TransportBarProps {
+  isPlaying: boolean;
+  playheadTime: number;
+  duration: number;
+  progress: number;
+  onTogglePlay: () => void;
+  onSeek: (time: number) => void;
+}
+
+function TransportBar({ isPlaying, playheadTime, duration, progress, onTogglePlay, onSeek }: TransportBarProps) {
+  const splitSegment = useEditorStore((s) => s.splitSegment);
+  const project      = useEditorStore((s) => s.project);
+
+  const canSplit = project?.segments.some(
+    (s) => playheadTime > s.startTime + 0.05 && playheadTime < s.endTime - 0.05,
+  ) ?? false;
+
+  const handleScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const ratio = Number(e.target.value);
+    if (Number.isFinite(duration) && duration > 0) onSeek(ratio * duration);
+  };
+
+  const handleSplit = () => {
+    if (!project) return;
+    const seg = project.segments.find(
+      (s) => playheadTime > s.startTime + 0.05 && playheadTime < s.endTime - 0.05,
+    );
+    if (seg) splitSegment(seg.id, playheadTime);
+  };
+
+  return (
+    <div style={{ height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', backgroundColor: '#0d0d0d', borderTop: '1px solid #222' }}>
+      <button
+        onClick={onTogglePlay}
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+        style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: 'none', border: '1px solid #333', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc' }}
+      >
+        {isPlaying ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <rect x="5" y="3" width="4" height="18" /><rect x="15" y="3" width="4" height="18" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+        )}
+      </button>
+
+      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: '#aaa', flexShrink: 0, minWidth: 90 }}>
+        {formatTime(playheadTime)} / {formatTime(duration)}
+      </span>
+
+      <div style={{ flex: 1, position: 'relative', height: 20, display: 'flex', alignItems: 'center' }}>
+        <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '100%', height: 3, backgroundColor: '#2a2a2a', borderRadius: 2 }} />
+        <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: `${progress * 100}%`, height: 3, backgroundColor: '#7F77DD', borderRadius: 2, pointerEvents: 'none' }} />
+        <input
+          type="range" min={0} max={1} step={0.0001}
+          value={Number.isFinite(progress) ? progress : 0}
+          onChange={handleScrub}
+          style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer', height: '100%' }}
+        />
+      </div>
+
+      <button
+        onClick={handleSplit}
+        disabled={!canSplit}
+        title="Split segment at playhead (S)"
+        style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 5, background: canSplit ? 'rgba(127,119,221,0.12)' : 'none', border: `1px solid ${canSplit ? 'rgba(127,119,221,0.4)' : '#2a2a2a'}`, color: canSplit ? '#7F77DD' : '#444', fontSize: 12, fontWeight: 600, cursor: canSplit ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 5 }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <line x1="12" y1="2" x2="12" y2="22" /><path d="M2 12h4M18 12h4" />
+        </svg>
+        Split
+      </button>
+    </div>
+  );
+}
+
+// ─── Badge ────────────────────────────────────────────────────────────────────
+
+function Badge({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'warning' }) {
+  return (
+    <div style={{
+      backgroundColor: tone === 'warning' ? 'rgba(249,115,22,0.88)' : 'rgba(127,119,221,0.88)',
+      color: '#fff', fontSize: 11, fontWeight: 700,
+      fontFamily: 'var(--font-mono)', padding: '3px 8px', borderRadius: 999,
+    }}>
+      {children}
+    </div>
+  );
+}

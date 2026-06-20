@@ -1,0 +1,235 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+@theme {
+  --color-primary: #8B6FFF;
+  --color-primary-hover: #7A5EEF;
+  --color-primary-muted: rgba(139, 111, 255, 0.12);
+
+  --color-accent: #1CE4B8;
+  --color-accent-muted: rgba(28, 228, 184, 0.1);
+
+  --color-editor-bg: #07080F;
+  --color-editor-surface: #0E0F1E;
+  --color-editor-panel: #13142A;
+  --color-editor-border: #1E2040;
+  --color-editor-text: #EEEEF8;
+  --color-editor-text-muted: #7878A0;
+}
+
+:root {
+  /* Brand */
+  --color-primary: #8B6FFF;
+  --color-primary-hover: #7A5EEF;
+  --color-primary-active: #6A4EDF;
+  --color-primary-muted: rgba(139, 111, 255, 0.12);
+  --color-primary-border: rgba(139, 111, 255, 0.28);
+  --color-primary-glow: rgba(139, 111, 255, 0.18);
+
+  /* Teal accent — used for curve, success states */
+  --color-accent: #1CE4B8;
+  --color-accent-muted: rgba(28, 228, 184, 0.1);
+  --color-accent-border: rgba(28, 228, 184, 0.25);
+
+  /* Editor backgrounds — deep-space navy */
+  --color-bg: #07080F;
+  --color-surface: #0E0F1E;
+  --color-panel: #13142A;
+  --color-overlay: #1A1B36;
+
+  /* Borders */
+  --color-border: #1E2040;
+  --color-border-subtle: #151628;
+  --color-border-strong: #2A2C52;
+
+  /* Text */
+  --color-text: #EEEEF8;
+  --color-text-muted: #7878A0;
+  --color-text-subtle: #44446A;
+  --color-text-disabled: #24244A;
+
+  /* Semantic */
+  --color-success: #1CE4B8;
+  --color-warning: #F59E0B;
+  --color-error: #FF6B78;
+  --color-info: #60A5FA;
+
+  /* Speed colors */
+  --color-speed-slow: #1CE4B8;
+  --color-speed-normal: #8B6FFF;
+  --color-speed-fast: #F59E0B;
+  --color-speed-vfast: #FF6B78;
+
+  /* Timeline */
+  --color-timeline-bg: #04050B;
+  --color-timeline-track: #0F1022;
+  --color-timeline-playhead: #8B6FFF;
+  --color-timeline-selection: rgba(139, 111, 255, 0.14);
+
+  /* Curve editor */
+  --color-curve-line: #1CE4B8;
+  --color-curve-point: #FFFFFF;
+  --color-curve-handle: rgba(28, 228, 184, 0.5);
+  --color-curve-bg: #04050B;
+  --color-curve-grid: rgba(255, 255, 255, 0.025);
+
+  /* Sizing */
+  --timeline-height: 120px;
+  --toolbar-height: 56px;
+  --panel-width: 256px;
+
+  /* Typography */
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-subtle);
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-primary-muted);
+  color: var(--color-text);
+}
+
+/* Range input styling */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-border-strong);
+  outline: none;
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: 2px solid var(--color-bg);
+  box-shadow: 0 0 0 1px var(--color-primary);
+  transition: box-shadow 0.15s;
+}
+input[type='range']::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 3px var(--color-primary-muted);
+}
+
+/* CSS Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+@keyframes playhead-move {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(480px); }
+}
+
+@keyframes draw-path {
+  from { stroke-dashoffset: 800; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+@keyframes beatPulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.75); }
+  50%       { opacity: 1;    transform: scale(1.25); }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-fade-up-delay-1 {
+  animation: fadeUp 0.6s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-fade-up-delay-2 {
+  animation: fadeUp 0.6s 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-fade-up-delay-3 {
+  animation: fadeUp 0.6s 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-up-delay-1,
+  .animate-fade-up-delay-2,
+  .animate-fade-up-delay-3,
+  .animate-fade-in {
+    animation: none;
+  }
+}

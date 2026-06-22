@@ -38,6 +38,12 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
+  // Build all Web Workers as classic IIFE bundles (not ES modules).
+  // Vite's default ES module workers fail in dev because the HMR client injected
+  // into the worker uses importScripts(), which is unavailable in module workers.
+  worker: {
+    format: 'iife',
+  },
   optimizeDeps: {
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util', '@ffmpeg/core'],
   },

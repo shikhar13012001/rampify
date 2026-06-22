@@ -105,27 +105,31 @@ export function ExportModal({ onClose }: ExportModalProps) {
 
     if (useOFPipeline) {
       // ── Optical flow export path ──────────────────────────────────────────
-      bridge.processWithOpticalFlow(project, ofSettings, {
-        onProgress: (pct, phase) => {
-          setProgress(pct);
-          setOfPhase(phase);
-          setSubStatus(OF_PHASE_LABEL[phase]);
-          setExportProgress(pct);
-        },
-        onDone: handleDone,
-        onError: handleError,
-      });
+      FFmpegBridge.guardExport({ onError: handleError }, () =>
+        bridge.processWithOpticalFlow(project, ofSettings, {
+          onProgress: (pct, phase) => {
+            setProgress(pct);
+            setOfPhase(phase);
+            setSubStatus(OF_PHASE_LABEL[phase]);
+            setExportProgress(pct);
+          },
+          onDone: handleDone,
+          onError: handleError,
+        }),
+      );
     } else if (blurSettings.enabled) {
       // ── Blur export path ──────────────────────────────────────────────────
-      bridge.processWithBlur(project, blurSettings, {
-        onProgress: (pct, sub) => {
-          setProgress(pct);
-          setSubStatus(sub);
-          setExportProgress(pct);
-        },
-        onDone: handleDone,
-        onError: handleError,
-      });
+      FFmpegBridge.guardExport({ onError: handleError }, () =>
+        bridge.processWithBlur(project, blurSettings, {
+          onProgress: (pct, sub) => {
+            setProgress(pct);
+            setSubStatus(sub);
+            setExportProgress(pct);
+          },
+          onDone: handleDone,
+          onError: handleError,
+        }),
+      );
     } else {
       // ── Standard export path ──────────────────────────────────────────────
       bridge.startProcessing(project, {

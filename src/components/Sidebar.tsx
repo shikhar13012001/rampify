@@ -533,8 +533,9 @@ function MotionBlurControl({
                 borderRadius: 4,
                 padding: '1px 5px',
               }}
+              title={`Blur applied at ${transitionCount} speed ${transitionCount === 1 ? 'transition' : 'transitions'} in the curve`}
             >
-              {transitionCount} pt{transitionCount !== 1 ? 's' : ''}
+              {transitionCount} {transitionCount === 1 ? 'transition' : 'transitions'}
             </span>
           )}
           {enabled && transitionCount === 0 && (
@@ -548,8 +549,9 @@ function MotionBlurControl({
                 borderRadius: 4,
                 padding: '1px 5px',
               }}
+              title="Add speed changes to your curve (delta > 0.4×) for blur to apply"
             >
-              No transitions
+              No speed changes
             </span>
           )}
         </div>
@@ -582,6 +584,12 @@ function MotionBlurControl({
           />
         </button>
       </label>
+
+      {enabled && (
+        <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-text-subtle)', padding: '0 2px', lineHeight: 1.4 }}>
+          Applied at export time. Intensity controls blur amount at each speed change.
+        </p>
+      )}
 
       {/* Intensity segmented control — only visible when enabled */}
       {enabled && (

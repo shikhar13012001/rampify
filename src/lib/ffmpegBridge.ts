@@ -4,6 +4,8 @@ import { getBlurIntensity, getTransitionFrameCount } from './blurMath';
 import { processSlowSegment } from './slowMotionPipeline';
 import type { BlurSettings, EditorProject, OpticalFlowQuality, OpticalFlowSettings, Segment } from '@/types/editor';
 import type { BlurFrame, FrameFile } from '@/workers/ffmpegWorker';
+import FfmpegWorkerCtor from '../workers/ffmpegWorker.ts?worker';
+import MotionBlurWorkerCtor from '../workers/motionBlurWorker.ts?worker';
 
 export type { BlurSettings, OpticalFlowQuality, OpticalFlowSettings };
 export { getSpeedAtTime, interpolateSpeed };
@@ -455,11 +457,7 @@ export class FFmpegBridge {
         });
         video.pause();
 
-        // Lazy-create the motionBlurWorker for the duration of this export.
-        this.motionBlurWorkerInstance = new Worker(
-          new URL('../workers/motionBlurWorker.ts', import.meta.url),
-          { type: 'module' },
-        );
+        this.motionBlurWorkerInstance = new MotionBlurWorkerCtor();
 
         for (let ti = 0; ti < transitions.length; ti++) {
           const tp = transitions[ti];
@@ -568,6 +566,21 @@ export class FFmpegBridge {
     callbacks.onDone(blob);
   }
 
+  // ── Shared error wrapper ─────────────────────────────────────────────────────
+
+  /**
+   * Wraps an async export pipeline so any thrown error is routed to
+   * callbacks.onError instead of becoming an unhandled promise rejection.
+   */
+  static guardExport<T extends { onError: (m: string) => void }>(
+    cb: T,
+    fn: () => Promise<void>,
+  ): void {
+    fn().catch((err: unknown) => {
+      cb.onError(err instanceof Error ? err.message : String(err));
+    });
+  }
+
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   private handleMessage(data: Record<string, unknown>) {
@@ -598,7 +611,5 @@ export class FFmpegBridge {
 }
 
 function createWorker() {
-  return new Worker(new URL('../workers/ffmpegWorker.ts', import.meta.url), {
-    type: 'module',
-  });
+  return new FfmpegWorkerCtor();
 }

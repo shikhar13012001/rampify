@@ -13,13 +13,29 @@ export default defineConfig({
   server: {
     headers: {
       'Cross-Origin-Opener-Policy':   'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
+    // Proxy Firebase auth handler to our own origin (Option 3 from Firebase redirect
+    // best practices). Needed because Chrome 115+ blocks cross-origin iframe storage
+    // access, which Firebase's getRedirectResult relies on. With the proxy, authDomain
+    // matches localhost:3000, so credentials stay same-origin.
+    proxy: {
+      '/__/auth': {
+        target: 'https://rampify-720b4.firebaseapp.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/__/firebase': {
+        target: 'https://rampify-720b4.firebaseapp.com',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
   preview: {
     headers: {
       'Cross-Origin-Opener-Policy':   'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
   optimizeDeps: {

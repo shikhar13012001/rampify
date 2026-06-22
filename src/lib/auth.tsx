@@ -1,7 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useState, useRef, useEffect } from 'react';
 import {
   GoogleAuthProvider,
-  signInWithRedirect,
+  signInWithCredential,
   signOut as fbSignOut,
   onAuthStateChanged,
   type User,
@@ -10,17 +11,66 @@ import { auth } from './firebase';
 
 export type { User };
 
+// ─── Google One Tap (uses FedCM — no popup, no redirect, no COOP issues) ──────
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: Record<string, unknown>) => void;
+          prompt: () => void;
+          cancel: () => void;
+        };
+      };
+    };
+  }
+}
+
+let oneTapReady = false;
+
+function initOneTap(onSuccess: (user: User) => void) {
+  if (oneTapReady) return;
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+  if (!clientId) return;
+
+  window.google?.accounts.id.initialize({
+    client_id: clientId,
+    callback: async (response: { credential: string }) => {
+      const credential = GoogleAuthProvider.credential(response.credential);
+      const result = await signInWithCredential(auth, credential);
+      onSuccess(result.user);
+    },
+    auto_select: false,
+    cancel_on_tap_outside: true,
+    use_fedcm_for_prompt: true,
+  });
+  oneTapReady = true;
+}
+
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
 export async function signIn(): Promise<void> {
-  await signInWithRedirect(auth, new GoogleAuthProvider());
+  return new Promise((resolve, reject) => {
+    initOneTap((user) => {
+      resolve();
+      // onAuthStateChanged will pick up the user
+      void user;
+    });
+    if (!window.google?.accounts.id) {
+      reject(new Error('Google Identity Services not loaded'));
+      return;
+    }
+    window.google.accounts.id.prompt();
+    resolve();
+  });
 }
 
 export async function signOut(): Promise<void> {
+  window.google?.accounts.id.cancel();
   await fbSignOut(auth);
 }
 
-/** Subscribe to auth state changes. Returns the unsubscribe function. */
 export function onAuthChange(callback: (user: User | null) => void): () => void {
   return onAuthStateChanged(auth, callback);
 }
@@ -35,7 +85,6 @@ export function UserButton({ user }: UserButtonProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
@@ -168,50 +217,62 @@ export function UserButton({ user }: UserButtonProps) {
   );
 }
 
-// ─── Google sign-in button ────────────────────────────────────────────────────
+// ─── Sign-in button (triggers Google One Tap overlay) ────────────────────────
 
 export function SignInButton() {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleClick = async () => {
+  const handleClick = () => {
+    setError('');
     setLoading(true);
-    try {
-      await signIn();
-    } finally {
+
+    initOneTap(() => setLoading(false));
+
+    if (!window.google?.accounts.id) {
+      setError('Google not loaded — try refreshing');
       setLoading(false);
+      return;
     }
+
+    window.google.accounts.id.prompt();
+    // Loading clears when onAuthChange fires
+    setTimeout(() => setLoading(false), 3000);
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={loading}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 7,
-        padding: '6px 14px',
-        borderRadius: 999,
-        border: '1px solid rgba(255,255,255,0.1)',
-        background: 'rgba(255,255,255,0.04)',
-        color: '#C0C0D8',
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: loading ? 'not-allowed' : 'pointer',
-        opacity: loading ? 0.6 : 1,
-        transition: 'background 0.12s',
-      }}
-      onMouseEnter={e => {
-        if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)';
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
-      }}
-    >
-      <GoogleIcon />
-      {loading ? 'Signing in…' : 'Sign in with Google'}
-    </button>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 7,
+          padding: '6px 14px',
+          borderRadius: 999,
+          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'rgba(255,255,255,0.04)',
+          color: '#C0C0D8',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: loading ? 'not-allowed' : 'pointer',
+          opacity: loading ? 0.6 : 1,
+          transition: 'background 0.12s',
+        }}
+        onMouseEnter={e => {
+          if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
+        }}
+      >
+        <GoogleIcon />
+        {loading ? 'Signing in…' : 'Sign in with Google'}
+      </button>
+      {error && <span style={{ fontSize: 11, color: '#f87171' }}>{error}</span>}
+    </div>
   );
 }
 

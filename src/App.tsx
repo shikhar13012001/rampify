@@ -25,8 +25,7 @@ function App() {
 
   // Subscribe to Firebase auth state; fetch subscription on sign-in.
   useEffect(() => {
-    return onAuthChange(async (firebaseUser) => {
-      console.log('[Rampify] auth state changed:', firebaseUser?.email ?? 'signed out');
+    async function applyUser(firebaseUser: import('firebase/auth').User | null) {
       if (firebaseUser) {
         const user: AuthUser = {
           uid:         firebaseUser.uid,
@@ -36,8 +35,6 @@ function App() {
           getIdToken:  () => firebaseUser.getIdToken(),
         };
         setUser(user);
-
-        // Fetch subscription status.
         try {
           const token = await firebaseUser.getIdToken();
           const res   = await fetch('/api/check-subscription', {
@@ -59,7 +56,13 @@ function App() {
         setUser(null);
         setIsPro(false);
       }
+    }
+
+    const unsub = onAuthChange((firebaseUser) => {
+      console.log('[Auth] onAuthChange:', firebaseUser?.email ?? 'null');
+      void applyUser(firebaseUser);
     });
+    return () => unsub();
   }, [setUser, setIsPro, setExportCounts]);
 
   const upgradeModalOpen     = useEditorStore(s => s.upgradeModalOpen);

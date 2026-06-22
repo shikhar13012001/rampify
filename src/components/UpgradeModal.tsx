@@ -51,9 +51,15 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: user?.uid, billingPeriod: billing }),
       });
-      const data = await res.json() as { url?: string; error?: string };
+      const isJson = res.headers.get('content-type')?.includes('application/json');
+      const data = isJson ? await res.json() as { url?: string; error?: string } : {};
 
-      if (!res.ok || !data.url) throw new Error(data.error ?? 'Failed to start checkout');
+      if (!res.ok || !(data as { url?: string }).url) {
+        throw new Error(
+          (data as { error?: string }).error ??
+          (res.status === 404 ? 'API not running — use `vercel dev` for checkout' : `Server error ${res.status}`)
+        );
+      }
       window.location.href = data.url;
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : 'Something went wrong');
@@ -163,6 +169,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
+              background: 'rgba(139,111,255,0.04)',
             }}
           >
             {/* Billing toggle */}
@@ -185,8 +192,8 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                     onClick={() => setBilling(cycle)}
                     style={{
                       flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
-                      background: active ? 'rgba(139,111,255,0.18)' : 'transparent',
-                      color: active ? '#C8BAFF' : 'var(--color-text-subtle)',
+                      background: active ? 'rgba(139,111,255,0.22)' : 'transparent',
+                      color: active ? '#D0C4FF' : '#9898B8',
                       fontSize: 12, fontWeight: active ? 700 : 500,
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                       transition: 'background 0.15s, color 0.15s',
@@ -263,7 +270,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
               )}
             </button>
 
-            <p style={{ margin: '12px 0 0', fontSize: 11, color: 'var(--color-text-disabled)', textAlign: 'center', lineHeight: 1.5 }}>
+            <p style={{ margin: '12px 0 0', fontSize: 11, color: '#6868A0', textAlign: 'center', lineHeight: 1.5 }}>
               Cancel anytime. No questions asked.
             </p>
 

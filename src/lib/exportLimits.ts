@@ -4,7 +4,8 @@ import { useEditorStore } from '@/store/editorStore';
 
 const STORAGE_KEY  = 'rampify_guest_export_record';
 const GUEST_LIMIT  = 1;
-export const EXPORT_LIMIT = GUEST_LIMIT;
+export const EXPORT_LIMIT        = GUEST_LIMIT;
+export const SIGNED_IN_FREE_LIMIT = 3;
 
 export interface ExportAllowance {
   allowed: boolean;
@@ -47,8 +48,7 @@ export function getRemainingExports(): number {
   const { user, isPro, exportsRemaining } = useEditorStore.getState();
   if (isPro) return 999;
   if (user) return exportsRemaining;
-  const record = loadGuestRecord();
-  return Math.max(0, GUEST_LIMIT - record.count);
+  return 0; // guests must sign in
 }
 
 /**
@@ -86,13 +86,11 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
     };
   }
 
-  // Guest
-  const record = loadGuestRecord();
-  const remaining = Math.max(0, GUEST_LIMIT - record.count);
+  // Guest — require sign-in; session storage is trivially bypassable
   return {
-    allowed: remaining > 0,
-    remaining,
-    reason: remaining <= 0 ? 'Guest export limit reached for this session.' : undefined,
+    allowed: false,
+    remaining: 0,
+    reason: 'Sign in to export. Free accounts get 3 exports per month.',
   };
 }
 
@@ -121,7 +119,5 @@ export async function recordExport(): Promise<void> {
     return;
   }
 
-  // Guest
-  const record = loadGuestRecord();
-  saveGuestRecord({ count: record.count + 1 });
+  // Guest — no-op (exports are blocked before reaching here)
 }

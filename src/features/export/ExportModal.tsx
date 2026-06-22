@@ -5,6 +5,7 @@ import type { OFPhase } from '@/lib/ffmpegBridge';
 import {
   checkExportAllowed,
   EXPORT_LIMIT,
+  SIGNED_IN_FREE_LIMIT,
   getRemainingExports,
   recordExport,
 } from '@/lib/exportLimits';
@@ -25,7 +26,9 @@ type Phase = 'idle' | 'checking' | 'processing' | 'done' | 'error';
 const BLUR_EXTRA_ESTIMATE_S = 20;
 
 export function ExportModal({ onClose }: ExportModalProps) {
-  const project = useEditorStore((state) => state.project);
+  const project  = useEditorStore((state) => state.project);
+  const user     = useEditorStore((state) => state.user);
+  const isPro    = useEditorStore((state) => state.isPro);
   const setExportProgress = useEditorStore((state) => state.setExportProgress);
   const setExporting = useEditorStore((state) => state.setExporting);
   const blurSettings = useEditorStore((state) => state.blurSettings);
@@ -270,7 +273,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
             </button>
           </div>
 
-          {/* Export quota */}
+          {/* Export quota — hidden for Pro users */}
+          {!isPro && (
           <div
             style={{
               borderRadius: 10,
@@ -284,10 +288,10 @@ export function ExportModal({ onClose }: ExportModalProps) {
             }}
           >
             <span style={{ fontSize: 12, color: remaining > 0 ? '#7878A0' : 'rgba(255, 107, 120, 0.8)' }}>
-              Guest exports
+              {user ? 'Free exports this month' : 'Guest exports (this session)'}
             </span>
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              {Array.from({ length: EXPORT_LIMIT }).map((_, i) => (
+              {Array.from({ length: user ? SIGNED_IN_FREE_LIMIT : EXPORT_LIMIT }).map((_, i) => (
                 <div
                   key={i}
                   style={{
@@ -308,10 +312,11 @@ export function ExportModal({ onClose }: ExportModalProps) {
                   color: remaining > 0 ? '#1CE4B8' : '#FF6B78',
                 }}
               >
-                {remaining}/{EXPORT_LIMIT}
+                {remaining}/{user ? SIGNED_IN_FREE_LIMIT : EXPORT_LIMIT}
               </span>
             </div>
           </div>
+          )}
 
           {/* Pre-export time estimate (shown only in idle state) */}
           {phase === 'idle' && useOFPipeline && ofEstimateSecs !== null && (

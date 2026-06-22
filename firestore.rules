@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── User profile ──────────────────────────────────────────────────────
+    // users/{uid} is written by the Stripe webhook via the Firebase Admin SDK
+    // (Admin SDK bypasses these rules). Clients may read only their own doc.
+    match /users/{uid} {
+      allow read:  if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+
+      // ─── Export logs ───────────────────────────────────────────────────
+      // Free users get a monthly export cap. The count is derived from the
+      // number of docs in this subcollection, so clients must NOT be able to
+      // delete logs (which would reset the counter) or write arbitrary fields
+      // (which could be used to inflate or corrupt the count). Only the owner
+      // can create a log with exactly the expected schema, and only read their
+      // own logs.
+      match /export_logs/{logId} {
+        allow read:   if request.auth != null && request.auth.uid == uid;
+        allow create: if request.auth != null
+                        && request.auth.uid == uid
+                        && request.resource.data.exportedAt is timestamp
+                        && request.resource.data.keys().hasOnly(['exportedAt']);
+        allow update, delete: if false;
+      }
+    }
+
+    // Default deny for anything not matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

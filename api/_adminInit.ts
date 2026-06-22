@@ -5,14 +5,34 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import Stripe from 'stripe';
 
 export function initAdmin() {
   if (getApps().length === 0) {
-    const serviceAccount = JSON.parse(
-      process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY ?? '{}',
-    );
-    initializeApp({ credential: cert(serviceAccount) });
+    let serviceAccount: object;
+    const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY;
+
+    if (raw && raw.trim() !== '{}' && raw.trim() !== '') {
+      try {
+        serviceAccount = JSON.parse(raw) as object;
+      } catch {
+        throw new Error('FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY is not valid JSON');
+      }
+    } else {
+      // Fallback for local dev: read from gitignored api/keys/keys.json
+      try {
+        const keyPath = join(process.cwd(), 'api', 'keys', 'keys.json');
+        serviceAccount = JSON.parse(readFileSync(keyPath, 'utf-8')) as object;
+      } catch {
+        throw new Error(
+          'Firebase Admin: set FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY or create api/keys/keys.json',
+        );
+      }
+    }
+
+    initializeApp({ credential: cert(serviceAccount as Parameters<typeof cert>[0]) });
   }
 }
 

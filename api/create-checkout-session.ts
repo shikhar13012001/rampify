@@ -1,6 +1,43 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initAdmin, stripeClient, verifyIdToken } from './_adminInit';
 
+/**
+ * Resolves the safe origin to use for Stripe redirect URLs.
+ *
+ * Security: never trust the client-supplied `Origin` header directly — an
+ * attacker can initiate a checkout from a server-side call or a compromised
+ * host and redirect the user to an arbitrary URL after payment. We only
+ * accept origins that match an explicit env-configured allowlist, plus the
+ * Vercel-generated preview URL and localhost dev origins.
+ *
+ * Configure production origins via the `ALLOWED_ORIGINS` env var
+ * (comma-separated), e.g. `ALLOWED_ORIGINS=https://rampify.app,https://www.rampify.app`.
+ */
+function resolveAllowedOrigin(reqOrigin: string | undefined): string | null {
+  const allowed = new Set<string>();
+
+  const envList = (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const o of envList) allowed.add(o);
+
+  // Vercel preview deployments get an auto-provided VERCEL_URL.
+  if (process.env.VERCEL_URL) {
+    allowed.add(`https://${process.env.VERCEL_URL}`);
+  }
+
+  // Local dev (Vite default + `vercel dev`).
+  allowed.add('http://localhost:5173');
+  allowed.add('http://localhost:3000');
+
+  if (reqOrigin && allowed.has(reqOrigin)) return reqOrigin;
+
+  // Fall back to the first configured production origin so redirects
+  // always land on a trusted host even if the client omitted Origin.
+  return envList[0] ?? null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -15,7 +52,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { billingPeriod = 'monthly' } = (req.body ?? {}) as { billingPeriod?: string };
+  // Validate billingPeriod against a strict whitelist.
+  const requested = (req.body ?? {}) as { billingPeriod?: unknown };
+  const billingPeriod: 'monthly' | 'annual' =
+    requested.billingPeriod === 'annual' ? 'annual' : 'monthly';
 
   const priceId =
     billingPeriod === 'annual'
@@ -27,7 +67,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Stripe price ID not configured for billing period: ' + billingPeriod });
   }
 
-  const origin = req.headers.origin ?? 'http://localhost:5173';
+  const origin = resolveAllowedOrigin(
+    typeof req.headers.origin === 'string' ? req.headers.origin : undefined,
+  );
+  if (!origin) {
+    return res.status(400).json({ error: 'Unable to determine a trusted redirect origin. Set ALLOWED_ORIGINS.' });
+  }
 
   try {
     const stripe  = stripeClient();
@@ -42,7 +87,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ url: session.url });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Checkout session creation failed';
-    return res.status(500).json({ error: message });
+    // Log full error server-side; return a generic message to the client.
+    console.error('[create-checkout-session]', err);
+    return res.status(500).json({ error: 'Checkout session creation failed' });
   }
 }

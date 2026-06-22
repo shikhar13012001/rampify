@@ -172,7 +172,11 @@ export function ExportModal({ onClose }: ExportModalProps) {
     if (phase !== 'done' || !downloadUrl || !project) return;
     const anchor = document.createElement('a');
     anchor.href = downloadUrl;
-    anchor.download = project.file.name.replace(/\.[^.]+$/, '') + '_rampified.mp4';
+    // Sanitize the user-supplied filename: strip extension, then remove any
+    // path separators / control chars that could confuse the download dialog.
+    const baseName = project.file.name.replace(/\.[^.]+$/, '');
+    const safeName = baseName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
+    anchor.download = safeName + '_rampified.mp4';
     anchor.click();
   }, [downloadUrl, phase, project]);
 
@@ -526,7 +530,9 @@ export function ExportModal({ onClose }: ExportModalProps) {
                     if (!downloadUrl || !project) return;
                     const anchor = document.createElement('a');
                     anchor.href = downloadUrl;
-                    anchor.download = project.file.name.replace(/\.[^.]+$/, '') + '_rampified.mp4';
+                    const baseName = project.file.name.replace(/\.[^.]+$/, '');
+                    const safeName = baseName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
+                    anchor.download = safeName + '_rampified.mp4';
                     anchor.click();
                   }}
                   style={primaryBtn(false)}

@@ -41,8 +41,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Webhook signature verification failed';
-    return res.status(400).json({ error: msg });
+    // Log the detailed reason server-side; return a generic 400 to the client
+    // so we don't leak signature/timing details to a potential attacker.
+    console.error('[stripe-webhook] signature verification failed:', err);
+    return res.status(400).json({ error: 'Webhook signature verification failed' });
   }
 
   const db = adminDb();
@@ -90,8 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Webhook handler error';
-    return res.status(500).json({ error: msg });
+    console.error('[stripe-webhook] handler error:', err);
+    return res.status(500).json({ error: 'Webhook handler failed' });
   }
 
   return res.status(200).json({ received: true });

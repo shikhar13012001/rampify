@@ -2,7 +2,6 @@ import { collection, addDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { useEditorStore } from '@/store/editorStore';
 
-const STORAGE_KEY  = 'rampify_guest_export_record';
 const GUEST_LIMIT  = 1;
 export const EXPORT_LIMIT        = GUEST_LIMIT;
 export const SIGNED_IN_FREE_LIMIT = 3;
@@ -11,29 +10,6 @@ export interface ExportAllowance {
   allowed: boolean;
   remaining: number;
   reason?: string;
-}
-
-// ─── Guest (localStorage) helpers ────────────────────────────────────────────
-
-function loadGuestRecord(): { count: number } {
-  try {
-    const raw = typeof window !== 'undefined'
-      ? window.sessionStorage.getItem(STORAGE_KEY)
-      : null;
-    if (!raw) return { count: 0 };
-    const parsed = JSON.parse(raw) as { count?: unknown };
-    return { count: typeof parsed.count === 'number' ? parsed.count : 0 };
-  } catch {
-    return { count: 0 };
-  }
-}
-
-function saveGuestRecord(record: { count: number }) {
-  try {
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(record));
-    }
-  } catch { /* ignore sessionStorage failures */ }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

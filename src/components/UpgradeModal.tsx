@@ -52,15 +52,16 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
         body: JSON.stringify({ userId: user?.uid, billingPeriod: billing }),
       });
       const isJson = res.headers.get('content-type')?.includes('application/json');
-      const data = isJson ? await res.json() as { url?: string; error?: string } : {};
+      const data = isJson ? (await res.json()) as { url?: string; error?: string } : {};
 
-      if (!res.ok || !(data as { url?: string }).url) {
+      const redirectUrl = data.url;
+      if (!res.ok || !redirectUrl) {
         throw new Error(
-          (data as { error?: string }).error ??
+          data.error ??
           (res.status === 404 ? 'API not running — use `vercel dev` for checkout' : `Server error ${res.status}`)
         );
       }
-      window.location.href = data.url;
+      window.location.href = redirectUrl;
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : 'Something went wrong');
       setCheckoutState('error');

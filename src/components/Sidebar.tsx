@@ -795,9 +795,7 @@ function OpticalFlowControl({
 
 function LockedOption({ label, onUpgrade }: { label: string; onUpgrade: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onUpgrade}
+    <div
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -806,23 +804,24 @@ function LockedOption({ label, onUpgrade }: { label: string; onUpgrade: () => vo
         fontSize: 12,
         color: 'var(--color-text-subtle)',
         padding: '6px 2px',
-        opacity: 0.7,
-        background: 'none',
-        border: 'none',
-        width: '100%',
-        cursor: 'pointer',
-        textAlign: 'left',
-        transition: 'opacity 0.12s',
+        opacity: 0.55,
+        userSelect: 'none',
       }}
-      onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.opacity = '1')}
-      onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.opacity = '0.7')}
     >
-      <span>{label}</span>
-      <span
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="11" rx="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={onUpgrade}
         style={{
           borderRadius: 5,
           backgroundColor: 'rgba(139, 111, 255, 0.1)',
-          border: '1px solid rgba(139, 111, 255, 0.2)',
+          border: '1px solid rgba(139, 111, 255, 0.25)',
           color: '#A898FF',
           padding: '2px 7px',
           fontSize: 9,
@@ -830,11 +829,13 @@ function LockedOption({ label, onUpgrade }: { label: string; onUpgrade: () => vo
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
           flexShrink: 0,
+          cursor: 'pointer',
+          opacity: 1,
         }}
       >
-        Pro
-      </span>
-    </button>
+        Upgrade
+      </button>
+    </div>
   );
 }
 

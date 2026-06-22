@@ -88,23 +88,44 @@ export function VideoPlayer() {
 
   const togglePlay = useCallback(() => setPlaying(!isPlaying), [isPlaying, setPlaying]);
 
-  // ── Motion blur hint ──────────────────────────────────────────────────────
+  const blurSettings = useEditorStore((s) => s.blurSettings);
+
+  const activeSegment = project
+    ? getActiveSegment(project.segments, playheadTime)
+    : null;
+  const rawSpeed = activeSegment ? getSegmentSpeedAtTime(activeSegment, playheadTime) : 1;
+  const clamped  = Math.max(0.0625, Math.min(16, rawSpeed));
+  const speedWarn = clamped !== rawSpeed;
+
+  const duration = project?.file.duration ?? 0;
+
+  // ── Motion blur preview ──────────────────────────────────────────────────
+  // Blur scales with how far the current speed deviates from 1×.
+  // Pro users see intensity-scaled blur when blur is enabled.
+  // Free users see a fixed teaser hint when there is any speed ramp present.
+  const INTENSITY_MULT: Record<string, number> = { subtle: 0.6, balanced: 1.2, cinematic: 2.2 };
+  const blurPx = useMemo(() => {
+    if (!project) return 0;
+    const speedDelta = Math.abs(rawSpeed - 1);
+    if (isPro && blurSettings.enabled) {
+      const mult = INTENSITY_MULT[blurSettings.intensity] ?? 1.2;
+      return Math.min(8, speedDelta * 2.5 * mult);
+    }
+    if (!isPro && segmentsHaveSpeedRamp(project.segments)) {
+      return Math.min(4, speedDelta * 1.8);
+    }
+    return 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, isPro, blurSettings.enabled, blurSettings.intensity, rawSpeed]);
+
+  // Show the bottom hint strip only for free users who have a speed ramp
   const hasSpeedRamp = useMemo(
     () => !isPro && !!project && segmentsHaveSpeedRamp(project.segments),
     [isPro, project],
   );
 
-  const activeSegment = project
-    ? getActiveSegment(project.segments, playheadTime)
-    : null;
-  const rawSpeed    = activeSegment ? getSegmentSpeedAtTime(activeSegment, playheadTime) : 1;
-  const clamped     = Math.max(0.0625, Math.min(16, rawSpeed));
-  const speedWarn   = clamped !== rawSpeed;
-  const blurPx      = hasSpeedRamp ? Math.min(4, Math.abs(rawSpeed - 1) * 1.8) : 0;
-
   if (!project) return null;
 
-  const duration = project.file.duration;
   const progress = Number.isFinite(duration) && duration > 0 ? playheadTime / duration : 0;
 
   return (
@@ -156,8 +177,8 @@ export function VideoPlayer() {
           <Badge>{formatTime(playheadTime)} / {formatTime(duration)}</Badge>
         </div>
 
-        {/* Pro blur hint — bottom strip, shown for free users with a speed ramp */}
-        {hasSpeedRamp && (
+        {/* Bottom hint strip */}
+        {(hasSpeedRamp || (isPro && blurSettings.enabled && segmentsHaveSpeedRamp(project.segments))) && (
           <div
             style={{
               position: 'absolute',
@@ -172,26 +193,34 @@ export function VideoPlayer() {
               gap: 8,
             }}
           >
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
-              Preview only — export with Pro for real motion blur
-            </span>
-            <button
-              type="button"
-              onClick={() => openUpgrade(true)}
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#A898FF',
-                background: 'rgba(139,111,255,0.18)',
-                border: '1px solid rgba(139,111,255,0.35)',
-                borderRadius: 5,
-                padding: '2px 8px',
-                cursor: 'pointer',
-                letterSpacing: '0.01em',
-              }}
-            >
-              Upgrade
-            </button>
+            {isPro && blurSettings.enabled ? (
+              <span style={{ fontSize: 11, color: 'rgba(28,228,184,0.85)', fontWeight: 500 }}>
+                Motion blur preview — exact blur renders at export
+              </span>
+            ) : (
+              <>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
+                  Preview only — export with Pro for real motion blur
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openUpgrade(true)}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#A898FF',
+                    background: 'rgba(139,111,255,0.18)',
+                    border: '1px solid rgba(139,111,255,0.35)',
+                    borderRadius: 5,
+                    padding: '2px 8px',
+                    cursor: 'pointer',
+                    letterSpacing: '0.01em',
+                  }}
+                >
+                  Upgrade
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

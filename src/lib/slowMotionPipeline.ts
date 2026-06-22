@@ -18,6 +18,7 @@
 
 import type { Segment } from '@/types/editor';
 import { extractFrames } from './frameExtractor';
+import OpticalFlowWorkerCtor from '../workers/opticalFlowWorker.ts?worker';
 
 // ─── Model status ─────────────────────────────────────────────────────────────
 
@@ -56,10 +57,7 @@ function getOrCreateWorker(): Worker {
 
   setModelStatus('loading');
 
-  workerInstance = new Worker(
-    new URL('../workers/opticalFlowWorker.ts', import.meta.url),
-    { type: 'module' },
-  );
+  workerInstance = new OpticalFlowWorkerCtor();
 
   workerInstance.addEventListener('message', (e: MessageEvent<WorkerMsg>) => {
     if (e.data.type === 'ready') {

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initAdmin, stripeClient, verifyIdToken } from './_adminInit';
+import { initAdmin, loadLocalEnv, stripeClient, verifyIdToken } from './_adminInit';
 
 /**
  * Resolves the safe origin to use for Stripe redirect URLs.
@@ -43,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  loadLocalEnv();
   initAdmin();
 
   let decoded: Awaited<ReturnType<typeof verifyIdToken>>;

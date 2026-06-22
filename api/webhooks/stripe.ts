@@ -1,20 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type Stripe from 'stripe';
-import { initAdmin, adminDb, stripeClient } from '../_adminInit';
+import { initAdmin, loadLocalEnv, adminDb, stripeClient } from '../_adminInit';
 
-/** Collect the raw request body for Stripe signature verification. */
 async function getRawBody(req: VercelRequest): Promise<Buffer> {
-  // If @vercel/node hasn't pre-consumed the stream, collect chunks.
-  // If body was already parsed (unlikely for octet-stream), fall back.
-  if (req.readable) {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-    }
-    return Buffer.concat(chunks);
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
   }
-  // Fallback: re-serialize (signature check will fail — use only in dev without CLI)
-  return Buffer.from(JSON.stringify(req.body ?? ''));
+  return Buffer.concat(chunks);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -22,6 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  loadLocalEnv();
   initAdmin();
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -41,10 +35,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
-    // Log the detailed reason server-side; return a generic 400 to the client
-    // so we don't leak signature/timing details to a potential attacker.
-    console.error('[stripe-webhook] signature verification failed:', err);
-    return res.status(400).json({ error: 'Webhook signature verification failed' });
+    // vercel dev consumes the HTTP body before the handler runs, leaving the
+    // stream empty. As a local-dev fallback, use the pre-parsed req.body and
+    // skip signature verification. This branch is explicitly blocked in
+    // production and Vercel preview deployments.
+    const isDevBypass =
+      rawBody.length === 0 &&
+      process.env.VERCEL_ENV !== 'production' &&
+      process.env.VERCEL_ENV !== 'preview';
+
+    if (isDevBypass && req.body) {
+      console.warn('[stripe-webhook] vercel dev raw-body bug — skipping sig check (dev only)');
+      event = req.body as Stripe.Event;
+    } else {
+      console.error('[stripe-webhook] signature verification failed:', err);
+      return res.status(400).json({ error: 'Webhook signature verification failed' });
+    }
   }
 
   const db = adminDb();

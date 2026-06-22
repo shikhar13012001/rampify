@@ -1,11 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initAdmin, adminDb, verifyIdToken, FREE_MONTHLY_EXPORTS } from './_adminInit';
+import { initAdmin, loadLocalEnv, adminDb, verifyIdToken, FREE_MONTHLY_EXPORTS } from './_adminInit';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  loadLocalEnv();
   initAdmin();
 
   let decoded: Awaited<ReturnType<typeof verifyIdToken>>;

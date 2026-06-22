@@ -6,6 +6,7 @@ import {
   validateBeatPattern,
   type BeatPattern,
 } from '@/lib/beatMapper';
+import BeatDetectionWorkerCtor from '../../workers/beatDetectionWorker.ts?worker';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -92,10 +93,7 @@ export function BeatSyncPanel() {
       return;
     }
 
-    const worker = new Worker(
-      new URL('../../workers/beatDetectionWorker.ts', import.meta.url),
-      { type: 'module' },
-    );
+    const worker = new BeatDetectionWorkerCtor();
     workerRef.current = worker;
 
     worker.onmessage = (e: MessageEvent) => {

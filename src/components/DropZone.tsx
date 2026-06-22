@@ -1,6 +1,16 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import { loadProjectState } from '@/lib/projectPersistence';
 import type { VideoFile } from '@/types/editor';
+
+function getSavedFileName(): string | null {
+  try {
+    const raw = localStorage.getItem('rampify_project_v1');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { fileName?: string };
+    return parsed.fileName ?? null;
+  } catch { return null; }
+}
 
 const ACCEPTED_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
 const ACCEPTED_EXT = /\.(mp4|mov|webm)$/i;
@@ -111,7 +121,12 @@ export function DropZone() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedFileName, setSavedFileName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setSavedFileName(getSavedFileName());
+  }, []);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -125,7 +140,23 @@ export function DropZone() {
 
       try {
         const videoFile = await readVideoMetadata(file);
-        setProject({ file: videoFile, segments: [] });
+        const saved = loadProjectState(videoFile.name, videoFile.duration);
+
+        if (saved) {
+          // Restore segments from the previous session for this file.
+          setProject({ file: videoFile, segments: saved.segments });
+          // Restore settings that setProject doesn't touch.
+          const s = useEditorStore.getState();
+          s.setBlurEnabled(saved.blurSettings.enabled);
+          s.setBlurIntensity(saved.blurSettings.intensity);
+          s.setOpticalFlowEnabled(saved.opticalFlowSettings.enabled);
+          s.setOpticalFlowQuality(saved.opticalFlowSettings.quality);
+          s.setMinSpeed(saved.minSpeed);
+          s.setMaxSpeed(saved.maxSpeed);
+          s.setBeatMarkers(saved.beatMarkers);
+        } else {
+          setProject({ file: videoFile, segments: [] });
+        }
       } catch (err) {
         setProject(null);
         setError(
@@ -279,8 +310,30 @@ export function DropZone() {
           </p>
 
           <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-subtle)' }}>
-            or click to browse - MP4, MOV, WebM
+            or click to browse — MP4, MOV, WebM
           </p>
+
+          {savedFileName && !error && (
+            <div
+              style={{
+                marginTop: 16,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 12,
+                color: '#1CE4B8',
+                background: 'rgba(28,228,184,0.07)',
+                border: '1px solid rgba(28,228,184,0.18)',
+                borderRadius: 8,
+                padding: '8px 12px',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>
+                Drop <strong style={{ fontWeight: 700 }}>{savedFileName}</strong> to restore your last session
+              </span>
+            </div>
+          )}
 
           {error ? (
             <div

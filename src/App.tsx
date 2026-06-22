@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { saveProjectState } from '@/lib/projectPersistence';
 import { TopBar } from '@/components/TopBar';
 import { DropZone } from '@/components/DropZone';
 import { Sidebar } from '@/components/Sidebar';
@@ -94,6 +95,26 @@ function EditorRoute() {
   const [exportOpen, setExportOpen] = useState(false);
 
   useKeyboardShortcuts();
+
+  // Persist project curves/settings to localStorage on every relevant change.
+  // The video file itself isn't saved (binary), but the curve/settings are enough
+  // to restore the session when the user re-drops the same file.
+  useEffect(() => {
+    return useEditorStore.subscribe((state) => {
+      if (!state.project) return;
+      saveProjectState({
+        fileName:            state.project.file.name,
+        duration:            state.project.file.duration,
+        segments:            state.project.segments,
+        blurSettings:        state.blurSettings,
+        opticalFlowSettings: state.opticalFlowSettings,
+        minSpeed:            state.minSpeed,
+        maxSpeed:            state.maxSpeed,
+        beatMarkers:         state.beatMarkers,
+        savedAt:             Date.now(),
+      });
+    });
+  }, []);
 
   useEffect(() => {
     const onExport = () => {

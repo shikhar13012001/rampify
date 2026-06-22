@@ -277,9 +277,14 @@ function SegmentRow({
   const speedCol = speedColor(avgSpeed);
 
   return (
-    <button
-      type="button"
+    // div instead of button to avoid invalid <button>-in-<button> nesting (delete button is inside)
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); }
+      }}
       style={{
         width: '100%',
         display: 'flex',
@@ -372,7 +377,7 @@ function SegmentRow({
           <CloseIcon />
         </button>
       )}
-    </button>
+    </div>
   );
 }
 

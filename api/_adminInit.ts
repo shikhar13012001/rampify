@@ -5,11 +5,33 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import Stripe from 'stripe';
 
+// vercel dev doesn't always inject .env.local vars into the function process.
+// Parse it manually on first call so all API routes get the correct values.
+let envLoaded = false;
+export function loadLocalEnv() {
+  if (envLoaded || process.env.VERCEL) return;
+  envLoaded = true;
+  const envPath = join(process.cwd(), '.env.local');
+  if (!existsSync(envPath)) return;
+  try {
+    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const val = trimmed.slice(eq + 1).trim();
+      if (key && !process.env[key]) process.env[key] = val;
+    }
+  } catch { /* ignore read errors */ }
+}
+
 export function initAdmin() {
+  loadLocalEnv();
   if (getApps().length === 0) {
     let serviceAccount: object;
     const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY;

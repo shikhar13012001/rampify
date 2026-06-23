@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type Stripe from 'stripe';
-import { initAdmin, loadLocalEnv, adminDb, stripeClient } from '../_adminInit';
+import { initAdmin, loadLocalEnv, adminDb, stripeClient } from '../_adminInit.js';
 
 async function getRawBody(req: VercelRequest): Promise<Buffer> {
   const chunks: Buffer[] = [];

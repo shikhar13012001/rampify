@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initAdmin, loadLocalEnv, adminDb, verifyIdToken, FREE_MONTHLY_EXPORTS } from './_adminInit';
+import { initAdmin, loadLocalEnv, adminDb, verifyIdToken, FREE_MONTHLY_EXPORTS } from './_adminInit.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {

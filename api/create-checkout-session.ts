@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initAdmin, loadLocalEnv, stripeClient, verifyIdToken } from './_adminInit';
+import { initAdmin, loadLocalEnv, stripeClient, verifyIdToken } from './_adminInit.js';
 
 /**
  * Resolves the safe origin to use for Stripe redirect URLs.

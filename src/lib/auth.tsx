@@ -21,6 +21,7 @@ declare global {
           initialize: (config: Record<string, unknown>) => void;
           prompt: () => void;
           cancel: () => void;
+          disableAutoSelect: () => void;
         };
       };
     };

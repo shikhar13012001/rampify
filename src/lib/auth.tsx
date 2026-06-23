@@ -68,6 +68,8 @@ export async function signIn(): Promise<void> {
 
 export async function signOut(): Promise<void> {
   window.google?.accounts.id.cancel();
+  window.google?.accounts.id.disableAutoSelect();
+  oneTapReady = false;
   await fbSignOut(auth);
 }
 

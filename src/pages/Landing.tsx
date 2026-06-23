@@ -189,7 +189,7 @@ function HeroBand() {
       </div>
 
       {/* Right — visual (cream-card mockup with curve) */}
-      <div className="clay-reveal" style={{ animationDelay: '0.1s' }}>
+      <div className="clay-reveal clay-hero-visual" style={{ animationDelay: '0.1s' }}>
         <CurveMockup />
       </div>
     </section>
@@ -1129,6 +1129,7 @@ function CTABand() {
     <section style={{ padding: '96px 24px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div
+          className="clay-cta-card"
           style={{
             borderRadius: 32,
             backgroundColor: 'var(--color-clay-ink)',

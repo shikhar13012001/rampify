@@ -88,6 +88,7 @@ const TIERS: PricingTier[] = [
 export function PricingTable() {
   return (
     <div
+      className="clay-pricing-grid"
       style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',

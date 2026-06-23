@@ -1,18 +1,27 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 interface ClayNavProps {
-  /** Optional CTA label override. Defaults to "Open editor". */
   ctaLabel?: string;
 }
 
+const NAV_LINKS = [
+  { label: 'Features', to: '/#features' },
+  { label: 'Pricing', to: '/pricing' },
+  { label: 'Changelog', to: '/changelog' },
+  { label: 'Docs', to: '/docs' },
+];
+
 export function ClayNav({ ctaLabel = 'Open editor' }: ClayNavProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <nav
       style={{
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        backgroundColor: 'rgba(255, 250, 240, 0.85)',
+        backgroundColor: 'rgba(255, 250, 240, 0.92)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--color-clay-line)',
@@ -48,14 +57,9 @@ export function ClayNav({ ctaLabel = 'Open editor' }: ClayNavProps) {
           </span>
         </Link>
 
-        {/* Center links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-          {[
-            { label: 'Features', to: '/#features' },
-            { label: 'Pricing', to: '/pricing' },
-            { label: 'Changelog', to: '/changelog' },
-            { label: 'Docs', to: '/docs' },
-          ].map((link) => (
+        {/* Center links — hidden on mobile via CSS */}
+        <div className="clay-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+          {NAV_LINKS.map((link) => (
             <a
               key={link.label}
               href={link.to}
@@ -74,28 +78,98 @@ export function ClayNav({ ctaLabel = 'Open editor' }: ClayNavProps) {
           ))}
         </div>
 
-        {/* CTA */}
-        <Link
-          to="/editor"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 18px',
-            borderRadius: 999,
-            backgroundColor: 'var(--color-clay-ink)',
-            color: 'var(--color-clay-canvas)',
-            textDecoration: 'none',
-            fontSize: 13,
-            fontWeight: 600,
-            transition: 'transform 0.15s',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-1px)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(0)'; }}
-        >
-          {ctaLabel}
-        </Link>
+        {/* Right side: CTA + hamburger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link
+            to="/editor"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 18px',
+              borderRadius: 999,
+              backgroundColor: 'var(--color-clay-ink)',
+              color: 'var(--color-clay-canvas)',
+              textDecoration: 'none',
+              fontSize: 13,
+              fontWeight: 600,
+              transition: 'transform 0.15s',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(0)'; }}
+          >
+            {ctaLabel}
+          </Link>
+
+          {/* Hamburger — shown only on mobile via CSS */}
+          <button
+            type="button"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            className="clay-nav-hamburger"
+            onClick={() => setMenuOpen((v) => !v)}
+            style={{
+              display: 'none', // overridden to flex on mobile via CSS
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              border: '1px solid var(--color-clay-line)',
+              background: 'transparent',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            {menuOpen ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-clay-ink)" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-clay-ink)" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                <line x1="3" y1="7" x2="21" y2="7" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="17" x2="21" y2="17" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile drawer */}
+      {menuOpen && (
+        <div
+          className="clay-nav-drawer"
+          style={{
+            display: 'none', // CSS shows this on mobile
+            flexDirection: 'column',
+            padding: '8px 24px 20px',
+            borderTop: '1px solid var(--color-clay-line)',
+            backgroundColor: 'rgba(255, 250, 240, 0.97)',
+            gap: 2,
+          }}
+        >
+          {NAV_LINKS.map((link) => (
+            <a
+              key={link.label}
+              href={link.to}
+              onClick={() => setMenuOpen(false)}
+              style={{
+                textDecoration: 'none',
+                fontSize: 15,
+                fontWeight: 500,
+                color: 'var(--color-clay-ink-soft)',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--color-clay-line)',
+                display: 'block',
+              }}
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+      )}
     </nav>
   );
 }

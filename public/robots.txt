@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /editor
+Disallow: /upgrade/
+
+Sitemap: https://rampify-eight.vercel.app/sitemap.xml

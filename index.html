@@ -4,7 +4,127 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>rampify</title>
+    <meta name="theme-color" content="#0a0b15" />
+
+    <!-- Primary SEO -->
+    <title>Speed Ramp Videos Online — No Installs, No Uploads | Rampify</title>
+    <meta name="description" content="Draw speed curves, AI slow motion, beat sync, and 4K export — all in the browser. Your footage never leaves your machine. Free to start, no installs required." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://rampify-eight.vercel.app/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://rampify-eight.vercel.app/" />
+    <meta property="og:site_name" content="Rampify" />
+    <meta property="og:title" content="Speed Ramp Videos Online — No Installs, No Uploads | Rampify" />
+    <meta property="og:description" content="Draw speed curves, AI slow motion, beat sync, and 4K export — all in the browser. Your footage never leaves your machine. Free to start." />
+    <meta property="og:image" content="https://rampify-eight.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Speed Ramp Videos Online — No Installs | Rampify" />
+    <meta name="twitter:description" content="Draw speed curves, AI slow motion, beat sync, and 4K export — entirely in the browser. Free to start." />
+    <meta name="twitter:image" content="https://rampify-eight.vercel.app/og-image.png" />
+
+    <!-- Structured data: SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Rampify",
+      "url": "https://rampify-eight.vercel.app",
+      "description": "Browser-based video speed ramping editor with AI slow motion, beat sync, motion blur, and 4K export. No installs. Your footage never leaves your machine.",
+      "applicationCategory": "VideoApplication",
+      "operatingSystem": "Any modern web browser",
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Free",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        {
+          "@type": "Offer",
+          "name": "Pro",
+          "price": "12",
+          "priceCurrency": "USD",
+          "priceSpecification": {
+            "@type": "RecurringChargeSpecification",
+            "price": "12",
+            "priceCurrency": "USD",
+            "billingDuration": "P1M"
+          }
+        }
+      ],
+      "featureList": [
+        "Speed curve editor with bezier and linear interpolation",
+        "AI frame interpolation powered by RIFE neural network",
+        "Beat sync with STFT spectral flux detection",
+        "Cinematic motion blur on speed transitions",
+        "4K export via ffmpeg.wasm",
+        "100% local processing — no video uploads"
+      ],
+      "publisher": {
+        "@type": "Organization",
+        "name": "Rampify",
+        "url": "https://rampify-eight.vercel.app"
+      }
+    }
+    </script>
+
+    <!-- Structured data: FAQPage -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Do I need to install anything to use Rampify?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Rampify runs entirely in your browser using WebAssembly. ffmpeg.wasm handles video encoding in a Web Worker, and AI interpolation runs via ONNX Runtime Web. No downloads, no plugins, no native apps."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does my video get uploaded to a server?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. All video processing happens locally in your browser. Your footage never leaves your machine. The only server calls are for authentication and subscription management."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What video formats does Rampify support?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Any format ffmpeg supports — MP4, WebM, MOV, MKV, AVI, and more. Export supports MP4 (H.264) and WebM (VP9) up to 4K resolution on Pro."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does the AI slow motion work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Rampify uses RIFE (Real-time Intermediate Flow Estimation), a neural network that generates intermediate frames between existing ones. This creates smooth slow motion without judder. It runs on GPU via WebGL when available, with CPU fallback."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I cancel my Rampify subscription anytime?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Cancel from the account menu with one click. No questions, no retention emails. Your Pro access continues until the end of your billing period, then you drop to the free plan."
+          }
+        }
+      ]
+    }
+    </script>
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">

@@ -32,37 +32,39 @@ export function TopBar({ onExportClick }: TopBarProps) {
       style={{
         height: 'var(--toolbar-height)',
         backgroundColor: 'var(--color-surface)',
-        borderBottom: '1px solid var(--color-border)',
+        borderBottom: '1px solid var(--color-border-subtle)',
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
-        padding: '0 16px',
+        padding: '0 18px',
         gap: 16,
         flexShrink: 0,
+        boxShadow: 'none',
       }}
     >
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <Link
           to="/"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 9, color: 'inherit', textDecoration: 'none' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: 'inherit', textDecoration: 'none' }}
         >
           <LogoMark />
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.03em', color: '#EEEEF8' }}>
+          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.035em', color: '#0a0a0a' }}>
             rampify
           </span>
         </Link>
       </div>
 
       {/* Center — file name */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', maxWidth: 400 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', maxWidth: 420 }}>
         {project ? (
           <div
             style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '4px 10px', borderRadius: 8,
-              background: 'rgba(255,255,255,0.03)',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '5px 12px', borderRadius: 9,
+              background: 'rgba(10,10,10,0.025)',
               border: '1px solid var(--color-border)',
+              boxShadow: 'none',
             }}
           >
             <VideoFileIcon />
@@ -71,29 +73,33 @@ export function TopBar({ onExportClick }: TopBarProps) {
               style={{
                 fontSize: 12, color: 'var(--color-text-muted)',
                 overflow: 'hidden', textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap', maxWidth: 300,
+                whiteSpace: 'nowrap', maxWidth: 320,
                 fontFamily: 'var(--font-mono)',
+                fontWeight: 500,
               }}
             >
               {project.file.name}
             </span>
           </div>
         ) : (
-          <span style={{ fontSize: 12, color: 'var(--color-text-subtle)' }}>No file loaded</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-subtle)', letterSpacing: '0.01em' }}>
+            No file loaded
+          </span>
         )}
       </div>
 
       {/* Right — auth + export */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center' }}>
         {/* Pro badge — hidden while auth is loading to avoid a flash */}
         {isPro && !isAuthLoading && (
           <span
             style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-              textTransform: 'uppercase', color: '#A898FF',
-              background: 'rgba(139,111,255,0.12)',
-              border: '1px solid rgba(139,111,255,0.25)',
-              borderRadius: 5, padding: '3px 7px',
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', color: '#b8a4ed',
+              background: 'rgba(184,164,237,0.14)',
+              border: '1px solid rgba(184,164,237,0.3)',
+              borderRadius: 5, padding: '3px 8px',
+              boxShadow: 'none',
             }}
           >
             Pro
@@ -114,20 +120,29 @@ export function TopBar({ onExportClick }: TopBarProps) {
           title={project ? 'Export video (Ctrl+E)' : 'Load a video first'}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7,
-            padding: '7px 16px', borderRadius: 10,
+            padding: '8px 18px', borderRadius: 10,
             border: exportDisabled
               ? '1px solid var(--color-border)'
-              : '1px solid rgba(139,111,255,0.4)',
+              : '1px solid transparent',
             background: exportDisabled
               ? 'transparent'
-              : 'linear-gradient(135deg, rgba(139,111,255,0.9) 0%, rgba(106,78,223,0.9) 100%)',
-            color: exportDisabled ? 'var(--color-text-subtle)' : '#ffffff',
+              : '#0a0a0a',
+            color: exportDisabled ? 'var(--color-text-subtle)' : '#fffaf0',
             fontSize: 13, fontWeight: 600,
             cursor: exportDisabled ? 'not-allowed' : 'pointer',
             opacity: exportDisabled ? 0.5 : 1,
-            boxShadow: exportDisabled ? 'none' : '0 0 16px rgba(139,111,255,0.2)',
-            transition: 'opacity 0.15s, box-shadow 0.15s',
+            boxShadow: 'none',
+            transition: 'opacity 0.15s, transform 0.15s',
             letterSpacing: '-0.01em',
+          }}
+          onMouseEnter={(e) => {
+            if (exportDisabled) return;
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
+            (e.currentTarget as HTMLButtonElement).style.opacity = '0.88';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+            (e.currentTarget as HTMLButtonElement).style.opacity = '1';
           }}
         >
           {isExporting ? <SpinnerIcon /> : <ExportIcon />}
@@ -142,10 +157,10 @@ export function TopBar({ onExportClick }: TopBarProps) {
 
 function LogoMark() {
   return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-      <rect width="22" height="22" rx="6" fill="rgba(139,111,255,0.18)" />
-      <polyline points="4,15 8,10 13,5 18,9" stroke="#8B6FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <circle cx="18" cy="9" r="2" fill="#1CE4B8" />
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <rect width="22" height="22" rx="6" fill="rgba(184,164,237,0.16)" stroke="rgba(184,164,237,0.3)" strokeWidth="0.5" />
+      <polyline points="4,15 8,10 13,5 18,9" stroke="#b8a4ed" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <circle cx="18" cy="9" r="2.2" fill="#2d8d8d" stroke="rgba(45,141,141,0.3)" strokeWidth="0.5" />
     </svg>
   );
 }
@@ -172,7 +187,7 @@ function ExportIcon() {
 function SpinnerIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 40 40" aria-hidden="true" style={{ animation: 'spin 0.8s linear infinite' }}>
-      <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="4" />
+      <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,250,240,0.3)" strokeWidth="4" />
       <path d="M20 4 A16 16 0 0 1 36 20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
     </svg>
   );

@@ -166,12 +166,12 @@ export function Timeline() {
             left: contextMenu.clientX,
             top: contextMenu.clientY,
             zIndex: 200,
-            backgroundColor: '#222',
-            border: '1px solid #333',
-            borderRadius: 6,
+            backgroundColor: '#fffaf0',
+            border: '1px solid #e5dfd0',
+            borderRadius: 12,
             overflow: 'hidden',
             minWidth: 164,
-            boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+            boxShadow: '0 8px 24px rgba(10,10,10,0.08), 0 24px 60px rgba(10,10,10,0.06)',
           }}
         >
           <ContextItem
@@ -209,13 +209,13 @@ function ContextItem({
         padding: '8px 14px',
         background: 'none',
         border: 'none',
-        color: disabled ? '#444' : '#d4d4d4',
+        color: disabled ? '#b8b8b8' : '#0a0a0a',
         fontSize: 13,
         cursor: disabled ? 'default' : 'pointer',
         gap: 24,
       }}
       onMouseEnter={(e) => {
-        if (!disabled) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#2e2e2e';
+        if (!disabled) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'rgba(10,10,10,0.05)';
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLButtonElement).style.backgroundColor = '';
@@ -223,7 +223,7 @@ function ContextItem({
     >
       <span>{label}</span>
       {shortcut && (
-        <span style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>{shortcut}</span>
+        <span style={{ fontSize: 11, color: '#8a8a8a', fontFamily: 'monospace' }}>{shortcut}</span>
       )}
     </button>
   );

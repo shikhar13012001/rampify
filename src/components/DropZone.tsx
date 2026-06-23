@@ -215,7 +215,7 @@ export function DropZone() {
         width: '100%',
         height: '100%',
         cursor: isLoading ? 'wait' : 'pointer',
-        borderRadius: 16,
+        borderRadius: 18,
         userSelect: 'none',
         outline: 'none',
         position: 'relative',
@@ -224,7 +224,10 @@ export function DropZone() {
         background: isDragging
           ? 'rgba(139, 111, 255, 0.05)'
           : 'var(--color-surface)',
-        transition: 'border-color 0.2s, background 0.2s',
+        transition: 'border-color 0.25s, background 0.25s',
+        boxShadow: isDragging
+          ? 'inset 0 0 80px rgba(139, 111, 255, 0.08)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.02)',
       }}
     >
       {/* Subtle grid background */}
@@ -235,14 +238,14 @@ export function DropZone() {
           inset: 0,
           width: '100%',
           height: '100%',
-          opacity: isDragging ? 0.15 : 0.04,
+          opacity: isDragging ? 0.15 : 0.035,
           transition: 'opacity 0.3s',
           pointerEvents: 'none',
         }}
       >
         <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(139,111,255,1)" strokeWidth="0.8" />
+          <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+            <path d="M 44 0 L 0 0 0 44" fill="none" stroke="rgba(139,111,255,1)" strokeWidth="0.7" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
@@ -257,10 +260,10 @@ export function DropZone() {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: 500,
-            height: 500,
+            width: 560,
+            height: 560,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(139, 111, 255, 0.12) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(139, 111, 255, 0.14) 0%, transparent 70%)',
             pointerEvents: 'none',
           }}
         />
@@ -281,16 +284,17 @@ export function DropZone() {
           {/* Upload icon */}
           <div
             style={{
-              width: 72,
-              height: 72,
-              borderRadius: 20,
-              border: `1.5px dashed ${isDragging ? 'rgba(139, 111, 255, 0.7)' : 'rgba(139, 111, 255, 0.3)'}`,
-              background: isDragging ? 'rgba(139, 111, 255, 0.1)' : 'rgba(139, 111, 255, 0.05)',
+              width: 76,
+              height: 76,
+              borderRadius: 22,
+              border: `1.5px dashed ${isDragging ? 'rgba(184, 164, 237, 0.7)' : 'rgba(184, 164, 237, 0.35)'}`,
+              background: isDragging ? 'rgba(184, 164, 237, 0.1)' : 'rgba(184, 164, 237, 0.06)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'all 0.2s',
-              marginBottom: 24,
+              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              marginBottom: 26,
+              boxShadow: 'none',
             }}
           >
             <UploadIcon active={isDragging} />
@@ -300,32 +304,33 @@ export function DropZone() {
             style={{
               margin: '0 0 8px',
               fontSize: 20,
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
-              color: isDragging ? '#EEEEF8' : '#9898C0',
+              fontWeight: 600,
+              letterSpacing: '-0.025em',
+              color: isDragging ? '#0a0a0a' : '#4a4a4a',
               transition: 'color 0.2s',
             }}
           >
             {isDragging ? 'Drop to load video' : 'Drop your video here'}
           </p>
 
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-subtle)' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-subtle)', letterSpacing: '0.01em' }}>
             or click to browse — MP4, MOV, WebM
           </p>
 
           {savedFileName && !error && (
             <div
               style={{
-                marginTop: 16,
+                marginTop: 18,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
                 fontSize: 12,
-                color: '#1CE4B8',
-                background: 'rgba(28,228,184,0.07)',
-                border: '1px solid rgba(28,228,184,0.18)',
-                borderRadius: 8,
-                padding: '8px 12px',
+                color: '#2d8d8d',
+                background: 'rgba(45,141,141,0.08)',
+                border: '1px solid rgba(45,141,141,0.2)',
+                borderRadius: 9,
+                padding: '8px 13px',
+                boxShadow: 'none',
               }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -343,14 +348,15 @@ export function DropZone() {
                 alignItems: 'flex-start',
                 gap: 10,
                 fontSize: 13,
-                color: '#FF6B78',
-                maxWidth: 440,
+                color: '#ff4d8b',
+                maxWidth: 460,
                 textAlign: 'left',
                 lineHeight: 1.5,
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: '1px solid rgba(255, 107, 120, 0.2)',
-                background: 'rgba(255, 107, 120, 0.06)',
+                border: '1px solid rgba(255, 77, 139, 0.2)',
+                background: 'rgba(255, 77, 139, 0.06)',
+                boxShadow: 'none',
               }}
             >
               <ErrorIcon />
@@ -364,7 +370,7 @@ export function DropZone() {
 }
 
 function UploadIcon({ active }: { active: boolean }) {
-  const color = active ? '#8B6FFF' : 'rgba(139, 111, 255, 0.5)';
+  const color = active ? '#b8a4ed' : 'rgba(184, 164, 237, 0.6)';
   return (
     <svg
       width="28"
@@ -407,42 +413,43 @@ function ErrorIcon() {
 
 function LoadingState() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'relative', zIndex: 1 }}>
       <div
         style={{
-          width: 52,
-          height: 52,
-          borderRadius: 16,
-          background: 'rgba(139, 111, 255, 0.08)',
-          border: '1px solid rgba(139, 111, 255, 0.2)',
+          width: 56,
+          height: 56,
+          borderRadius: 18,
+          background: 'rgba(184, 164, 237, 0.08)',
+          border: '1px solid rgba(184, 164, 237, 0.25)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          boxShadow: 'none',
         }}
       >
         <svg
-          width="24"
-          height="24"
+          width="26"
+          height="26"
           viewBox="0 0 40 40"
-          style={{ animation: 'spin 0.8s linear infinite' }}
+          style={{ animation: 'spin 0.85s linear infinite' }}
           aria-label="Loading"
         >
-          <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(139,111,255,0.15)" strokeWidth="3.5" />
+          <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(184,164,237,0.2)" strokeWidth="3.2" />
           <path
             d="M20 4 A16 16 0 0 1 36 20"
             fill="none"
-            stroke="#8B6FFF"
-            strokeWidth="3.5"
+            stroke="#b8a4ed"
+            strokeWidth="3.2"
             strokeLinecap="round"
           />
         </svg>
       </div>
       <div style={{ textAlign: 'center' }}>
-        <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: '#EEEEF8' }}>
+        <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.01em' }}>
           Reading video
         </p>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-subtle)' }}>
-          Extracting metadata...
+          Extracting metadata…
         </p>
       </div>
     </div>

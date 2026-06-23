@@ -158,11 +158,11 @@ export function UpgradeSuccess() {
         style={{
           width: 'min(420px, 100%)',
           borderRadius: 22,
-          border: '1px solid rgba(139,111,255,0.2)',
-          background: 'linear-gradient(180deg, #0E0F1E 0%, #0A0B15 100%)',
+          border: '1px solid #e5dfd0',
+          background: '#fffaf0',
           padding: 36,
           textAlign: 'center',
-          boxShadow: '0 32px 100px rgba(0,0,0,0.55)',
+          boxShadow: '0 8px 24px rgba(10,10,10,0.08), 0 24px 60px rgba(10,10,10,0.1)',
           position: 'relative',
           overflow: 'hidden',
         }}
@@ -173,7 +173,7 @@ export function UpgradeSuccess() {
           style={{
             position: 'absolute', top: -80, left: '50%', transform: 'translateX(-50%)',
             width: 320, height: 320, borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(139,111,255,0.08) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(184,164,237,0.1) 0%, transparent 70%)',
             pointerEvents: 'none',
           }}
         />
@@ -182,11 +182,11 @@ export function UpgradeSuccess() {
           <>
             <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'center' }}>
               <svg width="44" height="44" viewBox="0 0 40 40" aria-hidden="true" style={{ animation: 'spin 1s linear infinite' }}>
-                <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(139,111,255,0.2)" strokeWidth="3" />
-                <path d="M20 4 A16 16 0 0 1 36 20" fill="none" stroke="#8B6FFF" strokeWidth="3" strokeLinecap="round" />
+                <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(184,164,237,0.2)" strokeWidth="3" />
+                <path d="M20 4 A16 16 0 0 1 36 20" fill="none" stroke="#b8a4ed" strokeWidth="3" strokeLinecap="round" />
               </svg>
             </div>
-            <h1 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.03em' }}>
+            <h1 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.03em' }}>
               Confirming payment…
             </h1>
             <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 14, lineHeight: 1.6 }}>
@@ -200,17 +200,17 @@ export function UpgradeSuccess() {
             <div
               style={{
                 width: 56, height: 56, borderRadius: '50%',
-                background: 'rgba(28,228,184,0.12)',
-                border: '1px solid rgba(28,228,184,0.3)',
+                background: 'rgba(45,141,141,0.12)',
+                border: '1px solid rgba(45,141,141,0.3)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 margin: '0 auto 20px',
               }}
             >
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1CE4B8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2d8d8d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h1 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.03em' }}>
+            <h1 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.03em' }}>
               Welcome to Pro!
             </h1>
             <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 14, lineHeight: 1.6 }}>
@@ -224,19 +224,19 @@ export function UpgradeSuccess() {
             <div
               style={{
                 width: 56, height: 56, borderRadius: '50%',
-                background: 'rgba(245,158,11,0.1)',
-                border: '1px solid rgba(245,158,11,0.25)',
+                background: 'rgba(232,185,74,0.1)',
+                border: '1px solid rgba(232,185,74,0.3)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 margin: '0 auto 20px',
               }}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e8b94a" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <h1 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.03em' }}>
+            <h1 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.03em' }}>
               Payment received
             </h1>
             <p style={{ margin: '0 0 24px', color: 'var(--color-text-muted)', fontSize: 14, lineHeight: 1.6 }}>
@@ -248,10 +248,10 @@ export function UpgradeSuccess() {
                 onClick={() => window.location.reload()}
                 style={{
                   padding: '11px 22px', borderRadius: 10,
-                  background: 'linear-gradient(135deg, #8B6FFF 0%, #6A4EDF 100%)',
-                  border: 'none', color: '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                  boxShadow: '0 0 20px rgba(139,111,255,0.25)',
+                  background: '#0a0a0a',
+                  border: 'none', color: '#fffaf0',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  boxShadow: 'none',
                 }}
               >
                 Refresh
@@ -262,7 +262,7 @@ export function UpgradeSuccess() {
                 style={{
                   padding: '11px 22px', borderRadius: 10,
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.12)', color: '#C0C0D8',
+                  border: '1px solid #e5dfd0', color: '#4a4a4a',
                   fontSize: 14, fontWeight: 600, cursor: 'pointer',
                 }}
               >
@@ -274,7 +274,7 @@ export function UpgradeSuccess() {
 
         {phase === 'session-expired' && (
           <ErrorPanel
-            color="#FF6B78"
+            color="#ff4d8b"
             title="Your session expired"
             message="Please sign in again to complete your upgrade. Your payment was received."
             actionLabel="Sign in"
@@ -284,7 +284,7 @@ export function UpgradeSuccess() {
 
         {phase === 'api-down' && (
           <ErrorPanel
-            color="#F59E0B"
+            color="#e8b94a"
             title="API not running"
             message="The checkout API isn't reachable. If you're developing locally, run `vercel dev`. Your payment was still processed by Stripe."
             actionLabel="Refresh"
@@ -294,7 +294,7 @@ export function UpgradeSuccess() {
 
         {phase === 'signed-out' && (
           <ErrorPanel
-            color="#FF6B78"
+            color="#ff4d8b"
             title="Sign in to complete upgrade"
             message="You signed out during confirmation. Sign back in to activate your Pro subscription."
             actionLabel="Sign in"
@@ -328,7 +328,7 @@ function ErrorPanel({
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
       </div>
-      <h1 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.03em' }}>
+      <h1 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.03em' }}>
         {title}
       </h1>
       <p style={{ margin: '0 0 24px', color: 'var(--color-text-muted)', fontSize: 14, lineHeight: 1.6 }}>
@@ -339,10 +339,10 @@ function ErrorPanel({
         onClick={onAction}
         style={{
           padding: '11px 24px', borderRadius: 10,
-          background: 'linear-gradient(135deg, #8B6FFF 0%, #6A4EDF 100%)',
-          border: 'none', color: '#fff',
-          fontSize: 14, fontWeight: 700, cursor: 'pointer',
-          boxShadow: '0 0 20px rgba(139,111,255,0.25)',
+          background: '#0a0a0a',
+          border: 'none', color: '#fffaf0',
+          fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          boxShadow: 'none',
         }}
       >
         {actionLabel}

@@ -45,11 +45,11 @@ function avgSpeed(seg: Segment): number {
 }
 
 function speedColor(speed: number): string {
-  if (speed < 0.5) return '#4ADE80';   // slow  → green
-  if (speed < 0.8) return '#84CC16';   // slow-ish → lime
-  if (speed <= 1.2) return '#7F77DD';  // normal   → purple
-  if (speed <= 2.0) return '#F59E0B';  // fast     → amber
-  return '#F97316';                     // very fast → orange
+  if (speed < 0.5) return '#2d8d8d';   // slow  → Clay teal-bright
+  if (speed < 0.8) return '#a4d4c5';   // slow-ish → Clay mint
+  if (speed <= 1.2) return '#b8a4ed';  // normal   → Clay lavender
+  if (speed <= 2.0) return '#e8b94a';  // fast     → Clay ochre
+  return '#ff4d8b';                     // very fast → Clay pink
 }
 
 // ─── Deterministic waveform bar height ───────────────────────────────────────
@@ -144,15 +144,15 @@ export function useTimeline(
     // ── 1. Clear ────────────────────────────────────────────────────────
     ctx.clearRect(0, 0, W, H);
 
-    // ── 2. Ruler background ─────────────────────────────────────────────
-    ctx.fillStyle = '#0d0d0d';
+    // ── 2. Ruler background — Clay surface-soft ────────────────────────
+    ctx.fillStyle = '#faf5e8';
     ctx.fillRect(0, 0, W, RULER_H);
 
     // ── 3. Ruler ticks & labels ─────────────────────────────────────────
     const { major, minor } = pickInterval(duration, W);
     const steps = Math.ceil(duration / minor) + 1;
 
-    ctx.font = '10px monospace';
+    ctx.font = '10px "JetBrains Mono", monospace';
     ctx.textBaseline = 'top';
 
     for (let i = 0; i <= steps; i++) {
@@ -161,7 +161,7 @@ export function useTimeline(
       const x = Math.round((t / duration) * W) + 0.5;
       const isMaj = i % 5 === 0;
 
-      ctx.strokeStyle = isMaj ? '#484848' : '#252525';
+      ctx.strokeStyle = isMaj ? '#d4cebf' : '#efe9da';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, RULER_H - (isMaj ? 11 : 5));
@@ -169,23 +169,23 @@ export function useTimeline(
       ctx.stroke();
 
       if (isMaj && x > 14 && x < W - 14) {
-        ctx.fillStyle = '#606060';
+        ctx.fillStyle = '#8a8a8a';
         ctx.textAlign = 'center';
         ctx.fillText(tickLabel(t, major), x, 3);
       }
     }
 
     // Label "0" at far left
-    ctx.fillStyle = '#505050';
+    ctx.fillStyle = '#8a8a8a';
     ctx.textAlign = 'left';
     ctx.fillText('0', 3, 3);
 
-    // ── 4. Track background ─────────────────────────────────────────────
-    ctx.fillStyle = '#181818';
+    // ── 4. Track background — Clay card ────────────────────────────────
+    ctx.fillStyle = '#f5f0e0';
     ctx.fillRect(0, trackY, W, TRACK_H);
 
-    // Subtle center guide
-    ctx.strokeStyle = '#222';
+    // Subtle center guide — Clay line
+    ctx.strokeStyle = '#e5dfd0';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, trackY + TRACK_H / 2 + 0.5);
@@ -213,15 +213,15 @@ export function useTimeline(
       ctx.fillStyle = col + 'CC';
       ctx.fillRect(x1, sy, sw, 3);
 
-      // Border (brighter when selected)
-      ctx.strokeStyle = isSelected ? 'rgba(255,255,255,0.65)' : col + '60';
+      // Border (brighter when selected) — Clay ink on selection
+      ctx.strokeStyle = isSelected ? 'rgba(10,10,10,0.7)' : col + '60';
       ctx.lineWidth = isSelected ? 1.5 : 1;
       const inset = ctx.lineWidth / 2;
       ctx.strokeRect(x1 + inset, sy + inset, sw - ctx.lineWidth, segH - ctx.lineWidth);
 
       // Speed label — only when wide enough to fit
       if (sw > 44) {
-        ctx.font = 'bold 11px monospace';
+        ctx.font = 'bold 11px "JetBrains Mono", monospace';
         ctx.fillStyle = col + 'DD';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -232,10 +232,10 @@ export function useTimeline(
       if (speed < 0.5 && sw > 68) {
         const smooth  = isPro && ofEnabled;
         const badgeTxt = smooth ? '✦ Smooth' : '△ Choppy';
-        const badgeBg  = smooth ? 'rgba(28,228,184,0.82)' : 'rgba(245,158,11,0.82)';
-        const badgeFg  = smooth ? '#042E24' : '#3B2200';
+        const badgeBg  = smooth ? 'rgba(45,141,141,0.9)' : 'rgba(232,185,74,0.9)';
+        const badgeFg  = smooth ? '#ffffff' : '#3B2200';
 
-        ctx.font = 'bold 8px sans-serif';
+        ctx.font = 'bold 8px "Inter", sans-serif';
         ctx.textBaseline = 'middle';
         const tw  = ctx.measureText(badgeTxt).width;
         const bw  = tw + 8;
@@ -252,8 +252,8 @@ export function useTimeline(
       }
     }
 
-    // ── 6. Waveform row (placeholder) ───────────────────────────────────
-    ctx.fillStyle = '#111111';
+    // ── 6. Waveform row (placeholder) — Clay canvas ────────────────────
+    ctx.fillStyle = '#fffaf0';
     ctx.fillRect(0, waveY, W, waveAreaH);
 
     const BAR_W = 2;
@@ -266,7 +266,7 @@ export function useTimeline(
       const bx = i * stride;
       const bh = waveBarH(i) * maxBarPx;
       const by = waveY + (waveAreaH - bh) / 2;
-      ctx.fillStyle = 'rgba(127,119,221,0.17)';
+      ctx.fillStyle = 'rgba(184, 164, 237, 0.35)';
       ctx.fillRect(bx, by, BAR_W, bh);
     }
 
@@ -275,7 +275,7 @@ export function useTimeline(
     // overlay them.  Same useEffect so markers never lag behind a scrub.
     if (beatMarkers && beatMarkers.length > 0) {
       ctx.save();
-      ctx.strokeStyle = 'rgba(28, 228, 184, 0.75)';
+      ctx.strokeStyle = 'rgba(255, 77, 139, 0.7)';
       ctx.lineWidth   = 0.5;
       for (const t of beatMarkers) {
         if (t < 0 || t > duration) continue;
@@ -288,7 +288,7 @@ export function useTimeline(
       ctx.restore();
     }
 
-    // ── 8. Playhead ─────────────────────────────────────────────────────
+    // ── 8. Playhead — Clay pink ────────────────────────────────────────
     const px = Number.isFinite(playheadTime / duration)
       ? (playheadTime / duration) * W
       : 0;
@@ -296,13 +296,13 @@ export function useTimeline(
     // Soft glow behind the line
     const glow = ctx.createLinearGradient(px - 4, 0, px + 4, 0);
     glow.addColorStop(0, 'transparent');
-    glow.addColorStop(0.5, 'rgba(127,119,221,0.28)');
+    glow.addColorStop(0.5, 'rgba(255, 77, 139, 0.22)');
     glow.addColorStop(1, 'transparent');
     ctx.fillStyle = glow;
     ctx.fillRect(px - 4, 0, 8, H);
 
     // Line
-    ctx.strokeStyle = '#7F77DD';
+    ctx.strokeStyle = '#ff4d8b';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(px, 0);
@@ -310,7 +310,7 @@ export function useTimeline(
     ctx.stroke();
 
     // Triangle handle at top of ruler
-    ctx.fillStyle = '#7F77DD';
+    ctx.fillStyle = '#ff4d8b';
     ctx.beginPath();
     ctx.moveTo(px - 5, 0);
     ctx.lineTo(px + 5, 0);

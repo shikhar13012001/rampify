@@ -1,84 +1,101 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #8B6FFF;
-  --color-primary-hover: #7A5EEF;
-  --color-primary-muted: rgba(139, 111, 255, 0.12);
+  /* Clay design system — unified across marketing + editor */
+  --color-clay-canvas: #fffaf0;
+  --color-clay-card: #f5f0e0;
+  --color-clay-ink: #0a0a0a;
+  --color-clay-ink-soft: #4a4a4a;
+  --color-clay-ink-muted: #8a8a8a;
+  --color-clay-line: #e5dfd0;
+  --color-clay-pink: #ff4d8b;
+  --color-clay-teal: #1a3a3a;
+  --color-clay-teal-bright: #2d8d8d;
+  --color-clay-lavender: #b8a4ed;
+  --color-clay-peach: #ffb084;
+  --color-clay-ochre: #e8b94a;
+  --color-clay-surface-soft: #faf5e8;
+  --color-clay-surface-dark: #0a1a1a;
 
-  --color-accent: #1CE4B8;
-  --color-accent-muted: rgba(28, 228, 184, 0.1);
+  /* Editor tokens — aliased to Clay palette */
+  --color-primary: #0a0a0a;
+  --color-primary-hover: #1f1f1f;
+  --color-primary-muted: rgba(10, 10, 10, 0.08);
 
-  --color-editor-bg: #07080F;
-  --color-editor-surface: #0E0F1E;
-  --color-editor-panel: #13142A;
-  --color-editor-border: #1E2040;
-  --color-editor-text: #EEEEF8;
-  --color-editor-text-muted: #7878A0;
+  --color-accent: #2d8d8d;
+  --color-accent-muted: rgba(45, 141, 141, 0.1);
+
+  --color-editor-bg: #fffaf0;
+  --color-editor-surface: #f5f0e0;
+  --color-editor-panel: #faf5e8;
+  --color-editor-border: #e5dfd0;
+  --color-editor-text: #0a0a0a;
+  --color-editor-text-muted: #4a4a4a;
 }
 
 :root {
-  /* Brand */
-  --color-primary: #8B6FFF;
-  --color-primary-hover: #7A5EEF;
-  --color-primary-active: #6A4EDF;
-  --color-primary-muted: rgba(139, 111, 255, 0.12);
-  --color-primary-border: rgba(139, 111, 255, 0.28);
-  --color-primary-glow: rgba(139, 111, 255, 0.18);
+  /* Brand — Clay ink (near-black, warm) */
+  --color-primary: #0a0a0a;
+  --color-primary-hover: #1f1f1f;
+  --color-primary-active: #000000;
+  --color-primary-muted: rgba(10, 10, 10, 0.08);
+  --color-primary-border: rgba(10, 10, 10, 0.2);
+  --color-primary-glow: rgba(10, 10, 10, 0.06);
 
-  /* Teal accent — used for curve, success states */
-  --color-accent: #1CE4B8;
-  --color-accent-muted: rgba(28, 228, 184, 0.1);
-  --color-accent-border: rgba(28, 228, 184, 0.25);
+  /* Accent — Clay teal-bright (curve, success states) */
+  --color-accent: #2d8d8d;
+  --color-accent-muted: rgba(45, 141, 141, 0.1);
+  --color-accent-border: rgba(45, 141, 141, 0.25);
 
-  /* Editor backgrounds — deep-space navy */
-  --color-bg: #07080F;
-  --color-surface: #0E0F1E;
-  --color-panel: #13142A;
-  --color-overlay: #1A1B36;
+  /* Editor backgrounds — Clay cream canvas + warm surfaces */
+  --color-bg: #fffaf0;
+  --color-surface: #f5f0e0;
+  --color-panel: #faf5e8;
+  --color-overlay: #fffaf0;
 
-  /* Borders */
-  --color-border: #1E2040;
-  --color-border-subtle: #151628;
-  --color-border-strong: #2A2C52;
+  /* Borders — Clay hairline (warm cream) */
+  --color-border: #e5dfd0;
+  --color-border-subtle: #efe9da;
+  --color-border-strong: #d4cebf;
 
-  /* Text */
-  --color-text: #EEEEF8;
-  --color-text-muted: #7878A0;
-  --color-text-subtle: #44446A;
-  --color-text-disabled: #24244A;
+  /* Text — Clay ink scale */
+  --color-text: #0a0a0a;
+  --color-text-muted: #4a4a4a;
+  --color-text-subtle: #8a8a8a;
+  --color-text-disabled: #b8b8b8;
 
-  /* Semantic */
-  --color-success: #1CE4B8;
-  --color-warning: #F59E0B;
-  --color-error: #FF6B78;
-  --color-info: #60A5FA;
+  /* Semantic — Clay palette */
+  --color-success: #2d8d8d;
+  --color-warning: #e8b94a;
+  --color-error: #ff4d8b;
+  --color-info: #b8a4ed;
 
-  /* Speed colors */
-  --color-speed-slow: #1CE4B8;
-  --color-speed-normal: #8B6FFF;
-  --color-speed-fast: #F59E0B;
-  --color-speed-vfast: #FF6B78;
+  /* Speed colors — Clay brand saturations */
+  --color-speed-slow: #2d8d8d;
+  --color-speed-normal: #b8a4ed;
+  --color-speed-fast: #e8b94a;
+  --color-speed-vfast: #ff4d8b;
 
-  /* Timeline */
-  --color-timeline-bg: #04050B;
-  --color-timeline-track: #0F1022;
-  --color-timeline-playhead: #8B6FFF;
-  --color-timeline-selection: rgba(139, 111, 255, 0.14);
+  /* Timeline — cream canvas with warm track */
+  --color-timeline-bg: #faf5e8;
+  --color-timeline-track: #f5f0e0;
+  --color-timeline-playhead: #ff4d8b;
+  --color-timeline-selection: rgba(255, 77, 139, 0.12);
 
-  /* Curve editor */
-  --color-curve-line: #1CE4B8;
-  --color-curve-point: #FFFFFF;
-  --color-curve-handle: rgba(28, 228, 184, 0.5);
-  --color-curve-bg: #04050B;
-  --color-curve-grid: rgba(255, 255, 255, 0.025);
+  /* Curve editor — cream with teal-bright line */
+  --color-curve-line: #2d8d8d;
+  --color-curve-point: #0a0a0a;
+  --color-curve-handle: rgba(45, 141, 141, 0.5);
+  --color-curve-bg: #faf5e8;
+  --color-curve-grid: rgba(10, 10, 10, 0.06);
 
   /* Sizing */
   --timeline-height: 120px;
   --toolbar-height: 56px;
   --panel-width: 256px;
 
-  /* Typography */
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Helvetica Neue', sans-serif;
+  /* Typography — Inter for Clay warmth */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
@@ -118,22 +135,22 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-border-strong);
-  border-radius: 4px;
+  border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-subtle);
+  background: var(--color-clay-ink-muted);
 }
 
 /* Focus ring */
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-clay-ink);
   outline-offset: 2px;
 }
 
 /* Selection */
 ::selection {
-  background: var(--color-primary-muted);
-  color: var(--color-text);
+  background: rgba(184, 164, 237, 0.25);
+  color: var(--color-clay-ink);
 }
 
 /* Range input styling */
@@ -235,5 +252,111 @@ input[type='range']::-webkit-slider-thumb:hover {
   .animate-fade-up-delay-3,
   .animate-fade-in {
     animation: none;
+  }
+}
+
+/* ─── Clay marketing page styles ────────────────────────────────────────── */
+
+.clay-page {
+  background-color: var(--color-clay-canvas);
+  color: var(--color-clay-ink);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.clay-display {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  color: var(--color-clay-ink);
+}
+
+.clay-body {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  color: var(--color-clay-ink-soft);
+  line-height: 1.6;
+}
+
+/* Clay scroll reveal */
+@keyframes clay-reveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.clay-reveal {
+  animation: clay-reveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Clay 3D shadow — soft, warm, bottom-anchored */
+.clay-shadow {
+  box-shadow: 0 2px 4px rgba(10, 10, 10, 0.04),
+              0 8px 24px rgba(10, 10, 10, 0.06),
+              0 24px 60px rgba(10, 10, 10, 0.08);
+}
+
+.clay-shadow-lg {
+  box-shadow: 0 4px 8px rgba(10, 10, 10, 0.05),
+              0 16px 40px rgba(10, 10, 10, 0.08),
+              0 40px 100px rgba(10, 10, 10, 0.1);
+}
+
+/* Clay card hover lift */
+.clay-lift {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.clay-lift:hover {
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clay-reveal { animation: none; }
+  .clay-lift { transition: none; }
+  .clay-lift:hover { transform: none; }
+}
+
+/* ─── Clay responsive ───────────────────────────────────────────────────── */
+
+/* Tablet — collapse 3-col grids to 2-col */
+@media (max-width: 1024px) {
+  .clay-page section[style*="grid-template-columns: repeat(3, 1fr)"],
+  .clay-page div[style*="grid-template-columns: repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .clay-page div[style*="grid-template-columns: 7fr 5fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+  }
+  .clay-page div[style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Mobile — single column, smaller padding */
+@media (max-width: 768px) {
+  .clay-page section {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+  .clay-page section[style*="padding: 96px 24px"],
+  .clay-page section[style*="padding: 80px 24px 96px"] {
+    padding-top: 56px !important;
+    padding-bottom: 56px !important;
+  }
+  .clay-page div[style*="grid-template-columns: repeat(3, 1fr)"],
+  .clay-page div[style*="grid-template-columns: repeat(2, 1fr)"],
+  .clay-page div[style*="grid-template-columns: 7fr 5fr"],
+  .clay-page div[style*="grid-template-columns: 1.5fr repeat(3, 1fr)"],
+  .clay-page div[style*="grid-template-columns: repeat(4, 1fr)"],
+  .clay-page div[style*="grid-template-columns: 120px 1fr"],
+  .clay-page div[style*="grid-template-columns: 2fr 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .clay-page nav div[style*="gap: 28px"] {
+    display: none !important;
   }
 }

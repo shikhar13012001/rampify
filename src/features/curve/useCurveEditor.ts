@@ -104,24 +104,24 @@ export function useCurveEditor(
 
     const { toCanvas, plotW, plotH } = makeCoords(width, height, minSpeed, maxSpeed);
 
-    // Background
-    ctx.fillStyle = '#0a0a0a';
+    // Background — Clay surface-soft cream
+    ctx.fillStyle = '#faf5e8';
     ctx.fillRect(0, 0, width, height);
 
-    // Plot border
-    ctx.strokeStyle = '#2a2a2a';
+    // Plot border — Clay hairline
+    ctx.strokeStyle = '#e5dfd0';
     ctx.lineWidth = 1;
     ctx.strokeRect(PAD_L, PAD_T, plotW, plotH);
 
     // Grid lines — dynamic based on the visible speed range
     const gridSpeeds = computeGridSpeeds(minSpeed, maxSpeed);
-    ctx.font = '9px monospace';
+    ctx.font = '9px "JetBrains Mono", monospace';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'right';
     for (const s of gridSpeeds) {
       const { y } = toCanvas(0, s);
       const is1x = Math.abs(s - 1) < 0.01;
-      ctx.strokeStyle = is1x ? '#2f2f2f' : '#1c1c1c';
+      ctx.strokeStyle = is1x ? '#d4cebf' : '#efe9da';
       ctx.lineWidth = is1x ? 1.5 : 1;
       ctx.setLineDash(is1x ? [] : [3, 3]);
       ctx.beginPath();
@@ -129,11 +129,11 @@ export function useCurveEditor(
       ctx.lineTo(PAD_L + plotW, y);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = is1x ? '#666' : '#444';
+      ctx.fillStyle = is1x ? '#4a4a4a' : '#8a8a8a';
       ctx.fillText(`${s}×`, PAD_L - 5, y);
     }
 
-    // Curve fill
+    // Curve fill — Clay lavender tint
     ctx.beginPath();
     for (let i = 0; i <= SAMPLES; i++) {
       const t = i / SAMPLES;
@@ -146,10 +146,10 @@ export function useCurveEditor(
     ctx.lineTo(PAD_L + plotW, baseY);
     ctx.lineTo(PAD_L, baseY);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(127,119,221,0.08)';
+    ctx.fillStyle = 'rgba(45, 141, 141, 0.1)';
     ctx.fill();
 
-    // Curve line
+    // Curve line — Clay teal-bright
     ctx.beginPath();
     for (let i = 0; i <= SAMPLES; i++) {
       const t = i / SAMPLES;
@@ -158,12 +158,12 @@ export function useCurveEditor(
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
-    ctx.strokeStyle = '#7F77DD';
+    ctx.strokeStyle = '#2d8d8d';
     ctx.lineWidth = 2;
     ctx.setLineDash([]);
     ctx.stroke();
 
-    // Control points
+    // Control points — Clay ink + teal-bright
     for (let i = 0; i < curve.points.length; i++) {
       const pt = curve.points[i];
       const { x, y } = toCanvas(pt.time, pt.speed);
@@ -173,9 +173,9 @@ export function useCurveEditor(
 
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = isHovered ? '#fff' : (isEndpoint ? '#a9a5e8' : '#7F77DD');
+      ctx.fillStyle = isHovered ? '#0a0a0a' : (isEndpoint ? '#b8a4ed' : '#2d8d8d');
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.strokeStyle = 'rgba(255, 250, 240, 0.9)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }

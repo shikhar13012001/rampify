@@ -14,6 +14,14 @@ import { VideoPlayer } from '@/features/preview/VideoPlayer';
 import { Timeline } from '@/features/timeline/Timeline';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { Landing } from '@/pages/Landing';
+import { Pricing } from '@/pages/Pricing';
+import { Changelog } from '@/pages/Changelog';
+import { Roadmap } from '@/pages/Roadmap';
+import { Docs } from '@/pages/Docs';
+import { About } from '@/pages/About';
+import { Privacy } from '@/pages/Privacy';
+import { Terms } from '@/pages/Terms';
+import { Contact } from '@/pages/Contact';
 import { UpgradeSuccess } from '@/pages/UpgradeSuccess';
 import { useEditorStore } from '@/store/editorStore';
 import { onAuthChange } from '@/lib/auth';
@@ -121,6 +129,14 @@ function App() {
     <>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/changelog" element={<Changelog />} />
+        <Route path="/roadmap" element={<Roadmap />} />
+        <Route path="/docs" element={<Docs />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/editor" element={<EditorRoute />} />
         <Route path="/upgrade/success" element={<UpgradeSuccess />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -196,7 +212,7 @@ function EditorRoute() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '240px minmax(0, 1fr)',
+            gridTemplateColumns: '248px minmax(0, 1fr)',
             gridTemplateRows: 'minmax(0, 1fr)',
             height: 'calc(100dvh - var(--toolbar-height))',
             flex: 1,
@@ -205,10 +221,10 @@ function EditorRoute() {
           {/* Sidebar */}
           <aside
             style={{
-              borderRight: '1px solid var(--color-border)',
+              borderRight: '1px solid var(--color-border-subtle)',
               backgroundColor: 'var(--color-panel)',
               overflowY: 'auto',
-              padding: 10,
+              padding: 12,
             }}
           >
             <Sidebar />
@@ -227,7 +243,7 @@ function EditorRoute() {
           >
             {/* Video preview */}
             <ErrorBoundary>
-              <section style={{ minHeight: 0, backgroundColor: '#04050B' }}>
+              <section style={{ minHeight: 0, backgroundColor: '#0a1a1a' }}>
                 <VideoPlayer />
               </section>
             </ErrorBoundary>
@@ -236,7 +252,7 @@ function EditorRoute() {
             <ErrorBoundary>
               <section
                 style={{
-                  borderTop: '1px solid var(--color-border)',
+                  borderTop: '1px solid var(--color-border-subtle)',
                   backgroundColor: 'var(--color-curve-bg)',
                 }}
               >
@@ -248,8 +264,8 @@ function EditorRoute() {
             <ErrorBoundary>
               <section
                 style={{
-                  borderTop: '1px solid var(--color-border)',
-                  borderBottom: '1px solid var(--color-border)',
+                  borderTop: '1px solid var(--color-border-subtle)',
+                  borderBottom: '1px solid var(--color-border-subtle)',
                   backgroundColor: 'var(--color-curve-bg)',
                   padding: '12px 16px 10px',
                 }}
@@ -283,7 +299,7 @@ function EditorRoute() {
         <main
           style={{
             flex: 1,
-            padding: 24,
+            padding: 28,
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -308,6 +324,7 @@ function CurveEmptyState() {
         gap: 10,
         color: 'var(--color-text-subtle)',
         fontSize: 13,
+        letterSpacing: '0.01em',
       }}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">

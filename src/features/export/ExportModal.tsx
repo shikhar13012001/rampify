@@ -226,7 +226,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backgroundColor: 'rgba(10,10,10,0.4)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           padding: 20,
@@ -237,12 +237,12 @@ export function ExportModal({ onClose }: ExportModalProps) {
           style={{
             width: 'min(400px, 100%)',
             borderRadius: 20,
-            border: '1px solid rgba(255, 255, 255, 0.07)',
-            background: 'linear-gradient(180deg, #0E0F1E 0%, #0A0B15 100%)',
+            border: '1px solid #e5dfd0',
+            background: '#fffaf0',
             padding: 24,
             display: 'grid',
             gap: 16,
-            boxShadow: '0 24px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
+            boxShadow: '0 8px 24px rgba(10,10,10,0.08), 0 24px 60px rgba(10,10,10,0.1)',
             animation: 'fadeUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
@@ -251,7 +251,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <ExportModalIcon phase={phase} />
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#EEEEF8', letterSpacing: '-0.02em' }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.02em' }}>
                   {phase === 'done' ? 'Export ready' : phase === 'error' ? 'Export failed' : 'Export video'}
                 </h2>
               </div>
@@ -263,8 +263,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
               type="button"
               onClick={phase === 'processing' ? cancel : onClose}
               style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                background: 'rgba(10,10,10,0.04)',
+                border: '1px solid rgba(10,10,10,0.06)',
                 borderRadius: 8,
                 cursor: 'pointer',
                 color: 'var(--color-text-muted)',
@@ -276,8 +276,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 transition: 'background 0.12s',
                 flexShrink: 0,
               }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)')}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.08)')}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.04)')}
               aria-label={phase === 'processing' ? 'Cancel export' : 'Close'}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
@@ -292,8 +292,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
           <div
             style={{
               borderRadius: 10,
-              border: `1px solid ${remaining > 0 ? 'rgba(28, 228, 184, 0.15)' : 'rgba(255, 107, 120, 0.15)'}`,
-              background: remaining > 0 ? 'rgba(28, 228, 184, 0.05)' : 'rgba(255, 107, 120, 0.05)',
+              border: `1px solid ${remaining > 0 ? 'rgba(45, 141, 141, 0.2)' : 'rgba(255, 77, 139, 0.2)'}`,
+              background: remaining > 0 ? 'rgba(45, 141, 141, 0.06)' : 'rgba(255, 77, 139, 0.06)',
               padding: '9px 12px',
               display: 'flex',
               alignItems: 'center',
@@ -301,7 +301,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
               gap: 8,
             }}
           >
-            <span style={{ fontSize: 12, color: remaining > 0 ? '#7878A0' : 'rgba(255, 107, 120, 0.8)' }}>
+            <span style={{ fontSize: 12, color: remaining > 0 ? '#4a4a4a' : 'rgba(255, 77, 139, 0.85)' }}>
               {user ? 'Free exports this month' : 'Guest exports (this session)'}
             </span>
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -312,7 +312,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
                     width: 8,
                     height: 8,
                     borderRadius: '50%',
-                    background: i < remaining ? '#1CE4B8' : 'rgba(255,255,255,0.08)',
+                    background: i < remaining ? '#2d8d8d' : 'rgba(10,10,10,0.08)',
                     transition: 'background 0.2s',
                   }}
                 />
@@ -323,7 +323,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
                   fontSize: 11,
                   fontFamily: 'var(--font-mono)',
                   fontWeight: 600,
-                  color: remaining > 0 ? '#1CE4B8' : '#FF6B78',
+                  color: remaining > 0 ? '#2d8d8d' : '#ff4d8b',
                 }}
               >
                 {remaining}/{user ? SIGNED_IN_FREE_LIMIT : EXPORT_LIMIT}
@@ -338,18 +338,18 @@ export function ExportModal({ onClose }: ExportModalProps) {
               style={{
                 borderRadius: 10,
                 border: ofSettings.quality === 'ultra'
-                  ? '1px solid rgba(245, 158, 11, 0.25)'
-                  : '1px solid rgba(139, 111, 255, 0.15)',
+                  ? '1px solid rgba(232, 185, 74, 0.3)'
+                  : '1px solid rgba(184, 164, 237, 0.2)',
                 background: ofSettings.quality === 'ultra'
-                  ? 'rgba(245, 158, 11, 0.06)'
-                  : 'rgba(139, 111, 255, 0.06)',
+                  ? 'rgba(232, 185, 74, 0.08)'
+                  : 'rgba(184, 164, 237, 0.08)',
                 padding: '9px 12px',
                 display: 'grid',
                 gap: 4,
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: ofSettings.quality === 'ultra' ? '#F59E0B' : '#A898FF', fontWeight: 600 }}>
+                <span style={{ fontSize: 12, color: ofSettings.quality === 'ultra' ? '#e8b94a' : '#b8a4ed', fontWeight: 600 }}>
                   {ofSettings.quality === 'ultra' ? '⚠ Ultra quality' : 'Frame interpolation'}
                 </span>
                 <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
@@ -357,7 +357,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 </span>
               </div>
               {ofSettings.quality === 'ultra' && (
-                <p style={{ margin: 0, fontSize: 11, color: 'rgba(245,158,11,0.8)', lineHeight: 1.4 }}>
+                <p style={{ margin: 0, fontSize: 11, color: 'rgba(232,185,74,0.9)', lineHeight: 1.4 }}>
                   Ultra quality may take 2–5 minutes on CPU-only machines.
                 </p>
               )}
@@ -376,18 +376,18 @@ export function ExportModal({ onClose }: ExportModalProps) {
                     return (
                       <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {i > 0 && (
-                          <div style={{ width: 16, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+                          <div style={{ width: 16, height: 1, background: 'rgba(10,10,10,0.1)' }} />
                         )}
                         <span
                           style={{
                             fontSize: 10,
                             fontWeight: 600,
                             color: isDone && phase === 'done'
-                              ? '#1CE4B8'
+                              ? '#2d8d8d'
                               : isActive
-                                ? '#A898FF'
+                                ? '#b8a4ed'
                                 : isDone
-                                  ? '#1CE4B8'
+                                  ? '#2d8d8d'
                                   : 'var(--color-text-subtle)',
                             opacity: !isDone && !isActive ? 0.5 : 1,
                             transition: 'color 0.2s',
@@ -399,12 +399,12 @@ export function ExportModal({ onClose }: ExportModalProps) {
                     );
                   })}
                   {phase === 'done' && (
-                    <span style={{ fontSize: 10, fontWeight: 600, color: '#1CE4B8' }}>✓ Done</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: '#2d8d8d' }}>✓ Done</span>
                   )}
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, alignItems: 'center' }}>
-                <span style={{ color: '#C0C0D8' }}>{progressLabel}</span>
+                <span style={{ color: '#4a4a4a' }}>{progressLabel}</span>
                 <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                   {phase === 'done' ? '100' : progress}%
                 </span>
@@ -414,7 +414,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 style={{
                   height: 6,
                   borderRadius: 999,
-                  background: 'rgba(255,255,255,0.05)',
+                  background: 'rgba(10,10,10,0.05)',
                   overflow: 'hidden',
                   position: 'relative',
                 }}
@@ -424,8 +424,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
                     height: '100%',
                     width: `${phase === 'done' ? 100 : progress}%`,
                     background: phase === 'done'
-                      ? 'linear-gradient(90deg, #1CE4B8, #10B891)'
-                      : 'linear-gradient(90deg, #8B6FFF, #6A4EDF)',
+                      ? '#2d8d8d'
+                      : '#0a0a0a',
                     borderRadius: 999,
                     transition: 'width 200ms ease, background 0.4s ease',
                     position: 'relative',
@@ -458,20 +458,20 @@ export function ExportModal({ onClose }: ExportModalProps) {
             <div
               style={{
                 borderRadius: 10,
-                border: '1px solid rgba(255, 107, 120, 0.18)',
-                background: 'rgba(255, 107, 120, 0.06)',
+                border: '1px solid rgba(255, 77, 139, 0.2)',
+                background: 'rgba(255, 77, 139, 0.06)',
                 padding: '10px 12px',
                 display: 'flex',
                 gap: 10,
                 alignItems: 'flex-start',
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B78" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff4d8b" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              <p style={{ margin: 0, color: '#FF9AA0', fontSize: 13, lineHeight: 1.5 }}>
+              <p style={{ margin: 0, color: '#ff4d8b', fontSize: 13, lineHeight: 1.5 }}>
                 {errorMessage || 'Export failed. Please try again.'}
               </p>
             </div>
@@ -486,14 +486,14 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 gap: 10,
                 padding: '10px 12px',
                 borderRadius: 10,
-                background: 'rgba(28, 228, 184, 0.06)',
-                border: '1px solid rgba(28, 228, 184, 0.15)',
+                background: 'rgba(45, 141, 141, 0.08)',
+                border: '1px solid rgba(45, 141, 141, 0.2)',
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1CE4B8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d8d8d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              <span style={{ fontSize: 13, color: '#1CE4B8', fontWeight: 600 }}>
+              <span style={{ fontSize: 13, color: '#2d8d8d', fontWeight: 600 }}>
                 Download started automatically
               </span>
             </div>
@@ -586,8 +586,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
 function ExportModalIcon({ phase }: { phase: Phase }) {
   if (phase === 'done') {
     return (
-      <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(28,228,184,0.12)', border: '1px solid rgba(28,228,184,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1CE4B8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(45,141,141,0.12)', border: '1px solid rgba(45,141,141,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2d8d8d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
@@ -595,8 +595,8 @@ function ExportModalIcon({ phase }: { phase: Phase }) {
   }
   if (phase === 'error') {
     return (
-      <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,107,120,0.1)', border: '1px solid rgba(255,107,120,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B78" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+      <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,77,139,0.1)', border: '1px solid rgba(255,77,139,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff4d8b" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
           <line x1="12" y1="8" x2="12" y2="12" />
           <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -605,8 +605,8 @@ function ExportModalIcon({ phase }: { phase: Phase }) {
     );
   }
   return (
-    <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(139,111,255,0.12)', border: '1px solid rgba(139,111,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B6FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(184,164,237,0.14)', border: '1px solid rgba(184,164,237,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b8a4ed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         <polyline points="7 10 12 15 17 10" />
         <line x1="12" y1="15" x2="12" y2="3" />
@@ -637,9 +637,9 @@ const ghostBtn: React.CSSProperties = {
   flex: 1,
   padding: '10px 14px',
   borderRadius: 10,
-  border: '1px solid rgba(255, 255, 255, 0.07)',
+  border: '1px solid #e5dfd0',
   background: 'transparent',
-  color: '#9898C0',
+  color: '#4a4a4a',
   fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer',
@@ -652,13 +652,13 @@ function primaryBtn(disabled: boolean): React.CSSProperties {
     flex: 1,
     padding: '10px 14px',
     borderRadius: 10,
-    border: '1px solid rgba(139, 111, 255, 0.35)',
+    border: '1px solid transparent',
     background: disabled
-      ? 'rgba(139, 111, 255, 0.06)'
-      : 'linear-gradient(135deg, #8B6FFF 0%, #6A4EDF 100%)',
-    color: disabled ? '#8878C0' : '#fff',
+      ? 'rgba(10,10,10,0.3)'
+      : '#0a0a0a',
+    color: disabled ? 'rgba(255,250,240,0.6)' : '#fffaf0',
     fontSize: 13,
-    fontWeight: 700,
+    fontWeight: 600,
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.7 : 1,
     letterSpacing: '-0.01em',
@@ -666,7 +666,7 @@ function primaryBtn(disabled: boolean): React.CSSProperties {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    boxShadow: disabled ? 'none' : '0 0 20px rgba(139, 111, 255, 0.2)',
+    boxShadow: 'none',
     transition: 'opacity 0.15s',
   };
 }

@@ -152,15 +152,26 @@ export function VideoPlayer() {
             aria-label="Play"
             style={{
               position: 'absolute', inset: 0, margin: 'auto',
-              width: 58, height: 58, borderRadius: '50%',
-              backgroundColor: 'rgba(0,0,0,0.58)',
-              border: '2px solid rgba(255,255,255,0.2)',
+              width: 62, height: 62, borderRadius: '50%',
+              backgroundColor: 'rgba(7, 8, 15, 0.62)',
+              border: '1px solid rgba(139, 111, 255, 0.25)',
               cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backdropFilter: 'blur(4px)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              boxShadow: '0 0 32px rgba(139, 111, 255, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)',
+              transition: 'transform 0.15s, box-shadow 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)';
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 40px rgba(139, 111, 255, 0.25), inset 0 1px 0 rgba(255,255,255,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 32px rgba(139, 111, 255, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)';
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="white" aria-hidden="true" style={{ marginLeft: 2 }}>
               <polygon points="5,3 19,12 5,21" />
             </svg>
           </button>
@@ -208,9 +219,9 @@ export function VideoPlayer() {
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
-                    color: '#A898FF',
-                    background: 'rgba(139,111,255,0.18)',
-                    border: '1px solid rgba(139,111,255,0.35)',
+                    color: '#b8a4ed',
+                    background: 'rgba(184,164,237,0.18)',
+                    border: '1px solid rgba(184,164,237,0.35)',
                     borderRadius: 5,
                     padding: '2px 8px',
                     cursor: 'pointer',
@@ -270,11 +281,27 @@ function TransportBar({ isPlaying, playheadTime, duration, progress, onTogglePla
   };
 
   return (
-    <div style={{ height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', backgroundColor: '#0d0d0d', borderTop: '1px solid #222' }}>
+    <div style={{ height: 46, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', backgroundColor: 'var(--color-surface)', borderTop: '1px solid var(--color-border-subtle)' }}>
       <button
         onClick={onTogglePlay}
         aria-label={isPlaying ? 'Pause' : 'Play'}
-        style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: 'none', border: '1px solid #333', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc' }}
+        style={{
+          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+          background: 'rgba(139, 111, 255, 0.1)',
+          border: '1px solid rgba(139, 111, 255, 0.3)',
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#A898FF',
+          transition: 'background 0.15s, border-color 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(139, 111, 255, 0.16)';
+          (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(139, 111, 255, 0.45)';
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(139, 111, 255, 0.1)';
+          (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(139, 111, 255, 0.3)';
+        }}
       >
         {isPlaying ? (
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -287,13 +314,13 @@ function TransportBar({ isPlaying, playheadTime, duration, progress, onTogglePla
         )}
       </button>
 
-      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: '#aaa', flexShrink: 0, minWidth: 90 }}>
+      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)', flexShrink: 0, minWidth: 92, fontWeight: 500 }}>
         {formatTime(playheadTime)} / {formatTime(duration)}
       </span>
 
       <div style={{ flex: 1, position: 'relative', height: 20, display: 'flex', alignItems: 'center' }}>
-        <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '100%', height: 3, backgroundColor: '#2a2a2a', borderRadius: 2 }} />
-        <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: `${progress * 100}%`, height: 3, backgroundColor: '#7F77DD', borderRadius: 2, pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '100%', height: 3, backgroundColor: 'var(--color-border-strong)', borderRadius: 2 }} />
+        <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: `${progress * 100}%`, height: 3, backgroundColor: 'var(--color-primary)', borderRadius: 2, pointerEvents: 'none', boxShadow: '0 0 8px rgba(139, 111, 255, 0.3)' }} />
         <input
           type="range" min={0} max={1} step={0.0001}
           value={Number.isFinite(progress) ? progress : 0}
@@ -306,7 +333,17 @@ function TransportBar({ isPlaying, playheadTime, duration, progress, onTogglePla
         onClick={handleSplit}
         disabled={!canSplit}
         title="Split segment at playhead (S)"
-        style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 5, background: canSplit ? 'rgba(127,119,221,0.12)' : 'none', border: `1px solid ${canSplit ? 'rgba(127,119,221,0.4)' : '#2a2a2a'}`, color: canSplit ? '#7F77DD' : '#444', fontSize: 12, fontWeight: 600, cursor: canSplit ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 5 }}
+        style={{
+          flexShrink: 0, padding: '5px 11px', borderRadius: 7,
+          background: canSplit ? 'rgba(139, 111, 255, 0.12)' : 'transparent',
+          border: `1px solid ${canSplit ? 'rgba(139, 111, 255, 0.4)' : 'var(--color-border)'}`,
+          color: canSplit ? '#b8a4ed' : 'var(--color-text-disabled)',
+          fontSize: 12, fontWeight: 600,
+          cursor: canSplit ? 'pointer' : 'default',
+          display: 'flex', alignItems: 'center', gap: 5,
+          transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+          letterSpacing: '-0.01em',
+        }}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
           <line x1="12" y1="2" x2="12" y2="22" /><path d="M2 12h4M18 12h4" />
@@ -322,9 +359,13 @@ function TransportBar({ isPlaying, playheadTime, duration, progress, onTogglePla
 function Badge({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'warning' }) {
   return (
     <div style={{
-      backgroundColor: tone === 'warning' ? 'rgba(249,115,22,0.88)' : 'rgba(127,119,221,0.88)',
+      backgroundColor: tone === 'warning' ? 'rgba(249,115,22,0.85)' : 'rgba(139, 111, 255, 0.85)',
       color: '#fff', fontSize: 11, fontWeight: 700,
-      fontFamily: 'var(--font-mono)', padding: '3px 8px', borderRadius: 999,
+      fontFamily: 'var(--font-mono)', padding: '3px 9px', borderRadius: 999,
+      letterSpacing: '0.01em',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+      backdropFilter: 'blur(4px)',
+      WebkitBackdropFilter: 'blur(4px)',
     }}>
       {children}
     </div>

@@ -126,38 +126,38 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
         style={{
           position: 'fixed', inset: 0, zIndex: 1100,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: 'rgba(0,0,0,0.82)',
-          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          backgroundColor: 'rgba(10,10,10,0.4)',
+          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
           padding: 20, animation: 'fadeIn 0.18s ease',
         }}
       >
         <div
           style={{
-            width: 'min(420px, 100%)', borderRadius: 22,
-            border: '1px solid rgba(28,228,184,0.2)',
-            background: 'linear-gradient(160deg, #0E0F1E 0%, #0A0B15 100%)',
-            boxShadow: '0 40px 120px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
+            width: 'min(420px, 100%)', borderRadius: 24,
+            border: '1px solid #e5dfd0',
+            background: '#fffaf0',
+            boxShadow: '0 8px 24px rgba(10,10,10,0.08), 0 24px 60px rgba(10,10,10,0.1)',
             padding: 28, textAlign: 'center',
             animation: 'fadeUp 0.26s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(28,228,184,0.12)', border: '1px solid rgba(28,228,184,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1CE4B8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(45,141,141,0.12)', border: '1px solid rgba(45,141,141,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2d8d8d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.02em' }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.02em' }}>
             You're already Pro
           </h2>
-          <p style={{ margin: '8px 0 22px', fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.55 }}>
+          <p style={{ margin: '8px 0 22px', fontSize: 13, color: '#4a4a4a', lineHeight: 1.55 }}>
             All Pro features are unlocked. Enjoy unlimited exports, motion blur, AI frame interpolation, and beat sync.
           </p>
           <button
             type="button" onClick={onClose}
             style={{
-              padding: '11px 22px', borderRadius: 10, border: 'none', cursor: 'pointer',
-              background: 'linear-gradient(135deg, #8B6FFF 0%, #6A4EDF 100%)',
-              color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em',
+              padding: '11px 22px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: '#0a0a0a',
+              color: '#fffaf0', fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
             }}
           >
             Back to editor
@@ -173,8 +173,8 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
       style={{
         position: 'fixed', inset: 0, zIndex: 1100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'rgba(0,0,0,0.82)',
-        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        backgroundColor: 'rgba(10,10,10,0.4)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         padding: 20,
         animation: 'fadeIn 0.18s ease',
       }}
@@ -182,24 +182,24 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
       <div
         style={{
           width: 'min(680px, 100%)',
-          borderRadius: 22,
-          border: '1px solid rgba(139,111,255,0.18)',
-          background: 'linear-gradient(160deg, #0E0F1E 0%, #0A0B15 100%)',
-          boxShadow: '0 40px 120px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
+          borderRadius: 24,
+          border: '1px solid #e5dfd0',
+          background: '#fffaf0',
+          boxShadow: '0 8px 24px rgba(10,10,10,0.08), 0 24px 60px rgba(10,10,10,0.1)',
           position: 'relative',
           overflow: 'hidden',
           animation: 'fadeUp 0.26s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         {/* Ambient glow */}
-        <div aria-hidden="true" style={{ position: 'absolute', top: -120, right: -120, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,111,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div aria-hidden="true" style={{ position: 'absolute', top: -120, right: -120, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(184,164,237,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
         {/* Close */}
         <button
           type="button" onClick={onClose} aria-label="Close"
-          style={{ position: 'absolute', top: 18, right: 18, width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.12s', zIndex: 1 }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)')}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)')}
+          style={{ position: 'absolute', top: 18, right: 18, width: 30, height: 30, borderRadius: 8, background: 'rgba(10,10,10,0.04)', border: '1px solid rgba(10,10,10,0.06)', cursor: 'pointer', color: '#4a4a4a', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.12s', zIndex: 1 }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.08)')}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.04)')}
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -214,24 +214,24 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
             style={{
               flex: '1 1 280px',
               padding: '32px 28px 32px 32px',
-              borderRight: '1px solid rgba(255,255,255,0.05)',
+              borderRight: '1px solid #e5dfd0',
             }}
           >
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(139,111,255,0.14)', border: '1px solid rgba(139,111,255,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B6FFF" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(184,164,237,0.16)', border: '1px solid rgba(184,164,237,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b8a4ed" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.03em' }}>Rampify Pro</div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-subtle)', marginTop: 1 }}>Everything to edit like a pro</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.02em' }}>Rampify Pro</div>
+                <div style={{ fontSize: 11, color: '#8a8a8a', marginTop: 1 }}>Everything to edit like a pro</div>
               </div>
             </div>
 
             {reason && (
-              <p style={{ margin: '12px 0 20px', fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.55, background: 'rgba(139,111,255,0.06)', border: '1px solid rgba(139,111,255,0.12)', borderRadius: 8, padding: '8px 12px' }}>
+              <p style={{ margin: '12px 0 20px', fontSize: 13, color: '#4a4a4a', lineHeight: 1.55, background: 'rgba(184,164,237,0.08)', border: '1px solid rgba(184,164,237,0.18)', borderRadius: 10, padding: '8px 12px' }}>
                 {reason}
               </p>
             )}
@@ -241,20 +241,20 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
               {FEATURES.map(({ icon, label, desc }) => (
                 <div
                   key={label}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: '1px solid #efe9da' }}
                 >
-                  {/* Green checkmark */}
-                  <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'rgba(28,228,184,0.12)', border: '1px solid rgba(28,228,184,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#1CE4B8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  {/* Teal checkmark */}
+                  <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'rgba(45,141,141,0.12)', border: '1px solid rgba(45,141,141,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#2d8d8d" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <polyline points="2 6 5 9 10 3" />
                     </svg>
                   </span>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 10, color: '#8B6FFF' }}>{icon}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#D8D8EE' }}>{label}</span>
+                      <span style={{ fontSize: 10, color: '#b8a4ed' }}>{icon}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0a0a0a' }}>{label}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: 'var(--color-text-subtle)', lineHeight: 1.4, display: 'block', marginTop: 1 }}>{desc}</span>
+                    <span style={{ fontSize: 11, color: '#8a8a8a', lineHeight: 1.4, display: 'block', marginTop: 1 }}>{desc}</span>
                   </div>
                 </div>
               ))}
@@ -269,18 +269,18 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              background: 'rgba(139,111,255,0.04)',
+              background: '#faf5e8',
             }}
           >
             {/* Billing toggle */}
             <div
               style={{
                 display: 'flex',
-                borderRadius: 10,
-                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 12,
+                border: '1px solid #e5dfd0',
                 overflow: 'hidden',
                 marginBottom: 28,
-                background: 'rgba(255,255,255,0.02)',
+                background: '#fffaf0',
               }}
             >
               {(['monthly', 'annual'] as const).map((cycle) => {
@@ -292,16 +292,16 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                     onClick={() => setBilling(cycle)}
                     style={{
                       flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
-                      background: active ? 'rgba(139,111,255,0.22)' : 'transparent',
-                      color: active ? '#D0C4FF' : '#9898B8',
-                      fontSize: 12, fontWeight: active ? 700 : 500,
+                      background: active ? '#0a0a0a' : 'transparent',
+                      color: active ? '#fffaf0' : '#8a8a8a',
+                      fontSize: 12, fontWeight: active ? 600 : 500,
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                       transition: 'background 0.15s, color 0.15s',
                     }}
                   >
                     <span style={{ textTransform: 'capitalize' }}>{cycle}</span>
                     {cycle === 'annual' && (
-                      <span style={{ fontSize: 9, color: '#1CE4B8', fontWeight: 700, letterSpacing: '0.04em' }}>
+                      <span style={{ fontSize: 9, color: '#e8b94a', fontWeight: 600, letterSpacing: '0.04em' }}>
                         SAVE {annualSaving}%
                       </span>
                     )}
@@ -312,22 +312,22 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
 
             {/* Price display */}
             <div style={{ marginBottom: 24, textAlign: 'center' }}>
-              <div style={{ fontSize: 36, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.04em', lineHeight: 1 }}>
+              <div style={{ fontSize: 36, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.03em', lineHeight: 1 }}>
                 {billing === 'monthly' ? `$${monthlyPrice}` : `$${annualTotal}`}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-subtle)', marginTop: 4 }}>
+              <div style={{ fontSize: 13, color: '#8a8a8a', marginTop: 4 }}>
                 {billing === 'monthly' ? 'per month' : 'per year'}
-                {perMonthPrice && <span style={{ color: '#1CE4B8', marginLeft: 6, fontWeight: 600 }}>({perMonthPrice} billed annually)</span>}
+                {perMonthPrice && <span style={{ color: '#2d8d8d', marginLeft: 6, fontWeight: 600 }}>({perMonthPrice} billed annually)</span>}
               </div>
             </div>
 
             {checkoutState === 'error' && (
-              <p style={{ margin: '0 0 12px', color: 'var(--color-error)', fontSize: 12, textAlign: 'center' }}>
+              <p style={{ margin: '0 0 12px', color: '#ff4d8b', fontSize: 12, textAlign: 'center' }}>
                 {checkoutError}
               </p>
             )}
             {checkoutState === 'already-pro' && (
-              <p style={{ margin: '0 0 12px', color: '#1CE4B8', fontSize: 12, textAlign: 'center' }}>
+              <p style={{ margin: '0 0 12px', color: '#2d8d8d', fontSize: 12, textAlign: 'center' }}>
                 You're already Pro — nothing to upgrade.
               </p>
             )}
@@ -341,23 +341,23 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                 padding: '14px 20px',
                 borderRadius: 12,
                 background: checkoutState === 'loading'
-                  ? 'rgba(139,111,255,0.5)'
-                  : 'linear-gradient(135deg, #8B6FFF 0%, #6A4EDF 100%)',
+                  ? 'rgba(10,10,10,0.4)'
+                  : '#0a0a0a',
                 border: 'none',
-                color: '#fff',
+                color: '#fffaf0',
                 fontSize: 14,
-                fontWeight: 700,
+                fontWeight: 600,
                 letterSpacing: '-0.01em',
                 cursor: checkoutState === 'loading' ? 'not-allowed' : 'pointer',
-                boxShadow: checkoutState === 'loading' ? 'none' : '0 0 28px rgba(139,111,255,0.3)',
+                boxShadow: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                transition: 'opacity 0.15s, box-shadow 0.15s',
+                transition: 'opacity 0.15s',
                 width: '100%',
               }}
-              onMouseEnter={(e) => { if (checkoutState !== 'loading') (e.currentTarget as HTMLButtonElement).style.opacity = '0.9'; }}
+              onMouseEnter={(e) => { if (checkoutState !== 'loading') (e.currentTarget as HTMLButtonElement).style.opacity = '0.88'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
             >
               {checkoutState === 'loading' ? (
@@ -368,19 +368,19 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
               ) : (
                 <>
                   Start Pro
-                  <span style={{ opacity: 0.75, fontSize: 13, fontWeight: 500 }}>
+                  <span style={{ opacity: 0.7, fontSize: 13, fontWeight: 500 }}>
                     — {displayPrice}
                   </span>
                 </>
               )}
             </button>
 
-            <p style={{ margin: '12px 0 0', fontSize: 11, color: '#6868A0', textAlign: 'center', lineHeight: 1.5 }}>
+            <p style={{ margin: '12px 0 0', fontSize: 11, color: '#8a8a8a', textAlign: 'center', lineHeight: 1.5 }}>
               Cancel anytime. No questions asked.
             </p>
 
             {!user && (
-              <p style={{ margin: '8px 0 0', fontSize: 11, color: '#5A5A7A', textAlign: 'center' }}>
+              <p style={{ margin: '8px 0 0', fontSize: 11, color: '#8a8a8a', textAlign: 'center' }}>
                 You'll be prompted to sign in before checkout.
               </p>
             )}
@@ -394,7 +394,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
 function SpinnerIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 40 40" aria-hidden="true" style={{ animation: 'spin 0.8s linear infinite' }}>
-      <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="4" />
+      <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,250,240,0.3)" strokeWidth="4" />
       <path d="M20 4 A16 16 0 0 1 36 20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
     </svg>
   );

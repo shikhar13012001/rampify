@@ -184,9 +184,9 @@ export function BeatSyncPanel() {
           height: 32,
           background: 'none',
           border: 'none',
-          borderBottom: isOpen ? '1px solid var(--color-border)' : 'none',
+          borderBottom: isOpen ? '1px solid var(--color-border-subtle)' : 'none',
           cursor: 'pointer',
-          color: hasBeatData ? '#1CE4B8' : 'var(--color-text-subtle)',
+          color: hasBeatData ? '#2d8d8d' : 'var(--color-text-subtle)',
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: '0.06em',
@@ -203,9 +203,9 @@ export function BeatSyncPanel() {
               fontSize: 10,
               fontFamily: 'var(--font-mono)',
               fontWeight: 600,
-              color: '#1CE4B8',
-              background: 'rgba(28,228,184,0.1)',
-              border: '1px solid rgba(28,228,184,0.2)',
+              color: '#2d8d8d',
+              background: 'rgba(45,141,141,0.1)',
+              border: '1px solid rgba(45,141,141,0.25)',
               borderRadius: 4,
               padding: '1px 5px',
               marginLeft: 2,
@@ -227,7 +227,7 @@ export function BeatSyncPanel() {
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
-            borderBottom: '1px solid var(--color-border)',
+            borderBottom: '1px solid var(--color-border-subtle)',
           }}
         >
           {/* Toolbar row */}
@@ -242,8 +242,8 @@ export function BeatSyncPanel() {
                 padding: '6px 12px',
                 borderRadius: 8,
                 border: '1px solid var(--color-border-strong)',
-                background: 'rgba(255,255,255,0.04)',
-                color: analyzeState === 'analyzing' ? 'var(--color-text-subtle)' : '#C0C0D8',
+                background: 'rgba(10,10,10,0.04)',
+                color: analyzeState === 'analyzing' ? 'var(--color-text-subtle)' : '#4a4a4a',
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: analyzeState === 'analyzing' ? 'not-allowed' : 'pointer',
@@ -255,10 +255,10 @@ export function BeatSyncPanel() {
               }}
               onMouseEnter={e => {
                 if (analyzeState !== 'analyzing')
-                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.07)';
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.07)';
               }}
               onMouseLeave={e => {
-                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
+                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.04)';
               }}
             >
               <MusicIcon />
@@ -297,7 +297,7 @@ export function BeatSyncPanel() {
                       fontFamily: 'var(--font-mono)',
                       fontSize: 14,
                       fontWeight: 700,
-                      color: '#1CE4B8',
+                      color: '#2d8d8d',
                       letterSpacing: '-0.02em',
                     }}
                   >
@@ -340,10 +340,10 @@ export function BeatSyncPanel() {
                 padding: '6px 12px',
                 borderRadius: 8,
                 border: hasBeatData
-                  ? `1px solid ${isPro ? 'rgba(139,111,255,0.4)' : 'rgba(139,111,255,0.25)'}`
+                  ? `1px solid ${isPro ? 'rgba(184,164,237,0.4)' : 'rgba(184,164,237,0.25)'}`
                   : '1px solid var(--color-border)',
-                background: hasBeatData && isPro ? 'rgba(139,111,255,0.12)' : 'transparent',
-                color: hasBeatData ? (isPro ? '#A898FF' : '#7878A0') : 'var(--color-text-subtle)',
+                background: hasBeatData && isPro ? 'rgba(184,164,237,0.14)' : 'transparent',
+                color: hasBeatData ? (isPro ? '#b8a4ed' : '#8a8a8a') : 'var(--color-text-subtle)',
                 fontSize: 11,
                 fontWeight: 700,
                 cursor: hasBeatData ? 'pointer' : 'not-allowed',
@@ -355,11 +355,11 @@ export function BeatSyncPanel() {
               }}
               onMouseEnter={e => {
                 if (hasBeatData && isPro)
-                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(139,111,255,0.2)';
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(184,164,237,0.22)';
               }}
               onMouseLeave={e => {
                 (e.currentTarget as HTMLButtonElement).style.background =
-                  hasBeatData && isPro ? 'rgba(139,111,255,0.12)' : 'transparent';
+                  hasBeatData && isPro ? 'rgba(184,164,237,0.14)' : 'transparent';
               }}
             >
               Apply to clip
@@ -370,9 +370,9 @@ export function BeatSyncPanel() {
                     fontWeight: 700,
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase',
-                    color: '#A898FF',
-                    background: 'rgba(139,111,255,0.15)',
-                    border: '1px solid rgba(139,111,255,0.3)',
+                    color: '#b8a4ed',
+                    background: 'rgba(184,164,237,0.15)',
+                    border: '1px solid rgba(184,164,237,0.35)',
                     borderRadius: 3,
                     padding: '1px 4px',
                   }}
@@ -435,10 +435,10 @@ function PatternSelector({
         style={{
           appearance: 'none',
           WebkitAppearance: 'none',
-          background: 'rgba(255,255,255,0.04)',
+          background: 'rgba(10,10,10,0.04)',
           border: '1px solid var(--color-border-strong)',
           borderRadius: 8,
-          color: disabled ? 'var(--color-text-subtle)' : '#C0C0D8',
+          color: disabled ? 'var(--color-text-subtle)' : '#4a4a4a',
           fontSize: 11,
           fontWeight: 600,
           padding: '6px 26px 6px 10px',
@@ -447,9 +447,9 @@ function PatternSelector({
           fontFamily: 'var(--font-sans)',
         }}
       >
-        <option value="peak"   style={{ background: '#13142A', color: '#EEEEF8' }}>Peak on beat</option>
-        <option value="slow"   style={{ background: '#13142A', color: '#EEEEF8' }}>Slow on beat</option>
-        <option value="custom" style={{ background: '#13142A', color: '#EEEEF8' }}>Custom</option>
+        <option value="peak"   style={{ background: '#fffaf0', color: '#0a0a0a' }}>Peak on beat</option>
+        <option value="slow"   style={{ background: '#fffaf0', color: '#0a0a0a' }}>Slow on beat</option>
+        <option value="custom" style={{ background: '#fffaf0', color: '#0a0a0a' }}>Custom</option>
       </select>
       <span
         aria-hidden="true"
@@ -460,7 +460,7 @@ function PatternSelector({
           transform: 'translateY(-50%)',
           pointerEvents: 'none',
           fontSize: 9,
-          color: disabled ? 'var(--color-text-subtle)' : '#7878A0',
+          color: disabled ? 'var(--color-text-subtle)' : '#8a8a8a',
         }}
       >
         ▾
@@ -471,7 +471,7 @@ function PatternSelector({
 
 function ConfidenceBar({ confidence }: { confidence: number }) {
   const pct   = Math.round(confidence * 100);
-  const color = confidence >= 0.7 ? '#1CE4B8' : confidence >= 0.4 ? '#F59E0B' : '#FF6B78';
+  const color = confidence >= 0.7 ? '#2d8d8d' : confidence >= 0.4 ? '#e8b94a' : '#ff4d8b';
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -480,7 +480,7 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
           width: 48,
           height: 4,
           borderRadius: 999,
-          background: 'rgba(255,255,255,0.07)',
+          background: 'rgba(10,10,10,0.07)',
           overflow: 'hidden',
         }}
       >
@@ -520,7 +520,7 @@ function PulsingDots() {
             width: 5,
             height: 5,
             borderRadius: '50%',
-            background: '#1CE4B8',
+            background: '#2d8d8d',
             animation: 'beatPulse 1.2s ease-in-out infinite',
             animationDelay: `${i * 0.2}s`,
           }}
@@ -543,7 +543,7 @@ function CustomBeatSlider({
     <label style={{ display: 'grid', gap: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 10, color: 'var(--color-text-subtle)' }}>{label}</span>
-        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#A898FF' }}>
+        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#b8a4ed' }}>
           {value.toFixed(1)}×
         </span>
       </div>
@@ -554,7 +554,7 @@ function CustomBeatSlider({
         step={0.1}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
-        style={{ accentColor: '#8B6FFF' }}
+        style={{ accentColor: '#b8a4ed' }}
       />
     </label>
   );
@@ -567,7 +567,7 @@ function BeatIcon({ active }: { active: boolean }) {
       height="13"
       viewBox="0 0 24 24"
       fill="none"
-      stroke={active ? '#1CE4B8' : 'currentColor'}
+      stroke={active ? '#2d8d8d' : 'currentColor'}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"

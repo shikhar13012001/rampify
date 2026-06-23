@@ -107,16 +107,16 @@ export function UserButton({ user }: UserButtonProps) {
           gap: 7,
           padding: '4px 10px 4px 4px',
           borderRadius: 999,
-          border: '1px solid rgba(255,255,255,0.08)',
-          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid #e5dfd0',
+          background: 'rgba(10,10,10,0.04)',
           cursor: 'pointer',
-          color: '#C0C0D8',
+          color: '#4a4a4a',
           fontSize: 12,
           fontWeight: 500,
           transition: 'background 0.12s',
         }}
-        onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.07)')}
-        onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)')}
+        onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.07)')}
+        onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.04)')}
       >
         {user.photoURL ? (
           <img
@@ -133,14 +133,14 @@ export function UserButton({ user }: UserButtonProps) {
               width: 22,
               height: 22,
               borderRadius: '50%',
-              background: 'rgba(139,111,255,0.3)',
-              border: '1px solid rgba(139,111,255,0.4)',
+              background: 'rgba(184,164,237,0.3)',
+              border: '1px solid rgba(184,164,237,0.4)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 9,
               fontWeight: 700,
-              color: '#A898FF',
+              color: '#b8a4ed',
               flexShrink: 0,
             }}
           >
@@ -166,20 +166,20 @@ export function UserButton({ user }: UserButtonProps) {
             top: 'calc(100% + 6px)',
             right: 0,
             zIndex: 300,
-            backgroundColor: '#1A1B2E',
-            border: '1px solid rgba(255,255,255,0.08)',
+            backgroundColor: '#fffaf0',
+            border: '1px solid #e5dfd0',
             borderRadius: 10,
             overflow: 'hidden',
             minWidth: 180,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+            boxShadow: '0 8px 24px rgba(10,10,10,0.08), 0 24px 60px rgba(10,10,10,0.06)',
           }}
         >
           <div
             style={{
               padding: '10px 14px',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid #efe9da',
               fontSize: 11,
-              color: '#7878A0',
+              color: '#8a8a8a',
             }}
           >
             {user.email}
@@ -202,17 +202,17 @@ export function UserButton({ user }: UserButtonProps) {
               background: 'none',
               border: 'none',
               textAlign: 'left',
-              color: '#C0C0D8',
+              color: '#4a4a4a',
               fontSize: 13,
               cursor: 'pointer',
             }}
-            onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)')}
+            onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.05)')}
             onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = '')}
           >
             Sign out
           </button>
           {signOutError && (
-            <div style={{ padding: '8px 14px', fontSize: 11, color: '#FF6B78', borderTop: '1px solid rgba(255,107,120,0.15)' }}>
+            <div style={{ padding: '8px 14px', fontSize: 11, color: '#ff4d8b', borderTop: '1px solid rgba(255,77,139,0.18)' }}>
               Sign-out failed — try again
             </div>
           )}
@@ -273,9 +273,9 @@ export function SignInButton() {
           gap: 7,
           padding: '6px 14px',
           borderRadius: 999,
-          border: '1px solid rgba(255,255,255,0.1)',
-          background: 'rgba(255,255,255,0.04)',
-          color: '#C0C0D8',
+          border: '1px solid #e5dfd0',
+          background: 'rgba(10,10,10,0.04)',
+          color: '#4a4a4a',
           fontSize: 12,
           fontWeight: 600,
           cursor: loading ? 'not-allowed' : 'pointer',
@@ -283,16 +283,16 @@ export function SignInButton() {
           transition: 'background 0.12s',
         }}
         onMouseEnter={e => {
-          if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)';
+          if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.08)';
         }}
         onMouseLeave={e => {
-          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
+          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.04)';
         }}
       >
         <GoogleIcon />
         {loading ? 'Signing in…' : 'Sign in with Google'}
       </button>
-      {error && <span style={{ fontSize: 11, color: '#f87171' }}>{error}</span>}
+      {error && <span style={{ fontSize: 11, color: '#ff4d8b' }}>{error}</span>}
     </div>
   );
 }

@@ -186,10 +186,10 @@ export function Sidebar() {
         disabled={history.length === 0}
         style={{
           width: '100%',
-          borderRadius: 10,
-          border: `1px solid ${history.length > 0 ? 'rgba(139, 111, 255, 0.25)' : 'var(--color-border)'}`,
-          background: history.length > 0 ? 'rgba(139, 111, 255, 0.08)' : 'transparent',
-          color: history.length > 0 ? '#A898FF' : 'var(--color-text-subtle)',
+          borderRadius: 11,
+          border: `1px solid ${history.length > 0 ? 'rgba(184, 164, 237, 0.3)' : 'var(--color-border)'}`,
+          background: history.length > 0 ? 'rgba(184, 164, 237, 0.1)' : 'transparent',
+          color: history.length > 0 ? '#b8a4ed' : 'var(--color-text-subtle)',
           padding: '10px 12px',
           fontSize: 12,
           fontWeight: 600,
@@ -200,6 +200,7 @@ export function Sidebar() {
           gap: 6,
           transition: 'background 0.15s, border-color 0.15s, color 0.15s',
           letterSpacing: '-0.01em',
+          boxShadow: 'none',
         }}
       >
         <UndoIcon active={history.length > 0} />
@@ -209,7 +210,7 @@ export function Sidebar() {
             style={{
               marginLeft: 2,
               fontSize: 10,
-              color: '#7878A0',
+              color: '#8a8a8a',
               fontFamily: 'var(--font-mono)',
             }}
           >
@@ -225,13 +226,15 @@ function SectionCard({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        borderRadius: 12,
+        borderRadius: 13,
         border: '1px solid var(--color-border)',
-        backgroundColor: 'rgba(255, 255, 255, 0.015)',
-        padding: '10px 10px',
+        backgroundColor: 'rgba(255, 255, 255, 0.018)',
+        padding: '11px 11px',
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
+        transition: 'border-color 0.2s',
       }}
     >
       {children}
@@ -245,7 +248,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       style={{
         fontSize: 10,
         fontWeight: 700,
-        letterSpacing: '0.08em',
+        letterSpacing: '0.1em',
         textTransform: 'uppercase',
         color: 'var(--color-text-subtle)',
         paddingLeft: 2,
@@ -293,10 +296,17 @@ function SegmentRow({
         textAlign: 'left',
         padding: '9px 10px',
         borderRadius: 9,
-        border: `1px solid ${isSelected ? 'rgba(139, 111, 255, 0.4)' : 'transparent'}`,
-        background: isSelected ? 'rgba(139, 111, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+        border: `1px solid ${isSelected ? 'rgba(184, 164, 237, 0.42)' : 'transparent'}`,
+        background: isSelected ? 'rgba(184, 164, 237, 0.12)' : 'rgba(10, 10, 10, 0.025)',
         cursor: 'pointer',
-        transition: 'background 0.12s, border-color 0.12s',
+        transition: 'background 0.15s, border-color 0.15s',
+        boxShadow: 'none',
+      }}
+      onMouseEnter={(e) => {
+        if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255, 255, 255, 0.04)';
+      }}
+      onMouseLeave={(e) => {
+        if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255, 255, 255, 0.022)';
       }}
     >
       {/* Color bar */}
@@ -316,7 +326,7 @@ function SegmentRow({
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: isSelected ? '#EEEEF8' : '#9898C0',
+            color: isSelected ? '#fffaf0' : '#8a8a8a',
             letterSpacing: '-0.01em',
           }}
         >
@@ -341,11 +351,12 @@ function SegmentRow({
           fontSize: 10,
           fontWeight: 600,
           color: speedCol,
-          background: `${speedCol}12`,
-          border: `1px solid ${speedCol}22`,
+          background: `${speedCol}14`,
+          border: `1px solid ${speedCol}26`,
           padding: '2px 6px',
           borderRadius: 5,
           flexShrink: 0,
+          letterSpacing: '0.01em',
         }}
       >
         {avgSpeed.toFixed(1)}x
@@ -398,7 +409,7 @@ function ToggleRow({
         justifyContent: 'space-between',
         gap: 10,
         fontSize: 12,
-        color: checked ? '#C0C0D8' : 'var(--color-text-muted)',
+        color: checked ? '#4a4a4a' : 'var(--color-text-muted)',
         padding: '6px 2px',
         cursor: 'pointer',
         transition: 'color 0.12s',
@@ -412,8 +423,8 @@ function ToggleRow({
           width: 38,
           height: 22,
           borderRadius: 999,
-          border: `1px solid ${checked ? 'rgba(139, 111, 255, 0.5)' : 'rgba(255,255,255,0.08)'}`,
-          backgroundColor: checked ? '#8B6FFF' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${checked ? 'rgba(184, 164, 237, 0.5)' : 'rgba(10,10,10,0.08)'}`,
+          backgroundColor: checked ? '#0a0a0a' : 'rgba(10,10,10,0.04)',
           padding: 2,
           cursor: 'pointer',
           position: 'relative',
@@ -513,7 +524,7 @@ function MotionBlurControl({
           justifyContent: 'space-between',
           gap: 10,
           fontSize: 12,
-          color: enabled ? '#C0C0D8' : 'var(--color-text-muted)',
+          color: enabled ? '#4a4a4a' : 'var(--color-text-muted)',
           padding: '6px 2px',
           cursor: 'pointer',
           transition: 'color 0.12s',
@@ -527,7 +538,7 @@ function MotionBlurControl({
                 fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: '0.04em',
-                color: '#1CE4B8',
+                color: '#2d8d8d',
                 background: 'rgba(28, 228, 184, 0.1)',
                 border: '1px solid rgba(28, 228, 184, 0.2)',
                 borderRadius: 4,
@@ -562,8 +573,8 @@ function MotionBlurControl({
             width: 38,
             height: 22,
             borderRadius: 999,
-            border: `1px solid ${enabled ? 'rgba(139, 111, 255, 0.5)' : 'rgba(255,255,255,0.08)'}`,
-            backgroundColor: enabled ? '#8B6FFF' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${enabled ? 'rgba(184, 164, 237, 0.5)' : 'rgba(10,10,10,0.08)'}`,
+            backgroundColor: enabled ? '#0a0a0a' : 'rgba(10,10,10,0.04)',
             padding: 2,
             cursor: 'pointer',
             position: 'relative',
@@ -609,9 +620,9 @@ function MotionBlurControl({
               style={{
                 padding: '5px 0',
                 borderRadius: 7,
-                border: `1px solid ${intensity === value ? 'rgba(139, 111, 255, 0.45)' : 'var(--color-border)'}`,
-                background: intensity === value ? 'rgba(139, 111, 255, 0.12)' : 'transparent',
-                color: intensity === value ? '#A898FF' : 'var(--color-text-subtle)',
+                border: `1px solid ${intensity === value ? 'rgba(184, 164, 237, 0.45)' : 'var(--color-border)'}`,
+                background: intensity === value ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
+                color: intensity === value ? '#b8a4ed' : 'var(--color-text-subtle)',
                 fontSize: 10,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -678,7 +689,7 @@ function OpticalFlowControl({
           justifyContent: 'space-between',
           gap: 10,
           fontSize: 12,
-          color: enabled ? '#C0C0D8' : 'var(--color-text-muted)',
+          color: enabled ? '#4a4a4a' : 'var(--color-text-muted)',
           padding: '6px 2px',
           cursor: 'pointer',
           transition: 'color 0.12s',
@@ -688,7 +699,7 @@ function OpticalFlowControl({
           <span>Frame interpolation</span>
           {enabled && modelStatus === 'loading' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 9, color: '#7878A0', fontFamily: 'var(--font-mono)' }}>
+              <span style={{ fontSize: 9, color: '#8a8a8a', fontFamily: 'var(--font-mono)' }}>
                 Downloading AI model (6 MB)…
               </span>
               <div
@@ -705,7 +716,7 @@ function OpticalFlowControl({
                     height: '100%',
                     width: '40%',
                     borderRadius: 999,
-                    background: '#8B6FFF',
+                    background: '#b8a4ed',
                     animation: 'sidebar-shimmer 1.4s ease-in-out infinite',
                   }}
                 />
@@ -720,7 +731,7 @@ function OpticalFlowControl({
                 gap: 4,
                 fontSize: 9,
                 fontWeight: 700,
-                color: '#1CE4B8',
+                color: '#2d8d8d',
                 background: 'rgba(28,228,184,0.08)',
                 border: '1px solid rgba(28,228,184,0.2)',
                 borderRadius: 4,
@@ -739,8 +750,8 @@ function OpticalFlowControl({
             width: 38,
             height: 22,
             borderRadius: 999,
-            border: `1px solid ${enabled ? 'rgba(139, 111, 255, 0.5)' : 'rgba(255,255,255,0.08)'}`,
-            backgroundColor: enabled ? '#8B6FFF' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${enabled ? 'rgba(184, 164, 237, 0.5)' : 'rgba(10,10,10,0.08)'}`,
+            backgroundColor: enabled ? '#0a0a0a' : 'rgba(10,10,10,0.04)',
             padding: 2,
             cursor: 'pointer',
             position: 'relative',
@@ -781,9 +792,9 @@ function OpticalFlowControl({
                 style={{
                   padding: '5px 0',
                   borderRadius: 7,
-                  border: `1px solid ${quality === value ? 'rgba(139, 111, 255, 0.45)' : 'var(--color-border)'}`,
-                  background: quality === value ? 'rgba(139, 111, 255, 0.12)' : 'transparent',
-                  color: quality === value ? '#A898FF' : 'var(--color-text-subtle)',
+                  border: `1px solid ${quality === value ? 'rgba(184, 164, 237, 0.45)' : 'var(--color-border)'}`,
+                  background: quality === value ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
+                  color: quality === value ? '#b8a4ed' : 'var(--color-text-subtle)',
                   fontSize: 10,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -802,7 +813,7 @@ function OpticalFlowControl({
               style={{
                 margin: 0,
                 fontSize: 10,
-                color: quality === 'ultra' ? '#F59E0B' : 'var(--color-text-subtle)',
+                color: quality === 'ultra' ? '#e8b94a' : 'var(--color-text-subtle)',
                 padding: '0 2px',
                 fontFamily: 'var(--font-mono)',
               }}
@@ -848,9 +859,9 @@ function LockedOption({ label, onUpgrade }: { label: string; onUpgrade: () => vo
         onClick={onUpgrade}
         style={{
           borderRadius: 5,
-          backgroundColor: 'rgba(139, 111, 255, 0.1)',
-          border: '1px solid rgba(139, 111, 255, 0.25)',
-          color: '#A898FF',
+          backgroundColor: 'rgba(184, 164, 237, 0.12)',
+          border: '1px solid rgba(184, 164, 237, 0.3)',
+          color: '#b8a4ed',
           padding: '2px 7px',
           fontSize: 9,
           fontWeight: 700,
@@ -886,7 +897,7 @@ function InfoRow({
         alignItems: 'center',
         gap: 8,
         padding: '5px 2px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.025)',
       }}
     >
       <span style={{ fontSize: 11, color: 'var(--color-text-subtle)', flexShrink: 0 }}>{label}</span>
@@ -910,10 +921,10 @@ function InfoRow({
 }
 
 function speedColor(speed: number): string {
-  if (speed < 0.5) return '#1CE4B8';
-  if (speed <= 1.2) return '#8B6FFF';
-  if (speed <= 2.0) return '#F59E0B';
-  return '#FF6B78';
+  if (speed < 0.5) return '#2d8d8d';
+  if (speed <= 1.2) return '#b8a4ed';
+  if (speed <= 2.0) return '#e8b94a';
+  return '#ff4d8b';
 }
 
 function CloseIcon() {
@@ -927,7 +938,7 @@ function CloseIcon() {
 
 function UndoIcon({ active }: { active: boolean }) {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? '#A898FF' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? '#b8a4ed' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="1 4 1 10 7 10" />
       <path d="M3.51 15a9 9 0 1 0 .49-4.5" />
     </svg>

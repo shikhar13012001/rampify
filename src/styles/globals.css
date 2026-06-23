@@ -177,6 +177,11 @@ input[type='range']::-webkit-slider-thumb:hover {
   to { transform: rotate(360deg); }
 }
 
+@keyframes sidebar-shimmer {
+  0%   { transform: translateX(-150%); }
+  100% { transform: translateX(350%); }
+}
+
 @keyframes pulse-glow {
   0%, 100% { opacity: 0.5; }
   50%       { opacity: 1; }

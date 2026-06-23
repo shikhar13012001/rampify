@@ -1,41 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initAdmin, loadLocalEnv, stripeClient, verifyIdToken } from './_adminInit.js';
+import {
+  initAdmin,
+  loadLocalEnv,
+  adminDb,
+  stripeClient,
+  verifyIdToken,
+  resolveAllowedOrigin,
+} from './_adminInit.js';
 
-/**
- * Resolves the safe origin to use for Stripe redirect URLs.
- *
- * Security: never trust the client-supplied `Origin` header directly — an
- * attacker can initiate a checkout from a server-side call or a compromised
- * host and redirect the user to an arbitrary URL after payment. We only
- * accept origins that match an explicit env-configured allowlist, plus the
- * Vercel-generated preview URL and localhost dev origins.
- *
- * Configure production origins via the `ALLOWED_ORIGINS` env var
- * (comma-separated), e.g. `ALLOWED_ORIGINS=https://rampify.app,https://www.rampify.app`.
- */
-function resolveAllowedOrigin(reqOrigin: string | undefined): string | null {
-  const allowed = new Set<string>();
-
-  const envList = (process.env.ALLOWED_ORIGINS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  for (const o of envList) allowed.add(o);
-
-  // Vercel preview deployments get an auto-provided VERCEL_URL.
-  if (process.env.VERCEL_URL) {
-    allowed.add(`https://${process.env.VERCEL_URL}`);
+function isStillValid(end: unknown): boolean {
+  if (end == null) return true;
+  if (end instanceof Date) return end.getTime() > Date.now();
+  // Firestore Timestamp
+  if (typeof end === 'object' && end !== null && 'toMillis' in end && typeof (end as { toMillis: () => number }).toMillis === 'function') {
+    return (end as { toMillis: () => number }).toMillis() > Date.now();
   }
-
-  // Local dev (Vite default + `vercel dev`).
-  allowed.add('http://localhost:5173');
-  allowed.add('http://localhost:3000');
-
-  if (reqOrigin && allowed.has(reqOrigin)) return reqOrigin;
-
-  // Fall back to the first configured production origin so redirects
-  // always land on a trusted host even if the client omitted Origin.
-  return envList[0] ?? null;
+  return true;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -53,10 +33,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // Validate billingPeriod against a strict whitelist.
+  // Strict billingPeriod validation — no silent default for unknown values.
   const requested = (req.body ?? {}) as { billingPeriod?: unknown };
-  const billingPeriod: 'monthly' | 'annual' =
-    requested.billingPeriod === 'annual' ? 'annual' : 'monthly';
+  const bp = requested.billingPeriod;
+  if (bp !== 'monthly' && bp !== 'annual') {
+    return res.status(400).json({ error: 'Invalid billingPeriod (must be "monthly" or "annual")' });
+  }
+  const billingPeriod: 'monthly' | 'annual' = bp;
 
   const priceId =
     billingPeriod === 'annual'
@@ -65,7 +48,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ?? process.env.STRIPE_PRO_PRICE_ID; // legacy fallback
 
   if (!priceId) {
-    return res.status(500).json({ error: 'Stripe price ID not configured for billing period: ' + billingPeriod });
+    console.error('[create-checkout-session] missing price ID for', billingPeriod);
+    return res.status(500).json({ error: 'Checkout session creation failed' });
+  }
+
+  // Pro-status guard: refuse to create a duplicate subscription.
+  try {
+    const db = adminDb();
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    if (userDoc.exists) {
+      const data = userDoc.data() ?? {};
+      if (data.subscriptionTier === 'pro' && isStillValid(data.subscriptionEnd)) {
+        return res.status(409).json({ error: 'Already Pro' });
+      }
+    }
+  } catch (err) {
+    // Non-fatal: proceed with checkout if the read fails.
+    console.error('[create-checkout-session] user lookup failed:', err);
   }
 
   const origin = resolveAllowedOrigin(
@@ -76,19 +75,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const stripe  = stripeClient();
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/upgrade/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${origin}/editor`,
-      metadata:    { userId: decoded.uid },
-      customer_email: decoded.email ?? undefined,
-    });
+    const stripe = stripeClient();
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: 'subscription',
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${origin}/upgrade/success`,
+        cancel_url: `${origin}/editor`,
+        metadata: { userId: decoded.uid },
+        subscription_data: { metadata: { userId: decoded.uid } },
+        customer_email: decoded.email_verified ? decoded.email ?? undefined : undefined,
+        expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+      },
+      {
+        // Stable idempotency key: one active session per user+plan+price.
+        idempotencyKey: `${decoded.uid}:${billingPeriod}:${priceId}`,
+      },
+    );
 
     return res.status(200).json({ url: session.url });
   } catch (err) {
-    // Log full error server-side; return a generic message to the client.
     console.error('[create-checkout-session]', err);
     return res.status(500).json({ error: 'Checkout session creation failed' });
   }

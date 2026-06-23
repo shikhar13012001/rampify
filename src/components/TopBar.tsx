@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { useEditorStore } from '@/store/editorStore';
-import { getRemainingExports } from '@/lib/exportLimits';
 import { UserButton, SignInButton } from '@/lib/auth';
 
 interface TopBarProps {
@@ -12,12 +11,21 @@ export function TopBar({ onExportClick }: TopBarProps) {
   const isExporting  = useEditorStore(s => s.isExporting);
   const isPro        = useEditorStore(s => s.isPro);
   const user         = useEditorStore(s => s.user);
-  const remaining    = getRemainingExports();
+  const isAuthLoading = useEditorStore(s => s.isAuthLoading);
+  // Subscribe to the raw counts so the TopBar re-renders whenever
+  // recordExport / setExportCounts updates the store. Reading via
+  // getState() would not subscribe and would show stale quota.
+  const exportsRemaining = useEditorStore(s => s.exportsRemaining);
   const exportDisabled = !project || isExporting;
 
+  // While auth is loading (e.g. /check-subscription in flight), don't show
+  // quota text or a Pro badge — we don't know the tier yet.
+  const remaining = isPro ? 999 : exportsRemaining;
   const exportLabel = isPro
     ? isExporting ? 'Exporting…' : 'Export'
-    : isExporting ? 'Exporting…' : `Export (${remaining} left)`;
+    : isAuthLoading
+      ? (isExporting ? 'Exporting…' : 'Export')
+      : isExporting ? 'Exporting…' : `Export (${remaining} left)`;
 
   return (
     <header
@@ -77,8 +85,8 @@ export function TopBar({ onExportClick }: TopBarProps) {
 
       {/* Right — auth + export */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
-        {/* Pro badge */}
-        {isPro && (
+        {/* Pro badge — hidden while auth is loading to avoid a flash */}
+        {isPro && !isAuthLoading && (
           <span
             style={{
               fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',

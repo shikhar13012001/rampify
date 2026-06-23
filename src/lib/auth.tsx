@@ -19,12 +19,13 @@ declare global {
       accounts: {
         id: {
           initialize: (config: Record<string, unknown>) => void;
-          prompt: () => void;
+          prompt: (callback?: (notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean; isDismissedMoment: () => boolean; getNotDisplayedReason: () => string; getSkippedReason: () => string; getDismissedReason: () => string } | undefined) => void) => void;
           cancel: () => void;
           disableAutoSelect: () => void;
         };
       };
     };
+    __gisLoadFailed?: boolean;
   }
 }
 
@@ -51,22 +52,6 @@ function initOneTap(onSuccess: (user: User) => void) {
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
-export async function signIn(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    initOneTap((user) => {
-      resolve();
-      // onAuthStateChanged will pick up the user
-      void user;
-    });
-    if (!window.google?.accounts.id) {
-      reject(new Error('Google Identity Services not loaded'));
-      return;
-    }
-    window.google.accounts.id.prompt();
-    resolve();
-  });
-}
-
 export async function signOut(): Promise<void> {
   window.google?.accounts.id.cancel();
   window.google?.accounts.id.disableAutoSelect();
@@ -74,8 +59,11 @@ export async function signOut(): Promise<void> {
   await fbSignOut(auth);
 }
 
-export function onAuthChange(callback: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, callback);
+export function onAuthChange(
+  callback: (user: User | null) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  return onAuthStateChanged(auth, callback, onError);
 }
 
 // ─── UserButton component ─────────────────────────────────────────────────────
@@ -86,6 +74,7 @@ interface UserButtonProps {
 
 export function UserButton({ user }: UserButtonProps) {
   const [open, setOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -197,7 +186,15 @@ export function UserButton({ user }: UserButtonProps) {
           </div>
           <button
             type="button"
-            onClick={async () => { setOpen(false); await signOut(); }}
+            onClick={async () => {
+              try {
+                await signOut();
+                setOpen(false);
+              } catch (err) {
+                console.error('[signOut] failed:', err);
+                setSignOutError(true);
+              }
+            }}
             style={{
               display: 'block',
               width: '100%',
@@ -214,6 +211,11 @@ export function UserButton({ user }: UserButtonProps) {
           >
             Sign out
           </button>
+          {signOutError && (
+            <div style={{ padding: '8px 14px', fontSize: 11, color: '#FF6B78', borderTop: '1px solid rgba(255,107,120,0.15)' }}>
+              Sign-out failed — try again
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -224,23 +226,39 @@ export function UserButton({ user }: UserButtonProps) {
 
 export function SignInButton() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Initialize from the GIS load-failure flag so the message shows immediately
+  // on mount if the script already failed (script is async, may fail before or
+  // after React mounts — the click handler re-checks for the after case).
+  const [error, setError] = useState(() =>
+    typeof window !== 'undefined' && window.__gisLoadFailed
+      ? 'Google sign-in unavailable — try refreshing'
+      : ''
+  );
 
   const handleClick = () => {
     setError('');
-    setLoading(true);
+    if (window.__gisLoadFailed) {
+      setError('Google sign-in unavailable — try refreshing');
+      return;
+    }
 
     initOneTap(() => setLoading(false));
 
     if (!window.google?.accounts.id) {
       setError('Google not loaded — try refreshing');
-      setLoading(false);
       return;
     }
 
-    window.google.accounts.id.prompt();
-    // Loading clears when onAuthChange fires
-    setTimeout(() => setLoading(false), 3000);
+    setLoading(true);
+    // The GIS prompt() callback fires with a notification moment when the
+    // prompt is dismissed, skipped, or not displayed. We clear loading in
+    // those cases; the success case is handled by initOneTap's onSuccess
+    // (which fires signInWithCredential → onAuthStateChanged → setLoading(false)).
+    window.google.accounts.id.prompt((notification) => {
+      if (notification && (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment())) {
+        setLoading(false);
+      }
+    });
   };
 
   return (

@@ -64,6 +64,11 @@ STRIPE_SECRET_KEY              Stripe secret key (sk_test_… or sk_live_…)
 STRIPE_WEBHOOK_SECRET          From: stripe listen --print-secret
 STRIPE_PRO_MONTHLY_PRICE_ID    Stripe Price ID for $12/month recurring
 STRIPE_PRO_ANNUAL_PRICE_ID     Stripe Price ID for $96/year recurring
+STRIPE_PRO_PRICE_ID            Legacy fallback (used if MONTHLY is unset)
+STRIPE_WEBHOOK_DEV_BYPASS      Set to 1 ONLY for local `vercel dev` webhook testing.
+                               NEVER set in production/preview. When unset, the
+                               webhook rejects empty bodies without a valid signature.
+ALLOWED_ORIGINS                Comma-separated production origins for Stripe Checkout redirects
 FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY  Entire service account JSON as one line
 ```
 
@@ -121,11 +126,22 @@ src/
     UpgradeSuccess.tsx        — polls /api/check-subscription after Stripe redirect (30s window)
 
 api/                          — Vercel serverless functions (Node.js runtime)
-  _adminInit.ts               — Firebase Admin + Stripe singletons
-  create-checkout-session.ts  — POST: creates Stripe Checkout session; accepts billingPeriod
+  _adminInit.ts               — Firebase Admin + Stripe singletons; shared CORS + env helpers
+  create-checkout-session.ts  — POST: creates Stripe Checkout session; Pro-guard + idempotency key
   check-subscription.ts       — GET: returns { isPro, exportsThisMonth, exportsRemaining }
-  webhooks/stripe.ts          — Stripe webhook: writes Firestore on checkout.session.completed
+  record-export.ts            — POST: idempotent server-side export log (server timestamp); enforces free cap
+  webhooks/stripe.ts          — Stripe webhook: idempotent via stripe_events; handles 8+ event types
 ```
+
+### Export recording (canonical path)
+
+The client never writes to `export_logs` directly. `recordExport(exportId)` in
+`src/lib/exportLimits.ts` calls `POST /api/record-export` with a client-generated
+`crypto.randomUUID()`. The server writes `exportedAt` with a server-generated
+timestamp (unforgeable) and uses the UUID as the doc id, making retries idempotent.
+Firestore rules deny all client writes to `export_logs` as defense-in-depth — only
+the Admin SDK (which bypasses rules) writes logs. Pro exports are also logged so
+usage analytics are complete, but the cap is not applied.
 
 ## Phase 2 Workers
 

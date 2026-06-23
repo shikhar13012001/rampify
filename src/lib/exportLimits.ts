@@ -1,9 +1,7 @@
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from './firebase';
 import { useEditorStore } from '@/store/editorStore';
 
-const GUEST_LIMIT  = 1;
-export const EXPORT_LIMIT        = GUEST_LIMIT;
+const GUEST_LIMIT = 1;
+export const EXPORT_LIMIT = GUEST_LIMIT;
 export const SIGNED_IN_FREE_LIMIT = 3;
 
 export interface ExportAllowance {
@@ -18,18 +16,19 @@ export interface ExportAllowance {
  * Synchronous remaining-count for the TopBar display.
  * - Pro users: returns 999 (shown as "Unlimited" by the caller)
  * - Signed-in free users: returns value from store (refreshed on auth)
- * - Guests: reads sessionStorage
+ * - Guests: returns 0 (must sign in to export)
  */
 export function getRemainingExports(): number {
   const { user, isPro, exportsRemaining } = useEditorStore.getState();
   if (isPro) return 999;
   if (user) return exportsRemaining;
-  return 0; // guests must sign in
+  return 0;
 }
 
 /**
  * Async check used before starting an export.
  * For signed-in users, re-queries /api/check-subscription to get a fresh count.
+ * Does NOT mutate isPro as a side effect — callers read isPro from the store.
  */
 export async function checkExportAllowed(): Promise<ExportAllowance> {
   const { user, isPro } = useEditorStore.getState();
@@ -39,13 +38,12 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
   if (user) {
     try {
       const token = await user.getIdToken();
-      const res   = await fetch('/api/check-subscription', {
+      const res = await fetch('/api/check-subscription', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json() as { isPro: boolean; exportsRemaining: number; exportsThisMonth: number };
         useEditorStore.getState().setExportCounts(data.exportsThisMonth, data.exportsRemaining);
-        useEditorStore.getState().setIsPro(data.isPro);
         return {
           allowed: data.exportsRemaining > 0,
           remaining: data.exportsRemaining,
@@ -62,7 +60,7 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
     };
   }
 
-  // Guest — require sign-in; session storage is trivially bypassable
+  // Guest — require sign-in.
   return {
     allowed: false,
     remaining: 0,
@@ -71,29 +69,38 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
 }
 
 /**
- * Records a completed export.
- * - Pro: no-op
- * - Signed-in free: writes to Firestore export_logs subcollection
- * - Guest: increments sessionStorage counter
+ * Records a completed export via the /api/record-export endpoint.
+ * The server writes `exportedAt` with a server-generated timestamp (cannot
+ * be forged by the client) and enforces the monthly cap for free users.
+ *
+ * `exportId` is a client-generated UUID (crypto.randomUUID()) that makes the
+ * write idempotent — retrying the same export overwrites the same doc instead
+ * of double-counting.
+ *
+ * Pro exports are also logged (per spec) so usage analytics are complete.
  */
-export async function recordExport(): Promise<void> {
-  const { user, isPro } = useEditorStore.getState();
-  if (isPro) return;
+export async function recordExport(exportId: string): Promise<void> {
+  const { user } = useEditorStore.getState();
+  if (!user) return; // guests are blocked before reaching here
 
-  if (user) {
-    try {
-      await addDoc(collection(db, 'users', user.uid, 'export_logs'), {
-        exportedAt: new Date(),
-      });
-      // Refresh counts in store
-      const { exportsThisMonth, exportsRemaining } = useEditorStore.getState();
-      useEditorStore.getState().setExportCounts(
-        exportsThisMonth + 1,
-        Math.max(0, exportsRemaining - 1),
-      );
-    } catch { /* Firestore unavailable — best effort */ }
-    return;
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch('/api/record-export', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ exportId }),
+    });
+
+    if (res.ok) {
+      const data = await res.json() as { exportsThisMonth: number; exportsRemaining: number };
+      useEditorStore.getState().setExportCounts(data.exportsThisMonth, data.exportsRemaining);
+    } else {
+      console.error('[recordExport] server returned', res.status);
+    }
+  } catch (err) {
+    console.error('[recordExport] failed:', err);
   }
-
-  // Guest — no-op (exports are blocked before reaching here)
 }

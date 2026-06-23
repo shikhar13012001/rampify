@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getCurrentUserIdToken } from '@/lib/firebase';
 import { useEditorStore } from '@/store/editorStore';
 
@@ -9,7 +9,7 @@ interface UpgradeModalProps {
 }
 
 type BillingCycle = 'monthly' | 'annual';
-type CheckoutState = 'idle' | 'loading' | 'error';
+type CheckoutState = 'idle' | 'loading' | 'error' | 'already-pro';
 
 const FEATURES = [
   { icon: '◈', label: 'Motion blur', desc: 'Cinematic transitions on every speed change' },
@@ -19,11 +19,27 @@ const FEATURES = [
   { icon: '∞', label: 'Unlimited exports', desc: 'No monthly cap, ever' },
 ];
 
+const CHECKOUT_URL_PREFIXES = ['https://checkout.stripe.com/', 'https://pay.stripe.com/'];
+
 export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
-  const [billing,       setBilling]       = useState<BillingCycle>('monthly');
+  const [billing, setBilling] = useState<BillingCycle>('monthly');
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('idle');
   const [checkoutError, setCheckoutError] = useState('');
   const user = useEditorStore(s => s.user);
+  const isPro = useEditorStore(s => s.isPro);
+  // AbortController for the in-flight checkout fetch so we can cancel it if
+  // the modal unmounts mid-request (otherwise a late response could redirect
+  // the browser to Stripe after the user dismissed the modal). The modal is
+  // conditionally mounted by App.tsx, so unmount == close, and all transient
+  // state (checkoutState / checkoutError) naturally resets on each open.
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancel on unmount.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -38,6 +54,11 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
     setCheckoutState('loading');
     setCheckoutError('');
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+    // 10s timeout — Stripe checkout session creation is normally <1s.
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
     try {
       const token = await getCurrentUserIdToken();
       if (!token) {
@@ -46,13 +67,24 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
         return;
       }
 
-      const res  = await fetch('/api/create-checkout-session', {
+      const res = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ userId: user?.uid, billingPeriod: billing }),
+        body: JSON.stringify({ billingPeriod: billing }),
+        signal: controller.signal,
       });
       const isJson = res.headers.get('content-type')?.includes('application/json');
       const data = isJson ? (await res.json()) as { url?: string; error?: string } : {};
+
+      // 409 Already Pro — the server guards against duplicate purchases.
+      if (res.status === 409) {
+        setCheckoutState('already-pro');
+        // Auto-close after the user has a moment to read the message.
+        setTimeout(() => {
+          if (!controller.signal.aborted) onClose();
+        }, 2000);
+        return;
+      }
 
       const redirectUrl = data.url;
       if (!res.ok || !redirectUrl) {
@@ -61,16 +93,83 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
           (res.status === 404 ? 'API not running — use `vercel dev` for checkout' : `Server error ${res.status}`)
         );
       }
+      // Validate the redirect URL is a Stripe checkout host before navigating,
+      // guarding against a misconfigured server returning an arbitrary URL.
+      if (!CHECKOUT_URL_PREFIXES.some((p) => redirectUrl.startsWith(p))) {
+        throw new Error('Invalid checkout URL');
+      }
+      // If the request was aborted (modal closed / timed out), don't navigate.
+      if (controller.signal.aborted) return;
       window.location.href = redirectUrl;
     } catch (err) {
+      if (controller.signal.aborted) {
+        // Aborted by timeout or modal close — don't surface as a generic error.
+        setCheckoutState('idle');
+        return;
+      }
       setCheckoutError(err instanceof Error ? err.message : 'Something went wrong');
       setCheckoutState('error');
+    } finally {
+      clearTimeout(timeout);
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
+  // ── Pro guard: if already Pro, show a confirmation panel instead of the
+  // pricing flow so a user who re-opens the upgrade modal can't accidentally
+  // start a second checkout (the server also guards with a 409, this is the
+  // client-side UX layer).
+  if (isPro) {
+    return (
+      <div
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.82)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          padding: 20, animation: 'fadeIn 0.18s ease',
+        }}
+      >
+        <div
+          style={{
+            width: 'min(420px, 100%)', borderRadius: 22,
+            border: '1px solid rgba(28,228,184,0.2)',
+            background: 'linear-gradient(160deg, #0E0F1E 0%, #0A0B15 100%)',
+            boxShadow: '0 40px 120px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
+            padding: 28, textAlign: 'center',
+            animation: 'fadeUp 0.26s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(28,228,184,0.12)', border: '1px solid rgba(28,228,184,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1CE4B8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#EEEEF8', letterSpacing: '-0.02em' }}>
+            You're already Pro
+          </h2>
+          <p style={{ margin: '8px 0 22px', fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.55 }}>
+            All Pro features are unlocked. Enjoy unlimited exports, motion blur, AI frame interpolation, and beat sync.
+          </p>
+          <button
+            type="button" onClick={onClose}
+            style={{
+              padding: '11px 22px', borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: 'linear-gradient(135deg, #8B6FFF 0%, #6A4EDF 100%)',
+              color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em',
+            }}
+          >
+            Back to editor
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 1100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -99,8 +198,8 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
         <button
           type="button" onClick={onClose} aria-label="Close"
           style={{ position: 'absolute', top: 18, right: 18, width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.12s', zIndex: 1 }}
-          onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)')}
-          onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)')}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)')}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)')}
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -227,6 +326,11 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                 {checkoutError}
               </p>
             )}
+            {checkoutState === 'already-pro' && (
+              <p style={{ margin: '0 0 12px', color: '#1CE4B8', fontSize: 12, textAlign: 'center' }}>
+                You're already Pro — nothing to upgrade.
+              </p>
+            )}
 
             {/* CTA */}
             <button
@@ -253,8 +357,8 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                 transition: 'opacity 0.15s, box-shadow 0.15s',
                 width: '100%',
               }}
-              onMouseEnter={e => { if (checkoutState !== 'loading') (e.currentTarget as HTMLButtonElement).style.opacity = '0.9'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
+              onMouseEnter={(e) => { if (checkoutState !== 'loading') (e.currentTarget as HTMLButtonElement).style.opacity = '0.9'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
             >
               {checkoutState === 'loading' ? (
                 <>

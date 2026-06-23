@@ -62,6 +62,7 @@ interface EditorState {
   beatMarkers: number[];
   // Auth
   user: AuthUser | null;
+  isAuthLoading: boolean;
   exportsThisMonth: number;
   exportsRemaining: number;
   // Global upgrade modal (opened from any locked feature)
@@ -91,15 +92,17 @@ interface EditorActions {
   setIsPro: (isPro: boolean) => void;
   setExportCounts: (thisMonth: number, remaining: number) => void;
   setUpgradeModalOpen: (open: boolean) => void;
+  setAuthLoading: (loading: boolean) => void;
 }
 
 export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   project: null,
   selectedSegmentId: null,
   user: null,
+  isAuthLoading: false,
   upgradeModalOpen: false,
   exportsThisMonth: 0,
-  exportsRemaining: 3,
+  exportsRemaining: 0,
   playheadTime: 0,
   isPlaying: false,
   exportProgress: null,
@@ -370,11 +373,40 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   setOpticalFlowQuality: (quality) =>
     set((s) => ({ opticalFlowSettings: { ...s.opticalFlowSettings, quality } })),
   setBeatMarkers: (beatMarkers) => set({ beatMarkers }),
-  setUser: (user) => set({ user }),
-  setIsPro: (isPro) => set({ isPro }),
+  setUser: (user) =>
+    set((state) => {
+      if (user === null) {
+        // Sign-out / no user: reset all auth-derived state so no Pro state
+        // leaks into the next session and no stale quota is shown.
+        return {
+          user: null,
+          isPro: false,
+          exportsThisMonth: 0,
+          exportsRemaining: 0,
+          // Also turn off Pro-only features so they don't stay enabled
+          // visually after sign-out.
+          blurSettings: { ...state.blurSettings, enabled: false },
+          opticalFlowSettings: { ...state.opticalFlowSettings, enabled: false },
+        };
+      }
+      return { user };
+    }),
+  setIsPro: (isPro) =>
+    set((state) => {
+      if (state.isPro && !isPro) {
+        // Downgrade: disable Pro-only features to match the new tier.
+        return {
+          isPro,
+          blurSettings: { ...state.blurSettings, enabled: false },
+          opticalFlowSettings: { ...state.opticalFlowSettings, enabled: false },
+        };
+      }
+      return { isPro };
+    }),
   setExportCounts: (exportsThisMonth, exportsRemaining) =>
     set({ exportsThisMonth, exportsRemaining }),
   setUpgradeModalOpen: (upgradeModalOpen) => set({ upgradeModalOpen }),
+  setAuthLoading: (isAuthLoading) => set({ isAuthLoading }),
 }));
 
 function normalizePoints(points: SpeedCurve['points']): SpeedCurve['points'] {

@@ -1,6 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!_next|assets|favicon\\.ico).*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -8,13 +7,19 @@
       "source": "/(.*)",
       "headers": [
         { "key": "Cross-Origin-Opener-Policy",   "value": "same-origin" },
-        { "key": "Cross-Origin-Embedder-Policy", "value": "credentialless" }
+        { "key": "Cross-Origin-Embedder-Policy", "value": "credentialless" },
+        { "key": "X-Content-Type-Options",       "value": "nosniff" },
+        { "key": "Referrer-Policy",              "value": "strict-origin-when-cross-origin" }
       ]
     }
   ],
   "functions": {
     "api/webhooks/stripe.ts": {
-      "memory": 256
+      "memory": 256,
+      "maxDuration": 30
+    },
+    "api/record-export.ts": {
+      "maxDuration": 30
     }
   }
 }

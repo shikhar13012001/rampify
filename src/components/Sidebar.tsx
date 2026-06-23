@@ -684,23 +684,51 @@ function OpticalFlowControl({
           transition: 'color 0.12s',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span>Frame interpolation</span>
-          {enabled && (
+          {enabled && modelStatus === 'loading' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 9, color: '#7878A0', fontFamily: 'var(--font-mono)' }}>
+                Downloading AI model (6 MB)…
+              </span>
+              <div
+                style={{
+                  height: 3,
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.07)',
+                  overflow: 'hidden',
+                  width: '100%',
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: '40%',
+                    borderRadius: 999,
+                    background: '#8B6FFF',
+                    animation: 'sidebar-shimmer 1.4s ease-in-out infinite',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          {enabled && modelStatus === 'ready' && (
             <span
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
                 fontSize: 9,
-                fontWeight: 600,
-                color: modelStatus === 'ready' ? '#1CE4B8' : '#7878A0',
-                fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.01em',
+                fontWeight: 700,
+                color: '#1CE4B8',
+                background: 'rgba(28,228,184,0.08)',
+                border: '1px solid rgba(28,228,184,0.2)',
+                borderRadius: 4,
+                padding: '1px 5px',
+                width: 'fit-content',
               }}
             >
-              {modelStatus === 'ready'
-                ? '● AI model ready'
-                : modelStatus === 'loading'
-                  ? '○ Downloading model (6MB)…'
-                  : '○ Model not loaded'}
+              <span style={{ fontSize: 7 }}>●</span> AI model ready
             </span>
           )}
         </div>

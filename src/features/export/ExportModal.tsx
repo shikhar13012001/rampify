@@ -9,7 +9,6 @@ import {
   getRemainingExports,
   recordExport,
 } from '@/lib/exportLimits';
-import { UpgradeModal } from '@/components/UpgradeModal';
 
 const OF_PHASE_LABEL: Record<OFPhase, string> = {
   interpolating: 'Interpolating frames…',
@@ -40,10 +39,10 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [remaining, setRemaining] = useState(() => getRemainingExports());
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [upgradeReason, setUpgradeReason] = useState<string | undefined>();
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [ofPhase, setOfPhase] = useState<OFPhase | null>(null);
+  // Client-generated UUID per export attempt; makes recordExport idempotent.
+  const exportIdRef = useRef<string | null>(null);
 
   const bridgeRef = useRef<FFmpegBridge | null>(null);
 
@@ -65,8 +64,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     setRemaining(allowance.remaining);
 
     if (!allowance.allowed) {
-      setUpgradeReason(allowance.reason);
-      setUpgradeOpen(true);
+      useEditorStore.getState().setUpgradeModalOpen(true);
       setPhase('idle');
       return;
     }
@@ -78,12 +76,12 @@ export function ExportModal({ onClose }: ExportModalProps) {
     setExportProgress(0);
     setExporting(true);
     setStartedAt(Date.now());
+    exportIdRef.current = crypto.randomUUID();
 
     const bridge = new FFmpegBridge();
     bridgeRef.current = bridge;
 
     const handleDone = async (blob: Blob) => {
-      await recordExport();
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setRemaining(getRemainingExports());
@@ -92,6 +90,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       setOfPhase(null);
       setExportProgress(null);
       setExporting(false);
+      setStartedAt(null);
     };
 
     const handleError = (message: string) => {
@@ -101,6 +100,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       setOfPhase(null);
       setExportProgress(null);
       setExporting(false);
+      setStartedAt(null);
     };
 
     if (useOFPipeline) {
@@ -138,12 +138,12 @@ export function ExportModal({ onClose }: ExportModalProps) {
           setExportProgress(percent);
         },
         onDone: async (url) => {
-          await recordExport();
           setDownloadUrl(url);
           setRemaining(getRemainingExports());
           setPhase('done');
           setExportProgress(null);
           setExporting(false);
+          setStartedAt(null);
         },
         onError: handleError,
       });
@@ -182,6 +182,13 @@ export function ExportModal({ onClose }: ExportModalProps) {
     const safeName = baseName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
     anchor.download = safeName + '_rampified.mp4';
     anchor.click();
+    // Record the export AFTER triggering the download so the user only consumes
+    // a quota slot when the file actually starts downloading. The exportId
+    // makes the server-side write idempotent across retries.
+    const exportId = exportIdRef.current;
+    if (exportId) {
+      void recordExport(exportId).then(() => setRemaining(getRemainingExports()));
+    }
   }, [downloadUrl, phase, project]);
 
   useEffect(() => {
@@ -206,13 +213,12 @@ export function ExportModal({ onClose }: ExportModalProps) {
   ];
 
   return (
-    <>
-      <div
-        onClick={(event) => {
-          if (event.target === event.currentTarget && phase !== 'processing') {
-            onClose();
-          }
-        }}
+    <div
+      onClick={(event) => {
+        if (event.target === event.currentTarget && phase !== 'processing') {
+          onClose();
+        }
+      }}
         style={{
           position: 'fixed',
           inset: 0,
@@ -561,6 +567,9 @@ export function ExportModal({ onClose }: ExportModalProps) {
                   onClick={() => {
                     setPhase('idle');
                     setErrorMessage('');
+                    setDownloadUrl(null);
+                    setProgress(0);
+                    setStartedAt(null);
                   }}
                   style={primaryBtn(false)}
                 >
@@ -570,14 +579,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
             )}
           </div>
         </div>
-      </div>
-
-      <UpgradeModal
-        isOpen={upgradeOpen}
-        onClose={() => setUpgradeOpen(false)}
-        reason={upgradeReason}
-      />
-    </>
+    </div>
   );
 }
 

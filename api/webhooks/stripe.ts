@@ -67,7 +67,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let subscriptionEnd: Date | null = null;
       if (session.subscription) {
         const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-        subscriptionEnd = new Date(sub.current_period_end * 1000);
+        const periodEnd = sub.items.data[0]?.current_period_end;
+        if (periodEnd) subscriptionEnd = new Date(periodEnd * 1000);
       }
 
       await db.collection('users').doc(userId).set(

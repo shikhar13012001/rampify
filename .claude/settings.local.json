@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm audit:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)"
     ]
   }
 }

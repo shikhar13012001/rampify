@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
+import { Seo } from '@/components/Seo';
 
 interface DocSection {
   title: string;
@@ -80,6 +81,11 @@ const SECTIONS: DocSection[] = [
 export function Docs() {
   return (
     <div className="clay-page">
+      <Seo
+        title="Docs — Rampify Video Speed Editor Help & Tutorials"
+        description="Rampify documentation: speed curve editor, AI slow motion, beat sync, motion blur, 4K export, and privacy. Learn how to ramp video speed in the browser."
+        path="/docs"
+      />
       <ClayNav ctaLabel="Open editor" />
 
       <section style={{ padding: '80px 24px 64px' }}>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
+import { Seo } from '@/components/Seo';
 
 const CHANNELS = [
   {
@@ -47,6 +48,11 @@ export function Contact() {
 
   return (
     <div className="clay-page">
+      <Seo
+        title="Contact — Rampify Support & Inquiries"
+        description="Contact the Rampify team: general inquiries at hello@rampify.app, bug reports, partnership ideas, or feedback. We email you back, no ticketing system."
+        path="/contact"
+      />
       <ClayNav ctaLabel="Open editor" />
 
       <section style={{ padding: '80px 24px 64px' }}>

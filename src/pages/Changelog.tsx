@@ -1,5 +1,6 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
+import { Seo } from '@/components/Seo';
 
 const ENTRIES = [
   {
@@ -68,6 +69,11 @@ const ENTRIES = [
 export function Changelog() {
   return (
     <div className="clay-page">
+      <Seo
+        title="Changelog — Rampify Update History & New Features"
+        description="Rampify release notes: AI frame interpolation, beat sync, motion blur, 4K export, and editor improvements. See what's new in the browser-based speed ramp editor."
+        path="/changelog"
+      />
       <ClayNav />
 
       <section style={{ padding: '80px 24px 64px' }}>

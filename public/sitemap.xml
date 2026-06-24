@@ -6,6 +6,37 @@
     <priority>1.0</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
+  <!-- Feature subpages — keyword-targeted, high priority -->
+  <url>
+    <loc>https://rampify-eight.vercel.app/features/speed-ramp</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <lastmod>2026-06-24</lastmod>
+  </url>
+  <url>
+    <loc>https://rampify-eight.vercel.app/features/beat-sync</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <lastmod>2026-06-24</lastmod>
+  </url>
+  <url>
+    <loc>https://rampify-eight.vercel.app/features/ai-slow-motion</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <lastmod>2026-06-24</lastmod>
+  </url>
+  <url>
+    <loc>https://rampify-eight.vercel.app/features/4k-export</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <lastmod>2026-06-24</lastmod>
+  </url>
+  <url>
+    <loc>https://rampify-eight.vercel.app/features/privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <lastmod>2026-06-24</lastmod>
+  </url>
   <url>
     <loc>https://rampify-eight.vercel.app/pricing</loc>
     <changefreq>monthly</changefreq>

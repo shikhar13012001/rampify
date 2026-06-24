@@ -2,10 +2,16 @@ import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { PricingTable } from '@/components/marketing/PricingTable';
+import { Seo } from '@/components/Seo';
 
 export function Landing() {
   return (
     <div className="clay-page">
+      <Seo
+        title="Speed Ramp Videos Online — No Installs, No Uploads | Rampify"
+        description="Draw speed curves, AI slow motion, beat sync, and 4K export — all in the browser. Your footage never leaves your machine. Free to start, no installs required."
+        path="/"
+      />
       <ClayNav />
 
       {/* ── Hero band ────────────────────────────────────────────────────── */}

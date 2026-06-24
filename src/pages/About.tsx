@@ -1,5 +1,6 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
+import { Seo } from '@/components/Seo';
 
 const VALUES = [
   {
@@ -34,6 +35,11 @@ const STATS = [
 export function About() {
   return (
     <div className="clay-page">
+      <Seo
+        title="About — Rampify: Local-First Video Speed Editor"
+        description="Rampify is a local-first, browser-based video speed ramping editor. No uploads, no cloud rendering. Built on ffmpeg.wasm, RIFE AI, and WebAssembly."
+        path="/about"
+      />
       <ClayNav ctaLabel="Start free" />
 
       <section style={{ padding: '80px 24px 64px' }}>

@@ -1,5 +1,6 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
+import { Seo } from '@/components/Seo';
 
 interface RoadmapItem {
   title: string;
@@ -80,6 +81,11 @@ const STATUS_LABEL: Record<RoadmapItem['status'], string> = {
 export function Roadmap() {
   return (
     <div className="clay-page">
+      <Seo
+        title="Roadmap — What's Next for Rampify Speed Editor"
+        description="Rampify public roadmap: timeline ruler, multi-clip project support, keyboard shortcut editor, LUTs, caption track, and more. Vote on what we build next."
+        path="/roadmap"
+      />
       <ClayNav ctaLabel="Start free" />
 
       <section style={{ padding: '80px 24px 64px' }}>

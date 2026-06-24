@@ -49,4 +49,23 @@ export default defineConfig({
   },
   // Emit .wasm files as URL assets so ?url imports resolve to same-origin paths
   assetsInclude: ['**/*.wasm'],
+  build: {
+    rollupOptions: {
+      output: {
+        // Split heavy, stable vendor deps into their own chunks so they cache
+        // independently of the app code. Improves repeat-visit LCP by avoiding
+        // re-downloading React/Firebase when only app code changes.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            if (id.includes('firebase')) {
+              return 'firebase-vendor';
+            }
+          }
+        },
+      },
+    },
+  },
 });

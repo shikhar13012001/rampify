@@ -124,14 +124,50 @@
     }
     </script>
 
+    <!-- Structured data: Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Rampify",
+      "url": "https://rampify-eight.vercel.app",
+      "logo": "https://rampify-eight.vercel.app/favicon.svg",
+      "description": "Browser-based video speed ramping editor with AI slow motion, beat sync, motion blur, and 4K export. Local-first — no uploads.",
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "email": "hello@rampify.app",
+        "contactType": "customer support",
+        "areaServed": "Worldwide",
+        "availableLanguage": "English"
+      }
+    }
+    </script>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-    <script src="https://accounts.google.com/gsi/client" async onerror="window.__gisLoadFailed = true"></script>
+    <script src="https://accounts.google.com/gsi/client" async crossorigin="anonymous" onerror="window.__gisLoadFailed = true"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Pre-hydration fallback content. Crawlers (and users with JS disabled)
+        see this before React mounts. Kept in sync with the hero copy in
+        src/pages/Landing.tsx. The React tree replaces this on mount.
+      -->
+      <h1>Free Online Video Speed Editor</h1>
+      <p>
+        Rampify is a browser-based speed ramp editor. Draw speed curves, add AI
+        slow motion, sync cuts to beats, and export up to 4K — entirely in the
+        browser. No installs, no uploads. Your footage never leaves your machine.
+      </p>
+      <noscript>
+        Rampify is a JavaScript application. Please enable JavaScript to use the
+        speed ramp editor. Your video is processed locally in your browser and
+        never uploaded to a server.
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,10 +1,16 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { PricingTable } from '@/components/marketing/PricingTable';
+import { Seo } from '@/components/Seo';
 
 export function Pricing() {
   return (
     <div className="clay-page">
+      <Seo
+        title="Pricing — Free & Pro Video Speed Editor | Rampify"
+        description="Free: 3 exports/month, speed curves, motion blur. Pro: $12/month or $96/year for AI slow motion, beat sync, 4K export, unlimited exports."
+        path="/pricing"
+      />
       <ClayNav ctaLabel="Start free" />
 
       <section style={{ padding: '80px 24px 64px' }}>

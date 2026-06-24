@@ -1,5 +1,6 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
+import { Seo } from '@/components/Seo';
 
 const SECTIONS = [
   {
@@ -72,6 +73,11 @@ const SECTIONS = [
 export function Privacy() {
   return (
     <div className="clay-page">
+      <Seo
+        title="Privacy Policy — Local-First Video Editing | Rampify"
+        description="Rampify privacy policy: your video footage never leaves your device. We collect only your email and subscription status. No ads, no cross-site tracking, no data sales."
+        path="/privacy"
+      />
       <ClayNav ctaLabel="Open editor" />
 
       <section style={{ padding: '80px 24px 64px' }}>

@@ -8,23 +8,32 @@ const FOOTER_COLUMNS = [
       { label: 'Editor', to: '/editor' },
       { label: 'Pricing', to: '/pricing' },
       { label: 'Changelog', to: '/changelog' },
+      { label: 'Roadmap', to: '/roadmap' },
+    ],
+  },
+  {
+    title: 'Features',
+    links: [
+      { label: 'Speed Ramp', to: '/features/speed-ramp' },
+      { label: 'Beat Sync', to: '/features/beat-sync' },
+      { label: 'AI Slow Motion', to: '/features/ai-slow-motion' },
+      { label: '4K Export', to: '/features/4k-export' },
+      { label: 'Privacy', to: '/features/privacy' },
     ],
   },
   {
     title: 'Resources',
     links: [
       { label: 'Documentation', to: '/docs' },
-      { label: 'Changelog', to: '/changelog' },
-      { label: 'Roadmap', to: '/roadmap' },
+      { label: 'About', to: '/about' },
+      { label: 'Contact', to: '/contact' },
     ],
   },
   {
-    title: 'Company',
+    title: 'Legal',
     links: [
-      { label: 'About', to: '/about' },
-      { label: 'Privacy', to: '/privacy' },
-      { label: 'Terms', to: '/terms' },
-      { label: 'Contact', to: '/contact' },
+      { label: 'Privacy Policy', to: '/privacy' },
+      { label: 'Terms of Service', to: '/terms' },
     ],
   },
 ];
@@ -44,7 +53,7 @@ export function Footer() {
           margin: '0 auto',
           padding: '0 24px',
           display: 'grid',
-          gridTemplateColumns: '1.5fr repeat(3, 1fr)',
+          gridTemplateColumns: '1.5fr repeat(4, 1fr)',
           gap: 48,
         }}
       >

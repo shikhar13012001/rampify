@@ -1,5 +1,6 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
+import { Seo } from '@/components/Seo';
 
 const SECTIONS = [
   {
@@ -75,6 +76,11 @@ const SECTIONS = [
 export function Terms() {
   return (
     <div className="clay-page">
+      <Seo
+        title="Terms of Service — Rampify Video Speed Editor"
+        description="Rampify terms of service: acceptable use, subscription billing, refunds, and liability for a browser-based local-first video editing tool."
+        path="/terms"
+      />
       <ClayNav ctaLabel="Open editor" />
 
       <section style={{ padding: '80px 24px 64px' }}>

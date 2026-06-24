@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Logo } from '@/components/Logo';
 
 interface ClayNavProps {
   ctaLabel?: string;
@@ -40,18 +41,7 @@ export function ClayNav({ ctaLabel = 'Open editor' }: ClayNavProps) {
       >
         {/* Logo */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <svg width="24" height="24" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-            <rect width="22" height="22" rx="6" fill="#0a0a0a" />
-            <polyline
-              points="4,15 8,10 13,5 18,9"
-              stroke="#fffaf0"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-            <circle cx="18" cy="9" r="2" fill="#ff4d8b" />
-          </svg>
+          <Logo size={24} />
           <span className="clay-display" style={{ fontSize: 17, fontWeight: 600 }}>
             rampify
           </span>

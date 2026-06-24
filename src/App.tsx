@@ -5,6 +5,7 @@ import { saveProjectState } from '@/lib/projectPersistence';
 import { TopBar } from '@/components/TopBar';
 import { DropZone } from '@/components/DropZone';
 import { Sidebar } from '@/components/Sidebar';
+import { SidebarDrawer } from '@/components/SidebarDrawer';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { KeyboardHints } from '@/components/KeyboardHints';
 import { BeatSyncPanel } from '@/features/beatSync/BeatSyncPanel';
@@ -195,6 +196,8 @@ function EditorRoute() {
     project?.segments[0] ??
     null;
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <div
       style={{
@@ -206,20 +209,21 @@ function EditorRoute() {
         flexDirection: 'column',
       }}
     >
-      <TopBar onExportClick={() => setExportOpen(true)} />
+      <TopBar onExportClick={() => setExportOpen(true)} onToggleSidebar={() => setSidebarOpen(v => !v)} />
 
       {project ? (
         <div
+          className="editor-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: '248px minmax(0, 1fr)',
-            gridTemplateRows: 'minmax(0, 1fr)',
             height: 'calc(100dvh - var(--toolbar-height))',
             flex: 1,
           }}
         >
-          {/* Sidebar */}
+          {/* Sidebar — desktop (aside) */}
           <aside
+            className="editor-sidebar"
             style={{
               borderRight: '1px solid var(--color-border-subtle)',
               backgroundColor: 'var(--color-panel)',
@@ -232,6 +236,7 @@ function EditorRoute() {
 
           {/* Main workspace */}
           <main
+            className="editor-main"
             style={{
               position: 'relative',
               display: 'grid',
@@ -307,6 +312,9 @@ function EditorRoute() {
           <DropZone />
         </main>
       )}
+
+      {/* Mobile sidebar drawer */}
+      <SidebarDrawer open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {exportOpen && project ? <ExportModal onClose={() => setExportOpen(false)} /> : null}
     </div>

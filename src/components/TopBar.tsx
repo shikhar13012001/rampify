@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useEditorStore } from '@/store/editorStore';
 import { UserButton, SignInButton } from '@/lib/auth';
+import { Logo } from '@/components/Logo';
 
 interface TopBarProps {
   onExportClick?: () => void;
+  onToggleSidebar?: () => void;
 }
 
-export function TopBar({ onExportClick }: TopBarProps) {
+export function TopBar({ onExportClick, onToggleSidebar }: TopBarProps) {
   const project      = useEditorStore(s => s.project);
   const isExporting  = useEditorStore(s => s.isExporting);
   const isPro        = useEditorStore(s => s.isPro);
@@ -29,6 +31,7 @@ export function TopBar({ onExportClick }: TopBarProps) {
 
   return (
     <header
+      className="editor-topbar"
       style={{
         height: 'var(--toolbar-height)',
         backgroundColor: 'var(--color-surface)',
@@ -42,21 +45,49 @@ export function TopBar({ onExportClick }: TopBarProps) {
         boxShadow: 'none',
       }}
     >
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      {/* Logo + wordmark */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        {/* Mobile sidebar toggle — hidden on desktop via CSS */}
+        {project && (
+          <button
+            type="button"
+            className="editor-hamburger"
+            onClick={onToggleSidebar}
+            aria-label="Toggle panels"
+            style={{
+              display: 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              border: '1px solid var(--color-border)',
+              background: 'transparent',
+              color: '#4a4a4a',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+              <line x1="3" y1="7" x2="21" y2="7" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="17" x2="21" y2="17" />
+            </svg>
+          </button>
+        )}
         <Link
           to="/"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: 'inherit', textDecoration: 'none' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}
         >
-          <LogoMark />
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.035em', color: '#0a0a0a' }}>
+          <Logo size={22} />
+          <span className="editor-wordmark" style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.035em', color: '#0a0a0a' }}>
             rampify
           </span>
         </Link>
       </div>
 
-      {/* Center — file name */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', maxWidth: 420 }}>
+      {/* Center — file name (hidden on mobile) */}
+      <div className="editor-filename" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', maxWidth: 420 }}>
         {project ? (
           <div
             style={{
@@ -154,16 +185,6 @@ export function TopBar({ onExportClick }: TopBarProps) {
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
-
-function LogoMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-      <rect width="22" height="22" rx="6" fill="rgba(184,164,237,0.16)" stroke="rgba(184,164,237,0.3)" strokeWidth="0.5" />
-      <polyline points="4,15 8,10 13,5 18,9" stroke="#b8a4ed" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <circle cx="18" cy="9" r="2.2" fill="#2d8d8d" stroke="rgba(45,141,141,0.3)" strokeWidth="0.5" />
-    </svg>
-  );
-}
 
 function VideoFileIcon() {
   return (

@@ -296,28 +296,29 @@ function SegmentRow({
         textAlign: 'left',
         padding: '9px 10px',
         borderRadius: 9,
-        border: `1px solid ${isSelected ? 'rgba(184, 164, 237, 0.42)' : 'transparent'}`,
-        background: isSelected ? 'rgba(184, 164, 237, 0.12)' : 'rgba(10, 10, 10, 0.025)',
+        border: `1px solid ${isSelected ? 'rgba(10, 10, 10, 0.35)' : 'transparent'}`,
+        background: isSelected ? 'rgba(184, 164, 237, 0.22)' : 'rgba(10, 10, 10, 0.03)',
         cursor: 'pointer',
         transition: 'background 0.15s, border-color 0.15s',
         boxShadow: 'none',
       }}
       onMouseEnter={(e) => {
-        if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255, 255, 255, 0.04)';
+        if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(10, 10, 10, 0.06)';
       }}
       onMouseLeave={(e) => {
-        if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255, 255, 255, 0.022)';
+        if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(10, 10, 10, 0.03)';
       }}
     >
-      {/* Color bar */}
+      {/* Color bar — thicker for stronger contrast */}
       <div
         style={{
-          width: 3,
-          height: 28,
+          width: 4,
+          height: 32,
           borderRadius: 2,
-          background: isSelected ? speedCol : 'var(--color-border-strong)',
+          background: speedCol,
           flexShrink: 0,
-          transition: 'background 0.15s',
+          opacity: isSelected ? 1 : 0.55,
+          transition: 'background 0.15s, opacity 0.15s',
         }}
       />
 
@@ -326,7 +327,7 @@ function SegmentRow({
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: isSelected ? '#fffaf0' : '#8a8a8a',
+            color: isSelected ? '#0a0a0a' : '#4a4a4a',
             letterSpacing: '-0.01em',
           }}
         >
@@ -336,7 +337,7 @@ function SegmentRow({
           style={{
             marginTop: 2,
             fontSize: 10,
-            color: 'var(--color-text-subtle)',
+            color: 'var(--color-text-muted)',
             fontFamily: 'var(--font-mono)',
           }}
         >

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Rampify OG Image Generator</title>
+<style>
+  body { margin: 0; padding: 40px; background: #1a1a1a; color: #fff; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  p { color: #888; font-size: 14px; margin: 0; max-width: 600px; text-align: center; line-height: 1.5; }
+  canvas { border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); max-width: 100%; height: auto; }
+  button { padding: 12px 28px; font-size: 15px; font-weight: 600; border: none; border-radius: 10px; background: #ff4d8b; color: white; cursor: pointer; }
+  button:hover { background: #e83d7b; }
+  .hint { background: #2a2a2a; padding: 16px 20px; border-radius: 8px; font-size: 13px; color: #aaa; max-width: 600px; line-height: 1.6; }
+  code { background: #333; padding: 2px 6px; border-radius: 4px; color: #ff4d8b; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Rampify OG Image Generator</h1>
+  <p>This renders the 1200×630 social share image. Click download and save the file as <code>og-image.png</code> in the <code>public/</code> directory.</p>
+  <canvas id="canvas" width="1200" height="630"></canvas>
+  <button onclick="downloadPng()">Download og-image.png</button>
+  <div class="hint">
+    Save the downloaded file to <code>public/og-image.png</code> in the Rampify project root.<br>
+    The meta tags in <code>index.html</code> and <code>src/components/Seo.tsx</code> already reference this file.
+  </div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+function draw() {
+  const W = 1200, H = 630;
+
+  // Background — warm cream canvas
+  ctx.fillStyle = '#fffaf0';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle speed-curve decoration
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  ctx.strokeStyle = '#0a0a0a';
+  ctx.lineWidth = 12;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 420);
+  ctx.bezierCurveTo(200, 420, 300, 180, 500, 180);
+  ctx.bezierCurveTo(700, 180, 800, 480, 1000, 480);
+  ctx.bezierCurveTo(1100, 480, 1150, 380, 1200, 380);
+  ctx.stroke();
+  ctx.restore();
+
+  // Pink accent dot
+  ctx.fillStyle = '#ff4d8b';
+  ctx.beginPath();
+  ctx.arc(1050, 180, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Logo mark — rounded rect with ramp line
+  ctx.save();
+  ctx.translate(80, 72);
+  // Tile
+  ctx.fillStyle = '#0a0a0a';
+  roundRect(ctx, 0, 0, 44, 44, 12);
+  ctx.fill();
+  // Ramp line
+  ctx.strokeStyle = '#fffaf0';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(8, 30);
+  ctx.lineTo(16, 20);
+  ctx.lineTo(26, 10);
+  ctx.lineTo(36, 18);
+  ctx.stroke();
+  // Pink dot
+  ctx.fillStyle = '#ff4d8b';
+  ctx.beginPath();
+  ctx.arc(36, 18, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Wordmark
+  ctx.fillStyle = '#0a0a0a';
+  ctx.font = '600 28px Inter, -apple-system, sans-serif';
+  ctx.fillText('rampify', 136, 103);
+
+  // Eyebrow
+  ctx.fillStyle = '#ff4d8b';
+  ctx.font = '600 16px Inter, sans-serif';
+  drawSpacedText(ctx, 'SPEED RAMP VIDEO EDITOR', 80, 220, 2.4);
+
+  // Main headline — two lines
+  ctx.fillStyle = '#0a0a0a';
+  ctx.font = '700 58px Inter, sans-serif';
+  ctx.fillText('Speed ramp videos', 80, 290);
+  ctx.fillText('in your browser.', 80, 354);
+
+  // Subheadline
+  ctx.fillStyle = '#4a4a4a';
+  ctx.font = '400 22px Inter, sans-serif';
+  ctx.fillText('No installs. No uploads. Your footage never leaves your machine.', 80, 412);
+
+  // Feature pills
+  const pills = [
+    { label: 'Speed curves', x: 80, w: 150 },
+    { label: 'AI slow motion', x: 244, w: 160 },
+    { label: 'Beat sync', x: 418, w: 120 },
+    { label: '4K export', x: 552, w: 110 },
+  ];
+  ctx.font = '600 15px Inter, sans-serif';
+  pills.forEach(p => {
+    ctx.fillStyle = '#f5f0e0';
+    roundRect(ctx, p.x, 470, p.w, 38, 19);
+    ctx.fill();
+    ctx.strokeStyle = '#e5dfd0';
+    ctx.lineWidth = 1;
+    roundRect(ctx, p.x, 470, p.w, 38, 19);
+    ctx.stroke();
+    ctx.fillStyle = '#0a0a0a';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.label, p.x + p.w / 2, 494);
+    ctx.textAlign = 'left';
+  });
+
+  // CTA button
+  ctx.fillStyle = '#0a0a0a';
+  roundRect(ctx, 80, 540, 380, 50, 12);
+  ctx.fill();
+  ctx.fillStyle = '#fffaf0';
+  ctx.font = '600 17px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Free to start — rampify.app', 270, 571);
+  ctx.textAlign = 'left';
+
+  // URL bottom right
+  ctx.fillStyle = '#8a8a8a';
+  ctx.font = '500 15px Inter, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('rampify-eight.vercel.app', 1120, 571);
+  ctx.textAlign = 'left';
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawSpacedText(ctx, text, x, y, spacing) {
+  const chars = text.split('');
+  let cx = x;
+  for (const ch of chars) {
+    ctx.fillText(ch, cx, y);
+    cx += ctx.measureText(ch).width + spacing;
+  }
+}
+
+function downloadPng() {
+  const link = document.createElement('a');
+  link.download = 'og-image.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// Wait for fonts then draw
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(draw);
+} else {
+  draw();
+}
+</script>
+</body>
+</html>

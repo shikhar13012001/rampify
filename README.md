@@ -70,6 +70,7 @@ rampify/
 │   ├── _adminInit.ts             # Firebase Admin + Stripe singletons
 │   ├── create-checkout-session.ts
 │   ├── check-subscription.ts
+│   ├── record-export.ts          # Server-side export count (idempotent, Admin SDK)
 │   └── webhooks/
 │       └── stripe.ts
 │
@@ -78,6 +79,7 @@ rampify/
 │   │   └── rife_v4_lite.onnx     # RIFE model weights (6 MB)
 │   ├── robots.txt
 │   ├── sitemap.xml
+│   ├── og-image.svg              # Source SVG for social share image
 │   └── favicon.svg
 │
 └── src/
@@ -88,7 +90,7 @@ rampify/
     │   ├── curveMath.ts           # Interpolation, remapTime, curveToFFmpegFilter
     │   ├── presets.ts             # 5 built-in speed curve presets
     │   ├── ffmpegBridge.ts        # ffmpeg Web Worker lifecycle
-    │   ├── exportLimits.ts        # Guest (sessionStorage) + signed-in (Firestore) export counting
+    │   ├── exportLimits.ts        # Guest (sessionStorage) + signed-in (API) export counting
     │   ├── firebase.ts            # Firebase client init
     │   ├── auth.tsx               # Google One Tap sign-in / sign-out + UI components
     │   ├── beatMapper.ts          # STFT beat detection + mapBeatsToKeypoints()
@@ -103,8 +105,14 @@ rampify/
     │   ├── TopBar.tsx
     │   ├── Sidebar.tsx
     │   ├── DropZone.tsx
+    │   ├── Logo.tsx               # Shared brand mark (used everywhere)
+    │   ├── Seo.tsx                # Per-route Helmet meta tags
     │   ├── UpgradeModal.tsx
-    │   └── ErrorBoundary.tsx
+    │   ├── ErrorBoundary.tsx
+    │   └── marketing/
+    │       ├── ClayNav.tsx
+    │       ├── Footer.tsx
+    │       └── FeaturePageLayout.tsx
     │
     ├── features/
     │   ├── preview/VideoPlayer.tsx
@@ -113,9 +121,17 @@ rampify/
     │   ├── export/ExportModal.tsx
     │   └── beatSync/BeatSyncPanel.tsx
     │
+    ├── routes/
+    │   └── EditorRoute.tsx         # Lazy-loaded — keeps workers out of marketing bundle
+    │
     ├── pages/
     │   ├── Landing.tsx
-    │   └── UpgradeSuccess.tsx
+    │   ├── Pricing.tsx, Docs.tsx, Changelog.tsx, Roadmap.tsx
+    │   ├── About.tsx, Contact.tsx, Privacy.tsx, Terms.tsx
+    │   ├── UpgradeSuccess.tsx
+    │   └── features/
+    │       ├── SpeedRamp.tsx, BeatSync.tsx, AiSlowMotion.tsx
+    │       ├── PrivacyFeature.tsx, FourKExport.tsx
     │
     └── hooks/
         └── useKeyboardShortcuts.ts
@@ -292,6 +308,38 @@ Returns the user's current subscription status and export counts.
 Stripe webhook handler. Verifies the `stripe-signature` header and writes subscription state to Firestore on `checkout.session.completed` and `customer.subscription.deleted` events.
 
 **Required env var:** `STRIPE_WEBHOOK_SECRET`
+
+---
+
+### `POST /api/record-export`
+
+Records an export to Firestore (server-side, idempotent). Free users are capped at 3/month; Pro users have no cap but logs are still written for analytics.
+
+**Headers:** `Authorization: Bearer <Firebase ID token>`
+
+**Body:**
+```json
+{ "exportId": "uuid-v4" }
+```
+
+**Response:**
+```json
+{ "exportsThisMonth": 2, "exportsRemaining": 1 }
+```
+
+The `exportId` as Firestore doc ID makes the write idempotent — retrying the same export overwrites the doc, not duplicates it.
+
+---
+
+## SEO
+
+- **Per-route meta tags** via `react-helmet-async` — each page has its own `<title>`, `<meta description>`, `<link rel="canonical">`, OG, and Twitter Card. See `src/components/Seo.tsx`.
+- **Structured data** — `SoftwareApplication`, `FAQPage`, and `Organization` JSON-LD in `index.html`. `BreadcrumbList` on feature subpages.
+- **Pre-hydration fallback** — `<h1>` + `<p>` + `<noscript>` inside `#root` so crawlers see content before JS executes.
+- **Feature subpages** at `/features/speed-ramp`, `/features/beat-sync`, `/features/ai-slow-motion`, `/features/4k-export`, `/features/privacy` — each keyword-targeted with H1/H2 hierarchy.
+- **Lazy-loaded editor** — `EditorRoute` is `React.lazy()` so ffmpeg.wasm + RIFE ONNX workers don't ship to marketing pages. Marketing bundle: ~126KB gzipped; editor bundle: ~97KB gzipped (loaded only on `/editor`).
+- **Sitemap** at `public/sitemap.xml` — submit in Google Search Console after deploy.
+- **OG image** — `public/og-image.svg` is the source; run `scripts/generate-og-image.html` in a browser to generate `public/og-image.png` (required for Facebook/Twitter card rendering).
 
 ---
 

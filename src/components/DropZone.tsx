@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { loadProjectState } from '@/lib/projectPersistence';
 import { readVideoMetadata, isAcceptedVideoFile, getRejectedFileMessage } from '@/lib/videoMetadata';
+import { checkExportCapabilities } from '@/lib/browserCapabilities';
 
 function getSavedFileName(): string | null {
   try {
@@ -19,6 +20,11 @@ export function DropZone() {
   const [error, setError] = useState<string | null>(null);
   const [savedFileName, setSavedFileName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Computed once, synchronously, at mount — capabilities don't change during
+  // a session. Loading/previewing a video doesn't need ffmpeg.wasm (the
+  // browser's native <video> decoder handles that), so this is a warning,
+  // not a hard block — only export actually requires these.
+  const [capabilities] = useState(() => checkExportCapabilities());
 
   useEffect(() => {
     setSavedFileName(getSavedFileName());
@@ -212,6 +218,34 @@ export function DropZone() {
           <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-subtle)', letterSpacing: '0.01em' }}>
             or click to browse — MP4, MOV, WebM
           </p>
+
+          {!capabilities.supported && (
+            <div
+              style={{
+                marginTop: 18,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                fontSize: 12,
+                color: '#e8b94a',
+                background: 'rgba(232,185,74,0.08)',
+                border: '1px solid rgba(232,185,74,0.25)',
+                borderRadius: 9,
+                padding: '8px 13px',
+                maxWidth: 420,
+                textAlign: 'left',
+                lineHeight: 1.5,
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>
+                This browser is missing {capabilities.missing.join(', ')} — video preview will
+                work, but export won't. Try an up-to-date Chrome, Firefox, or Edge.
+              </span>
+            </div>
+          )}
 
           {savedFileName && !error && (
             <div

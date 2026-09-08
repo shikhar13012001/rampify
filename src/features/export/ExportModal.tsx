@@ -3,6 +3,7 @@ import { useEditorStore } from '@/store/editorStore';
 import { FFmpegBridge, hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
 import type { OFPhase } from '@/lib/ffmpegBridge';
 import { exportBlockedReason, isUnsupportedCombination, GUEST_EXPERIMENT } from '@/lib/planConfig';
+import { checkExportCapabilities } from '@/lib/browserCapabilities';
 import {
   checkExportAllowed,
   EXPORT_LIMIT,
@@ -67,6 +68,12 @@ export function ExportModal({ onClose }: ExportModalProps) {
 
   const tier = planTierFor(!!user, isPro);
 
+  // Capability check (see DropZone.tsx for the same check, shown earlier as a
+  // dismissible warning) — this is the hard block: computed once since
+  // capabilities don't change mid-session, and enforced here regardless of
+  // whether the user saw/heeded DropZone's notice.
+  const [capabilities] = useState(() => checkExportCapabilities());
+
   // Entitlement check — evaluated reactively as soon as settings change, not
   // only when Start export is clicked, so a blocked configuration is visible
   // before the user commits to waiting on anything.
@@ -105,6 +112,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       // Both checks are also surfaced in the idle-phase UI before this point is
       // ever reached by a click — re-checked here only as a safety net (e.g.
       // settings changing between render and click).
+      if (!capabilities.supported) return;
       if (unsupportedCombo) return;
       if (blockedReason) {
         if (tier === 'guest') {
@@ -125,87 +133,99 @@ export function ExportModal({ onClose }: ExportModalProps) {
         return;
       }
 
-    setPhase('processing');
-    setProgress(0);
-    setSubStatus('');
-    setErrorMessage('');
-    setExportProgress(0);
-    setExporting(true);
-    setStartedAt(Date.now());
-    exportIdRef.current = crypto.randomUUID();
-    recordedExportIdRef.current = null;
-
-    const bridge = new FFmpegBridge();
-    bridgeRef.current = bridge;
-
-    const handleDone = async (blob: Blob) => {
-      const url = URL.createObjectURL(blob);
-      setDownloadUrl(url);
-      setRemaining(getRemainingExports());
-      setPhase('done');
+      setPhase('processing');
+      setProgress(0);
       setSubStatus('');
-      setOfPhase(null);
-      setExportProgress(null);
-      setExporting(false);
-      setStartedAt(null);
-    };
+      setErrorMessage('');
+      setExportProgress(0);
+      setExporting(true);
+      setStartedAt(Date.now());
+      exportIdRef.current = crypto.randomUUID();
+      recordedExportIdRef.current = null;
 
-    const handleError = (message: string) => {
-      setErrorMessage(message);
-      setPhase('error');
-      setSubStatus('');
-      setOfPhase(null);
-      setExportProgress(null);
-      setExporting(false);
-      setStartedAt(null);
-    };
+      const bridge = new FFmpegBridge();
+      bridgeRef.current = bridge;
 
-    if (useOFPipeline) {
-      // ── Optical flow export path ──────────────────────────────────────────
-      FFmpegBridge.guardExport({ onError: handleError }, () =>
-        bridge.processWithOpticalFlow(project, ofSettings, audioSettings, {
-          onProgress: (pct, phase) => {
-            setProgress(pct);
-            setOfPhase(phase);
-            setSubStatus(OF_PHASE_LABEL[phase]);
-            setExportProgress(pct);
+      const handleDone = async (blob: Blob) => {
+        const url = URL.createObjectURL(blob);
+        setDownloadUrl(url);
+        setRemaining(getRemainingExports());
+        setPhase('done');
+        setSubStatus('');
+        setOfPhase(null);
+        setExportProgress(null);
+        setExporting(false);
+        setStartedAt(null);
+      };
+
+      const handleError = (message: string) => {
+        // Full technical detail (e.g. an ffmpeg log dump) goes to the console,
+        // not the UI — see friendlyErrorMessage() for what the user sees.
+        console.error('[export] failed:', message);
+        setErrorMessage(message);
+        setPhase('error');
+        setSubStatus('');
+        setOfPhase(null);
+        setExportProgress(null);
+        setExporting(false);
+        setStartedAt(null);
+      };
+
+      if (useOFPipeline) {
+        // ── Optical flow export path ────────────────────────────────────────
+        FFmpegBridge.guardExport({ onError: handleError }, () =>
+          bridge.processWithOpticalFlow(project, ofSettings, audioSettings, {
+            onProgress: (pct, phase) => {
+              setProgress(pct);
+              setOfPhase(phase);
+              setSubStatus(OF_PHASE_LABEL[phase]);
+              setExportProgress(pct);
+            },
+            onDone: handleDone,
+            onError: handleError,
+          }),
+        );
+      } else if (blurSettings.enabled) {
+        // ── Blur export path ────────────────────────────────────────────────
+        FFmpegBridge.guardExport({ onError: handleError }, () =>
+          bridge.processWithBlur(project, blurSettings, audioSettings, {
+            onProgress: (pct, sub) => {
+              setProgress(pct);
+              setSubStatus(sub);
+              setExportProgress(pct);
+            },
+            onDone: handleDone,
+            onError: handleError,
+          }),
+        );
+      } else {
+        // ── Standard export path ────────────────────────────────────────────
+        bridge.startProcessing(project, audioSettings, {
+          onProgress: (percent) => {
+            setProgress(percent);
+            setExportProgress(percent);
           },
-          onDone: handleDone,
-          onError: handleError,
-        }),
-      );
-    } else if (blurSettings.enabled) {
-      // ── Blur export path ──────────────────────────────────────────────────
-      FFmpegBridge.guardExport({ onError: handleError }, () =>
-        bridge.processWithBlur(project, blurSettings, audioSettings, {
-          onProgress: (pct, sub) => {
-            setProgress(pct);
-            setSubStatus(sub);
-            setExportProgress(pct);
+          onDone: async (url) => {
+            setDownloadUrl(url);
+            setRemaining(getRemainingExports());
+            setPhase('done');
+            setExportProgress(null);
+            setExporting(false);
+            setStartedAt(null);
           },
-          onDone: handleDone,
           onError: handleError,
-        }),
-      );
-    } else {
-      // ── Standard export path ──────────────────────────────────────────────
-      bridge.startProcessing(project, audioSettings, {
-        onProgress: (percent) => {
-          setProgress(percent);
-          setExportProgress(percent);
-        },
-        onDone: async (url) => {
-          setDownloadUrl(url);
-          setRemaining(getRemainingExports());
-          setPhase('done');
-          setExportProgress(null);
-          setExporting(false);
-          setStartedAt(null);
-        },
-        onError: handleError,
-      });
+        });
+      }
+    } finally {
+      // Safe to release re-entrancy right away even though the export itself
+      // keeps running asynchronously: by this point `phase` is no longer
+      // 'idle' (or we returned early with it still 'idle', a legitimate
+      // retry case), so the Start button is either unmounted or was never
+      // shown — either way a second click can't re-enter this function while
+      // an export is genuinely in flight.
+      startInFlightRef.current = false;
     }
-  }, [project, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, audioSettings, useOFPipeline, setExportProgress, setExporting]);
+  }, [project, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, audioSettings, useOFPipeline, setExportProgress, setExporting]);
 
   const cancel = useCallback(() => {
     bridgeRef.current?.cancelOpticalFlow();
@@ -228,6 +248,17 @@ export function ExportModal({ onClose }: ExportModalProps) {
       setExporting(false);
     };
   }, [setExportProgress, setExporting]);
+
+  // Revoke the previous blob: URL whenever it's replaced by a new one, and
+  // whatever the last one was on unmount. Without this, every completed
+  // export in a session (or every modal open/close cycle) leaked a full-size
+  // video Blob for the lifetime of the page — object URLs are never
+  // reclaimed automatically, only on explicit revoke or page unload.
+  useEffect(() => {
+    return () => {
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    };
+  }, [downloadUrl]);
 
   useEffect(() => {
     if (!downloadUrl || !project) return;
@@ -398,7 +429,13 @@ export function ExportModal({ onClose }: ExportModalProps) {
               as soon as the modal opens (not only after clicking Start), so the
               user knows before spending any time waiting on a render that was
               never going to be allowed. */}
-          {phase === 'idle' && unsupportedCombo && (
+          {phase === 'idle' && !capabilities.supported && (
+            <Banner tone="neutral">
+              This browser is missing {capabilities.missing.join(', ')} — export can't run
+              here. Try an up-to-date Chrome, Firefox, or Edge.
+            </Banner>
+          )}
+          {phase === 'idle' && capabilities.supported && unsupportedCombo && (
             <Banner tone="neutral">
               4K + AI frame interpolation isn't supported yet on any plan — the in-browser
               pipeline can't reliably encode it. Try one or the other.
@@ -410,6 +447,17 @@ export function ExportModal({ onClose }: ExportModalProps) {
           {phase === 'idle' && tier === 'guest' && !GUEST_EXPERIMENT.enabled && (
             <Banner tone="info">
               Sign in to export — free accounts get {SIGNED_IN_FREE_LIMIT} exports/month.
+            </Banner>
+          )}
+          {/* Capability check: the export pipeline only ever processes the FIRST
+              segment (see ffmpegBridge.ts) — silently, with no other warning
+              anywhere. This surfaces that limitation before the user waits on a
+              render that would drop every segment after the first. */}
+          {phase === 'idle' && (project?.segments.length ?? 0) > 1 && (
+            <Banner tone="neutral">
+              This clip has {project?.segments.length} segments, but export only
+              processes the first one — segments after a split aren't included yet.
+              Undo the split, or expect only segment 1's speed curve in the output.
             </Banner>
           )}
 
@@ -552,9 +600,25 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              <p style={{ margin: 0, color: '#ff4d8b', fontSize: 13, lineHeight: 1.5 }}>
-                {errorMessage || 'Export failed. Please try again.'}
-              </p>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, color: '#ff4d8b', fontSize: 13, lineHeight: 1.5 }}>
+                  {friendlyErrorMessage(errorMessage)}
+                </p>
+                {errorMessage && (
+                  <details style={{ marginTop: 6 }}>
+                    <summary style={{ fontSize: 11, color: 'rgba(255,77,139,0.7)', cursor: 'pointer' }}>
+                      Technical details
+                    </summary>
+                    <pre style={{
+                      margin: '6px 0 0', fontSize: 10, color: 'rgba(255,77,139,0.8)',
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 120, overflowY: 'auto',
+                      fontFamily: 'var(--font-mono)',
+                    }}>
+                      {errorMessage}
+                    </pre>
+                  </details>
+                )}
+              </div>
             </div>
           )}
 
@@ -584,14 +648,16 @@ export function ExportModal({ onClose }: ExportModalProps) {
           <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
             {phase === 'idle' && (() => {
               const guestNeedsSignIn = tier === 'guest' && !GUEST_EXPERIMENT.enabled;
-              const disabled = unsupportedCombo || guestNeedsSignIn;
-              const label = unsupportedCombo
+              const disabled = !capabilities.supported || unsupportedCombo || guestNeedsSignIn;
+              const label = !capabilities.supported
                 ? 'Not supported'
-                : guestNeedsSignIn
-                  ? 'Sign in to export'
-                  : blockedReason
-                    ? (tier === 'guest' ? 'Sign in to export' : 'Upgrade to export')
-                    : 'Start export';
+                : unsupportedCombo
+                  ? 'Not supported'
+                  : guestNeedsSignIn
+                    ? 'Sign in to export'
+                    : blockedReason
+                      ? (tier === 'guest' ? 'Sign in to export' : 'Upgrade to export')
+                      : 'Start export';
               return (
                 <>
                   <button type="button" onClick={onClose} style={ghostBtn}>
@@ -782,6 +848,33 @@ function ExportModalIcon({ phase }: { phase: Phase }) {
       </svg>
     </div>
   );
+}
+
+/**
+ * Maps a raw error (often a multi-line ffmpeg log dump — see
+ * ffmpegWorker.ts's `exitCode !== 0` branch) to a short, actionable message.
+ * The raw text is never shown as the primary UI message — it's logged to the
+ * console (see handleError above) and available in the collapsed <details>
+ * this renders alongside, for anyone who needs it.
+ */
+function friendlyErrorMessage(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes('worker error') || lower.includes('failed to load') || lower.includes('coreurl')) {
+    return "The video engine couldn't load. Check your connection and try again.";
+  }
+  if (lower.includes('video load error') || lower.includes('metadata load timeout')) {
+    return "Couldn't read the video for processing. Try re-loading the clip.";
+  }
+  if (lower.includes('suspiciously small') || lower.includes('encode likely failed')) {
+    return 'The export produced no usable output. Try a shorter clip or a simpler speed curve.';
+  }
+  if (lower.includes('ffmpeg exited with code')) {
+    return 'The video encoder hit an error processing this clip.';
+  }
+  if (lower.includes('already running')) {
+    return 'Another export is still in progress — wait for it to finish first.';
+  }
+  return 'Export failed. Please try again.';
 }
 
 function estimateTimeRemaining(progress: number, startedAt: number | null, blurEnabled: boolean) {

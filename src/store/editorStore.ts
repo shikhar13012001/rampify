@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type {
+  AudioSettings,
   BlurIntensity,
   BlurSettings,
   EditorProject,
+  ExportResolution,
   OpticalFlowQuality,
   OpticalFlowSettings,
   Segment,
@@ -10,7 +12,7 @@ import type {
 } from '@/types/editor';
 import { interpolateSpeed } from '@/lib/curveMath';
 
-export type { BlurIntensity, BlurSettings, OpticalFlowQuality, OpticalFlowSettings };
+export type { AudioSettings, BlurIntensity, BlurSettings, ExportResolution, OpticalFlowQuality, OpticalFlowSettings };
 
 function hasValidProjectFile(project: EditorProject | null): project is EditorProject {
   if (!project) return false;
@@ -58,6 +60,8 @@ interface EditorState {
   isPro: boolean;
   blurSettings: BlurSettings;
   opticalFlowSettings: OpticalFlowSettings;
+  audioSettings: AudioSettings;
+  exportResolution: ExportResolution;
   // Beat-sync: absolute seconds in the source video
   beatMarkers: number[];
   // Auth
@@ -87,6 +91,8 @@ interface EditorActions {
   setBlurIntensity: (intensity: BlurIntensity) => void;
   setOpticalFlowEnabled: (enabled: boolean) => void;
   setOpticalFlowQuality: (quality: OpticalFlowQuality) => void;
+  setPreservePitch: (preservePitch: boolean) => void;
+  setExportResolution: (resolution: ExportResolution) => void;
   setBeatMarkers: (markers: number[]) => void;
   setUser: (user: AuthUser | null) => void;
   setIsPro: (isPro: boolean) => void;
@@ -113,6 +119,8 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   isPro: false,
   blurSettings: { enabled: false, intensity: 'balanced' },
   opticalFlowSettings: { enabled: false, quality: 'quality' },
+  audioSettings: { preservePitch: true },
+  exportResolution: '1080p',
   beatMarkers: [],
 
   setProject: (project) =>
@@ -372,6 +380,9 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
     set((s) => ({ opticalFlowSettings: { ...s.opticalFlowSettings, enabled } })),
   setOpticalFlowQuality: (quality) =>
     set((s) => ({ opticalFlowSettings: { ...s.opticalFlowSettings, quality } })),
+  setPreservePitch: (preservePitch) =>
+    set((s) => ({ audioSettings: { ...s.audioSettings, preservePitch } })),
+  setExportResolution: (exportResolution) => set({ exportResolution }),
   setBeatMarkers: (beatMarkers) => set({ beatMarkers }),
   setUser: (user) =>
     set((state) => {

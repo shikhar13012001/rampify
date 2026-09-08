@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { FFmpegBridge, hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
 import type { OFPhase } from '@/lib/ffmpegBridge';
+import { CloudAPIEngine } from '@/lib/CloudAPIEngine';
+import { requiresCloudEngine } from '@/lib/ExportEngine';
+import type { ExportRequest } from '@/lib/ExportEngine';
 import {
   checkExportAllowed,
   EXPORT_LIMIT,
@@ -9,6 +12,13 @@ import {
   getRemainingExports,
   recordExport,
 } from '@/lib/exportLimits';
+
+const CLOUD_PHASE_LABEL: Record<string, string> = {
+  uploading: 'Uploading to cloud…',
+  queued: 'Queued for cloud render…',
+  rendering: 'Rendering in the cloud…',
+  downloading: 'Preparing download…',
+};
 
 const OF_PHASE_LABEL: Record<OFPhase, string> = {
   interpolating: 'Interpolating frames…',
@@ -32,6 +42,9 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const setExporting = useEditorStore((state) => state.setExporting);
   const blurSettings = useEditorStore((state) => state.blurSettings);
   const ofSettings   = useEditorStore((state) => state.opticalFlowSettings);
+  const audioSettings = useEditorStore((state) => state.audioSettings);
+  const exportResolution = useEditorStore((state) => state.exportResolution);
+  const setExportResolution = useEditorStore((state) => state.setExportResolution);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [progress, setProgress] = useState(0);
@@ -41,10 +54,25 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const [remaining, setRemaining] = useState(() => getRemainingExports());
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [ofPhase, setOfPhase] = useState<OFPhase | null>(null);
+  const [usingCloudEngine, setUsingCloudEngine] = useState(false);
   // Client-generated UUID per export attempt; makes recordExport idempotent.
   const exportIdRef = useRef<string | null>(null);
 
   const bridgeRef = useRef<FFmpegBridge | null>(null);
+  const cloudEngineRef = useRef<CloudAPIEngine | null>(null);
+
+  // 4K + AI interpolation exceeds what the in-browser WASM pipeline can
+  // reliably handle — see requiresCloudEngine's doc comment in ExportEngine.ts.
+  const wouldUseCloud = useMemo(
+    () => requiresCloudEngine({
+      project: project!,
+      audioSettings,
+      blurSettings,
+      opticalFlowSettings: ofSettings,
+      resolution: exportResolution,
+    }),
+    [project, audioSettings, blurSettings, ofSettings, exportResolution],
+  );
 
   // Detect OF mode: enabled + project has at least one slow segment.
   const useOFPipeline = useMemo(
@@ -60,9 +88,9 @@ export function ExportModal({ onClose }: ExportModalProps) {
     if (!project) return;
 
     // Free users can toggle blur / frame interpolation on to preview them, but
-    // exporting with either still requires Pro — that's the only point the
-    // paywall shows up for these two features.
-    if (!isPro && (blurSettings.enabled || ofSettings.enabled)) {
+    // exporting with either — or at 4K — still requires Pro. That's the only
+    // point the paywall shows up for these features.
+    if (!isPro && (blurSettings.enabled || ofSettings.enabled || exportResolution === '4k')) {
       useEditorStore.getState().setUpgradeModalOpen(true);
       return;
     }
@@ -85,6 +113,48 @@ export function ExportModal({ onClose }: ExportModalProps) {
     setExporting(true);
     setStartedAt(Date.now());
     exportIdRef.current = crypto.randomUUID();
+
+    // ── Cloud export path — 4K + AI interpolation only, everything else stays
+    // local. Isolated from the FFmpegBridge logic below so today's working
+    // local pipelines are untouched. ──────────────────────────────────────────
+    if (wouldUseCloud) {
+      setUsingCloudEngine(true);
+      const engine = new CloudAPIEngine();
+      cloudEngineRef.current = engine;
+
+      const request: ExportRequest = {
+        project,
+        audioSettings,
+        blurSettings,
+        opticalFlowSettings: ofSettings,
+        resolution: exportResolution,
+      };
+
+      try {
+        const result = await engine.start(request, (event) => {
+          setProgress(event.percent);
+          setSubStatus(CLOUD_PHASE_LABEL[event.phase] ?? event.message ?? '');
+          setExportProgress(event.percent);
+        });
+        const blob = result.blob ?? (result.url ? await fetch(result.url).then((r) => r.blob()) : null);
+        if (!blob) throw new Error('Cloud export finished without a downloadable file');
+        const url = URL.createObjectURL(blob);
+        setDownloadUrl(url);
+        setRemaining(getRemainingExports());
+        setPhase('done');
+      } catch (err) {
+        setErrorMessage(err instanceof Error ? err.message : String(err));
+        setPhase('error');
+      } finally {
+        setSubStatus('');
+        setExportProgress(null);
+        setExporting(false);
+        setStartedAt(null);
+        cloudEngineRef.current = null;
+      }
+      return;
+    }
+    setUsingCloudEngine(false);
 
     const bridge = new FFmpegBridge();
     bridgeRef.current = bridge;
@@ -114,7 +184,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     if (useOFPipeline) {
       // ── Optical flow export path ──────────────────────────────────────────
       FFmpegBridge.guardExport({ onError: handleError }, () =>
-        bridge.processWithOpticalFlow(project, ofSettings, {
+        bridge.processWithOpticalFlow(project, ofSettings, audioSettings, {
           onProgress: (pct, phase) => {
             setProgress(pct);
             setOfPhase(phase);
@@ -128,7 +198,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     } else if (blurSettings.enabled) {
       // ── Blur export path ──────────────────────────────────────────────────
       FFmpegBridge.guardExport({ onError: handleError }, () =>
-        bridge.processWithBlur(project, blurSettings, {
+        bridge.processWithBlur(project, blurSettings, audioSettings, {
           onProgress: (pct, sub) => {
             setProgress(pct);
             setSubStatus(sub);
@@ -140,7 +210,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       );
     } else {
       // ── Standard export path ──────────────────────────────────────────────
-      bridge.startProcessing(project, {
+      bridge.startProcessing(project, audioSettings, {
         onProgress: (percent) => {
           setProgress(percent);
           setExportProgress(percent);
@@ -156,13 +226,15 @@ export function ExportModal({ onClose }: ExportModalProps) {
         onError: handleError,
       });
     }
-  }, [project, isPro, blurSettings, ofSettings, useOFPipeline, setExportProgress, setExporting]);
+  }, [project, isPro, blurSettings, ofSettings, audioSettings, exportResolution, wouldUseCloud, useOFPipeline, setExportProgress, setExporting]);
 
   const cancel = useCallback(() => {
     bridgeRef.current?.cancelOpticalFlow();
     bridgeRef.current?.cancelBlurExport();
     bridgeRef.current?.cancel();
     bridgeRef.current = null;
+    cloudEngineRef.current?.cancel();
+    cloudEngineRef.current = null;
     setPhase('idle');
     setProgress(0);
     setSubStatus('');
@@ -175,6 +247,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
   useEffect(() => {
     return () => {
       bridgeRef.current?.cancel();
+      cloudEngineRef.current?.cancel();
       setExportProgress(null);
       setExporting(false);
     };
@@ -264,7 +337,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 </h2>
               </div>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-subtle)' }}>
-                1080p MP4 via ffmpeg.wasm
+                {exportResolution === '4k' ? '4K' : '1080p'} MP4
+                {usingCloudEngine || (phase === 'idle' && wouldUseCloud) ? ' · cloud render' : ' via ffmpeg.wasm'}
               </p>
             </div>
             <button
@@ -338,6 +412,40 @@ export function ExportModal({ onClose }: ExportModalProps) {
               </span>
             </div>
           </div>
+          )}
+
+          {/* Resolution — 4K routes to the cloud engine when combined with AI interpolation */}
+          {phase === 'idle' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                {(['1080p', '4k'] as const).map((res) => (
+                  <button
+                    key={res}
+                    type="button"
+                    onClick={() => setExportResolution(res)}
+                    style={{
+                      padding: '7px 0',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: `1px solid ${exportResolution === res ? 'rgba(184, 164, 237, 0.45)' : '#e5dfd0'}`,
+                      background: exportResolution === res ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
+                      color: exportResolution === res ? '#8a6fd6' : 'var(--color-text-muted)',
+                      transition: 'background 0.12s, border-color 0.12s, color 0.12s',
+                    }}
+                  >
+                    {res === '4k' ? '4K' : '1080p'}
+                  </button>
+                ))}
+              </div>
+              {wouldUseCloud && (
+                <p style={{ margin: 0, fontSize: 11, color: '#8a6fd6', lineHeight: 1.4 }}>
+                  4K + frame interpolation exceeds what the browser can process reliably —
+                  this export renders in the cloud instead of locally.
+                </p>
+              )}
+            </div>
           )}
 
           {/* Pre-export time estimate (shown only in idle state) */}

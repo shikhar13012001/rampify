@@ -2,12 +2,12 @@ import { curveToFFmpegFilter, getSpeedAtTime, interpolateSpeed, remapTime } from
 import { extractFrames } from './frameExtractor';
 import { getBlurIntensity, getTransitionFrameCount } from './blurMath';
 import { processSlowSegment } from './slowMotionPipeline';
-import type { BlurSettings, EditorProject, OpticalFlowQuality, OpticalFlowSettings, Segment } from '@/types/editor';
+import type { AudioSettings, BlurSettings, EditorProject, OpticalFlowQuality, OpticalFlowSettings, Segment } from '@/types/editor';
 import type { BlurFrame, FrameFile } from '@/workers/ffmpegWorker';
 import FfmpegWorkerCtor from '../workers/ffmpegWorker.ts?worker';
 import MotionBlurWorkerCtor from '../workers/motionBlurWorker.ts?worker';
 
-export type { BlurSettings, OpticalFlowQuality, OpticalFlowSettings };
+export type { AudioSettings, BlurSettings, OpticalFlowQuality, OpticalFlowSettings };
 export { getSpeedAtTime, interpolateSpeed };
 
 // ─── Optical flow types ───────────────────────────────────────────────────────
@@ -125,6 +125,14 @@ export function findTransitionPoints(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Precomputed atempo chain for the "preserve pitch" path (AudioSettings.preservePitch
+ * === true). Chains atempo=2.0 / atempo=0.5 stages to cover ratios outside atempo's
+ * native [0.5, 100] range, since ffmpeg rejects a single out-of-range factor.
+ * When preservePitch is false, the worker instead builds an asetrate/aresample chain
+ * itself (see ffmpegWorker.ts) — that path needs the real input sample rate, which
+ * isn't known on the main thread, so it can't be precomputed here.
+ */
 function buildAtempoFilters(avgSpeed: number): string[] {
   const filters: string[] = [];
   let remaining = avgSpeed;
@@ -221,7 +229,7 @@ export class FFmpegBridge {
 
   // ── Standard export (no blur) ───────────────────────────────────────────────
 
-  startProcessing(project: EditorProject, callbacks: ExportCallbacks): void {
+  startProcessing(project: EditorProject, audioSettings: AudioSettings, callbacks: ExportCallbacks): void {
     this.callbacks = callbacks;
 
     const { file, segments } = project;
@@ -248,6 +256,8 @@ export class FFmpegBridge {
       videoUrl: file.url,
       setptsFilter,
       atempoFilters,
+      avgSpeed,
+      preservePitch: audioSettings.preservePitch,
       outputName: 'output.mp4',
     });
   }
@@ -293,6 +303,7 @@ export class FFmpegBridge {
   async processWithOpticalFlow(
     project: EditorProject,
     ofSettings: OpticalFlowSettings,
+    audioSettings: AudioSettings,
     callbacks: OFExportCallbacks,
   ): Promise<void> {
     const { file, segments } = project;
@@ -386,6 +397,8 @@ export class FFmpegBridge {
             videoUrl: file.url,
             setptsFilter: 'setpts=PTS-STARTPTS',
             atempoFilters,
+            avgSpeed: segAvgSpeed,
+            preservePitch: audioSettings.preservePitch,
             outputName: 'output.mp4',
             frameFiles,
             framerate,
@@ -418,6 +431,7 @@ export class FFmpegBridge {
   async processWithBlur(
     project: EditorProject,
     blurSettings: BlurSettings,
+    audioSettings: AudioSettings,
     callbacks: BlurExportCallbacks,
   ): Promise<void> {
     const { file, segments } = project;
@@ -552,6 +566,8 @@ export class FFmpegBridge {
           videoUrl: file.url,
           setptsFilter,
           atempoFilters,
+          avgSpeed,
+          preservePitch: audioSettings.preservePitch,
           outputName: 'output.mp4',
           blurFrames,
           returnMode: 'buffer',

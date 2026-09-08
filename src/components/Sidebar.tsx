@@ -40,6 +40,8 @@ export function Sidebar() {
   const setOFEnabled       = useEditorStore((state) => state.setOpticalFlowEnabled);
   const setOFQuality       = useEditorStore((state) => state.setOpticalFlowQuality);
   const setUpgradeModalOpen = useEditorStore((state) => state.setUpgradeModalOpen);
+  const preservePitch      = useEditorStore((state) => state.audioSettings.preservePitch);
+  const setPreservePitch   = useEditorStore((state) => state.setPreservePitch);
 
   // Count speed transitions above the 0.4 threshold across all segments.
   const transitionCount = useMemo(() => {
@@ -55,7 +57,6 @@ export function Sidebar() {
   }, [project]);
 
   const [lockAudio, setLockAudio] = useState(true);
-  const [pitchCorrection, setPitchCorrection] = useState(true);
   const [muteDuringRamp, setMuteDuringRamp] = useState(false);
   const [fileInfoOpen, setFileInfoOpen] = useState(false);
 
@@ -149,7 +150,12 @@ export function Sidebar() {
         <SectionLabel>Audio</SectionLabel>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <ToggleRow label="Lock audio to speed" checked={lockAudio} onChange={setLockAudio} />
-          <ToggleRow label="Pitch correction" checked={pitchCorrection} onChange={setPitchCorrection} />
+          <ToggleRow label="Preserve pitch" checked={preservePitch} onChange={setPreservePitch} />
+          {!preservePitch && (
+            <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-text-subtle)', padding: '0 2px', lineHeight: 1.4 }}>
+              Off: pitch shifts naturally with speed (chipmunk on fast, deep on slow) — applied at export.
+            </p>
+          )}
           <ToggleRow label="Mute during ramp" checked={muteDuringRamp} onChange={setMuteDuringRamp} />
         </div>
       </SectionCard>

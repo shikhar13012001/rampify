@@ -42,3 +42,27 @@ export interface OpticalFlowSettings {
   enabled: boolean;
   quality: OpticalFlowQuality;
 }
+
+export interface AudioSettings {
+  /** true (default): tempo-only stretch via atempo, pitch stays natural.
+   *  false: pitch shifts with speed (asetrate/aresample) — the classic
+   *  "chipmunk" / deep-voice tape effect, chosen deliberately as a look. */
+  preservePitch: boolean;
+}
+
+export type ExportResolution = '1080p' | '4k';
+
+export type ClipStatus = 'queued' | 'processing' | 'done' | 'error';
+
+/**
+ * One clip in a batch queue. Reuses EditorProject's {file, segments} shape
+ * (a batch clip *is* a single-file project, just tagged with an id and
+ * pipeline status) rather than defining a parallel structure.
+ */
+export interface VideoClip extends EditorProject {
+  id: string;
+  status: ClipStatus;
+  progress?: number;
+  resultBlob?: Blob;
+  errorMessage?: string;
+}

@@ -7,6 +7,7 @@ import { SidebarDrawer } from '@/components/SidebarDrawer';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { KeyboardHints } from '@/components/KeyboardHints';
 import { BeatSyncPanel } from '@/features/beatSync/BeatSyncPanel';
+import { BatchPanel } from '@/features/batch/BatchPanel';
 import { CurveEditor } from '@/features/curve/CurveEditor';
 import { ExportModal } from '@/features/export/ExportModal';
 import { VideoPlayer } from '@/features/preview/VideoPlayer';
@@ -30,6 +31,7 @@ export default function EditorRoute() {
   const playheadTime = useEditorStore((state) => state.playheadTime);
   const ofEnabled = useEditorStore((state) => state.opticalFlowSettings.enabled);
   const [exportOpen, setExportOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
 
   // ── Resizable video preview pane ──────────────────────────────────────────
   const mainRef = useRef<HTMLElement>(null);
@@ -149,7 +151,11 @@ export default function EditorRoute() {
         flexDirection: 'column',
       }}
     >
-      <TopBar onExportClick={() => setExportOpen(true)} onToggleSidebar={() => setSidebarOpen(v => !v)} />
+      <TopBar
+        onExportClick={() => setExportOpen(true)}
+        onToggleSidebar={() => setSidebarOpen(v => !v)}
+        onBatchClick={() => setBatchOpen(true)}
+      />
 
       {project ? (
         <div
@@ -304,6 +310,7 @@ export default function EditorRoute() {
       <SidebarDrawer open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {exportOpen && project ? <ExportModal onClose={() => setExportOpen(false)} /> : null}
+      {batchOpen ? <BatchPanel onClose={() => setBatchOpen(false)} /> : null}
     </div>
   );
 }

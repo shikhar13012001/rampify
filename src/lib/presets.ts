@@ -80,12 +80,70 @@ export const montage: SpeedCurve = {
   ],
 };
 
+/**
+ * Whip pan — a near-instant snap to a very high speed and back, mimicking a
+ * fast camera whip transition. Linear (not bezier) so the snap reads as a
+ * hard edge rather than an eased ramp.
+ */
+export const whipPan: SpeedCurve = {
+  type: 'linear',
+  points: [
+    { time: 0.00, speed: 1.0 },
+    { time: 0.40, speed: 1.0 },
+    { time: 0.46, speed: 9.0 },
+    { time: 0.54, speed: 9.0 },
+    { time: 0.60, speed: 1.0 },
+    { time: 1.00, speed: 1.0 },
+  ],
+};
+
+/**
+ * Impact drop — a fast build that slams into a near-freeze right at the
+ * moment of impact, holds it, then eases back to normal. Good for hits,
+ * landings, or any "moment of contact."
+ */
+export const impactDrop: SpeedCurve = {
+  type: 'bezier',
+  points: [
+    { time: 0.00, speed: 2.0 },
+    { time: 0.35, speed: 2.0 },
+    { time: 0.42, speed: 0.08 },
+    { time: 0.55, speed: 0.08 },
+    { time: 0.65, speed: 1.5 },
+    { time: 1.00, speed: 1.0 },
+  ],
+};
+
+/**
+ * Heartbeat — a double-pulse "lub-dub" rhythm repeated twice, each pulse
+ * pair separated by a rest. Good for tension builds and anticipation beats.
+ */
+export const heartbeat: SpeedCurve = {
+  type: 'bezier',
+  points: [
+    { time: 0.00, speed: 1.0 },
+    { time: 0.08, speed: 2.2 },
+    { time: 0.14, speed: 0.7 },
+    { time: 0.20, speed: 2.2 },
+    { time: 0.28, speed: 0.9 },
+    { time: 0.50, speed: 0.9 },
+    { time: 0.58, speed: 2.2 },
+    { time: 0.64, speed: 0.7 },
+    { time: 0.70, speed: 2.2 },
+    { time: 0.78, speed: 0.9 },
+    { time: 1.00, speed: 1.0 },
+  ],
+};
+
 export const PRESETS = [
   { id: 'flat',        label: 'Flat (1×)',      curve: flat },
   { id: 'heroMoment',  label: 'Hero Moment',    curve: heroMoment },
   { id: 'jumpCut',     label: 'Jump Cut',       curve: jumpCut },
   { id: 'bulletTime',  label: 'Bullet Time',    curve: bulletTime },
   { id: 'montage',     label: 'Montage',        curve: montage },
+  { id: 'whipPan',     label: 'Whip Pan',       curve: whipPan },
+  { id: 'impactDrop',  label: 'Impact Drop',    curve: impactDrop },
+  { id: 'heartbeat',   label: 'Heartbeat',      curve: heartbeat },
 ] as const;
 
 export type PresetId = typeof PRESETS[number]['id'];

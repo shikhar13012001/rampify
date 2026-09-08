@@ -24,7 +24,15 @@ interface StartMsg {
   type: 'start';
   videoUrl: string;
   setptsFilter: string;
+  // Precomputed atempo chain, used when preservePitch is true.
   atempoFilters: string[];
+  // Curve's average speed and the pitch-preservation flag — used to build the
+  // asetrate/aresample "chipmunk" chain instead, when preservePitch is false.
+  // That path needs the real input sample rate, which is only knowable inside
+  // this worker (see probeAudioSampleRate), so it can't be precomputed on the
+  // main thread the way atempoFilters is.
+  avgSpeed: number;
+  preservePitch: boolean;
   outputName: string;
   blurFrames?: BlurFrame[];
   // Optical flow image sequence: when provided, these frames are used as video
@@ -61,6 +69,39 @@ async function loadFFmpeg() {
   await ffmpeg.load({ coreURL: coreJsURL, wasmURL: coreWasmURL });
 }
 
+// Fallback used only if the input has no parseable audio stream info (e.g. no
+// audio track at all) — arbitrary but harmless, since asetrate's absolute
+// value only matters relative to aresample's target, both set to this value.
+const FALLBACK_SAMPLE_RATE_HZ = 48000;
+
+/**
+ * Probes the input's real audio sample rate by running a throwaway ffmpeg
+ * invocation with no output — it always exits non-zero, but ffmpeg still logs
+ * stream info to stderr first (e.g. "Audio: aac ... 44100 Hz, stereo"), which
+ * `recentLogs` captures via the 'log' event. We need the true rate here
+ * because reinterpreting samples at the wrong base rate (asetrate) would shift
+ * the output's duration by the wrong factor, desyncing audio from video.
+ */
+async function probeAudioSampleRate(): Promise<number> {
+  recentLogs.length = 0;
+  await ffmpeg.exec(['-i', 'input.mp4']);
+  const match = recentLogs.join('\n').match(/Audio:.*?(\d+)\s*Hz/);
+  return match ? parseInt(match[1], 10) : FALLBACK_SAMPLE_RATE_HZ;
+}
+
+/**
+ * Builds the "chipmunk" audio filter chain — pitch shifts naturally with
+ * speed, like an analog tape/vinyl speed change. Reinterpreting the existing
+ * samples at `sampleRate * speed` Hz (asetrate) shifts both pitch and
+ * duration by exactly `speed`, matching the video's setpts remap; aresample
+ * back to the real rate afterward keeps the AAC encoder's declared sample
+ * rate correct.
+ */
+function buildChipmunkFilters(avgSpeed: number, sampleRateHz: number): string[] {
+  const clamped = Math.max(0.1, Math.min(10, avgSpeed)); // guard against pathological curves
+  return [`asetrate=${Math.round(sampleRateHz * clamped)}`, `aresample=${sampleRateHz}`];
+}
+
 self.onmessage = async (e: MessageEvent<InboundMsg>) => {
   const msg = e.data;
 
@@ -91,12 +132,20 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
         await ffmpeg.writeFile(ff.name, ff.data);
       }
 
-      const af = msg.atempoFilters.length > 0
-        ? msg.atempoFilters.join(',')
-        : null;
+      let af: string | null;
+      if (Math.abs(msg.avgSpeed - 1) < 0.02) {
+        // No meaningful speed change — skip the audio filter (and the probe
+        // it would otherwise require) entirely.
+        af = null;
+      } else if (msg.preservePitch) {
+        af = msg.atempoFilters.length > 0 ? msg.atempoFilters.join(',') : null;
+      } else {
+        const sampleRateHz = await probeAudioSampleRate();
+        af = buildChipmunkFilters(msg.avgSpeed, sampleRateHz).join(',');
+      }
 
       console.debug('[ffmpeg] setpts filter:', msg.setptsFilter);
-      console.debug('[ffmpeg] atempo filter:', af ?? '(none)');
+      console.debug('[ffmpeg] audio filter:', af ?? '(none)', msg.preservePitch ? '(pitch-preserved)' : '(pitch shifts with speed)');
       console.debug('[ffmpeg] blur frames:', blurFrames.length);
       console.debug('[ffmpeg] OF frame files:', frameFiles.length, 'framerate:', msg.framerate ?? '—');
 

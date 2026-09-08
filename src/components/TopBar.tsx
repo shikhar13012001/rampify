@@ -6,9 +6,10 @@ import { Logo } from '@/components/Logo';
 interface TopBarProps {
   onExportClick?: () => void;
   onToggleSidebar?: () => void;
+  onBatchClick?: () => void;
 }
 
-export function TopBar({ onExportClick, onToggleSidebar }: TopBarProps) {
+export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarProps) {
   const project      = useEditorStore(s => s.project);
   const isExporting  = useEditorStore(s => s.isExporting);
   const isPro        = useEditorStore(s => s.isPro);
@@ -142,6 +143,29 @@ export function TopBar({ onExportClick, onToggleSidebar }: TopBarProps) {
           ? <UserButton user={user} />
           : <SignInButton />
         }
+
+        {/* Batch export — queue clips and apply the current curve to all of them */}
+        {onBatchClick && (
+          <button
+            type="button"
+            onClick={onBatchClick}
+            title="Batch export — apply this curve to multiple clips"
+            aria-label="Batch export"
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 34, height: 34, borderRadius: 9,
+              border: '1px solid var(--color-border)', background: 'transparent',
+              color: 'var(--color-text-muted)', cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" />
+              <rect x="14" y="3" width="7" height="7" rx="1.5" />
+              <rect x="3" y="14" width="7" height="7" rx="1.5" />
+              <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            </svg>
+          </button>
+        )}
 
         {/* Export button */}
         <button

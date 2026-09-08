@@ -286,7 +286,7 @@ export function UpgradeSuccess() {
           <ErrorPanel
             color="#e8b94a"
             title="API not running"
-            message="The checkout API isn't reachable. If you're developing locally, run `vercel dev`. Your payment was still processed by Stripe."
+            message="The checkout API isn't reachable. If you're developing locally, run `vercel dev`. Your payment was still processed by Dodo Payments."
             actionLabel="Refresh"
             onAction={() => window.location.reload()}
           />

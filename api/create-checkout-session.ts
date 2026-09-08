@@ -3,10 +3,11 @@ import {
   initAdmin,
   loadLocalEnv,
   adminDb,
-  stripeClient,
+  dodoClient,
   verifyIdToken,
   resolveAllowedOrigin,
 } from './_adminInit.js';
+import { getServerEnv } from './_env.js';
 
 function isStillValid(end: unknown): boolean {
   if (end == null) return true;
@@ -41,14 +42,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const billingPeriod: 'monthly' | 'annual' = bp;
 
-  const priceId =
+  const env = getServerEnv();
+  const productId =
     billingPeriod === 'annual'
-      ? process.env.STRIPE_PRO_ANNUAL_PRICE_ID
-      : process.env.STRIPE_PRO_MONTHLY_PRICE_ID
-        ?? process.env.STRIPE_PRO_PRICE_ID; // legacy fallback
+      ? env.DODO_PRO_ANNUAL_PRODUCT_ID
+      : env.DODO_PRO_MONTHLY_PRODUCT_ID;
 
-  if (!priceId) {
-    console.error('[create-checkout-session] missing price ID for', billingPeriod);
+  if (!productId) {
+    console.error('[create-checkout-session] missing product ID for', billingPeriod);
     return res.status(500).json({ error: 'Checkout session creation failed' });
   }
 
@@ -75,25 +76,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const stripe = stripeClient();
-    const session = await stripe.checkout.sessions.create(
-      {
-        mode: 'subscription',
-        line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${origin}/upgrade/success`,
-        cancel_url: `${origin}/editor`,
-        metadata: { userId: decoded.uid },
-        subscription_data: { metadata: { userId: decoded.uid } },
-        customer_email: decoded.email_verified ? decoded.email ?? undefined : undefined,
-        expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour
-      },
-      {
-        // Stable idempotency key: one active session per user+plan+price.
-        idempotencyKey: `${decoded.uid}:${billingPeriod}:${priceId}`,
-      },
-    );
+    const dodo = dodoClient();
+    // NOTE: product_id must be configured as a recurring/subscription product
+    // in the Dodo dashboard (Products → Pricing → Recurring) — the checkout
+    // session itself doesn't declare "subscription mode" the way Stripe's did.
+    //
+    // metadata.userId is the load-bearing field here: it's echoed back
+    // verbatim on every webhook event tied to this checkout (payment.succeeded,
+    // subscription.active, ...), which is how api/webhooks/dodo.ts ties the
+    // event back to a Firestore user without needing a customer-id lookup on
+    // the very first event.
+    const session = await dodo.checkoutSessions.create({
+      product_cart: [{ product_id: productId, quantity: 1 }],
+      return_url: `${origin}/upgrade/success`,
+      customer: decoded.email_verified && decoded.email
+        ? { email: decoded.email, name: decoded.name ?? decoded.email }
+        : undefined,
+      metadata: { userId: decoded.uid, billingPeriod },
+    });
 
-    return res.status(200).json({ url: session.url });
+    return res.status(200).json({ url: session.checkout_url });
   } catch (err) {
     console.error('[create-checkout-session]', err);
     return res.status(500).json({ error: 'Checkout session creation failed' });

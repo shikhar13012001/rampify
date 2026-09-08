@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { interpolateSpeed } from '@/lib/curveMath';
 import { hasSlowSegments } from '@/lib/ffmpegBridge';
+import { planTierFor } from '@/lib/exportLimits';
+import { canUseBlurIntensity } from '@/lib/planConfig';
 import { useEditorStore } from '@/store/editorStore';
 import type { Segment } from '@/types/editor';
 import { formatTime } from './formatTime';
@@ -27,7 +29,9 @@ export function VideoPlayer() {
   const project         = useEditorStore((s) => s.project);
   const isPlaying       = useEditorStore((s) => s.isPlaying);
   const playheadTime    = useEditorStore((s) => s.playheadTime);
+  const user            = useEditorStore((s) => s.user);
   const isPro           = useEditorStore((s) => s.isPro);
+  const tier            = planTierFor(!!user, isPro);
   const setPlaying      = useEditorStore((s) => s.setPlaying);
   const setPlayheadTime = useEditorStore((s) => s.setPlayheadTime);
   const openUpgrade     = useEditorStore((s) => s.setUpgradeModalOpen);
@@ -101,15 +105,19 @@ export function VideoPlayer() {
   const duration = project?.file.duration ?? 0;
 
   // ── Motion blur preview ──────────────────────────────────────────────────
-  // Blur scales with how far the current speed deviates from 1×.
-  // Pro users see intensity-scaled blur whenever blur is enabled. Free users
-  // only see a preview once they explicitly flip the "Motion blur" toggle in
-  // the sidebar — it's no longer automatic just because a ramp exists.
+  // Blur scales with how far the current speed deviates from 1×. Anyone whose
+  // tier can actually export the CURRENTLY SELECTED intensity (Pro: any
+  // intensity; Free: Balanced only; Guest: none) sees intensity-scaled blur
+  // that matches what export will produce. Everyone else still sees a fixed
+  // teaser once they've explicitly toggled blur on, so they know what they'd
+  // get by switching to Balanced or upgrading — it's never automatic just
+  // because a ramp exists.
+  const blurWillExport = canUseBlurIntensity(blurSettings.intensity, tier);
   const INTENSITY_MULT: Record<string, number> = { subtle: 0.6, balanced: 1.2, cinematic: 2.2 };
   const blurPx = useMemo(() => {
     if (!project || !blurSettings.enabled) return 0;
     const speedDelta = Math.abs(rawSpeed - 1);
-    if (isPro) {
+    if (blurWillExport) {
       const mult = INTENSITY_MULT[blurSettings.intensity] ?? 1.2;
       return Math.min(8, speedDelta * 2.5 * mult);
     }
@@ -118,14 +126,15 @@ export function VideoPlayer() {
     }
     return 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project, isPro, blurSettings.enabled, blurSettings.intensity, rawSpeed]);
+  }, [project, blurWillExport, blurSettings.enabled, blurSettings.intensity, rawSpeed]);
 
-  // Bottom hint strip: shown for free users previewing a Pro-only feature
-  // they've explicitly toggled on (blur or frame interpolation).
+  // Bottom hint strip: shown when previewing a feature that won't actually
+  // apply at this tier/setting (blur at an intensity this tier can't export,
+  // or AI frame interpolation for anyone but Pro).
   const ofSettings = useEditorStore((s) => s.opticalFlowSettings);
   const hasSpeedRamp = useMemo(
-    () => !isPro && blurSettings.enabled && !!project && segmentsHaveSpeedRamp(project.segments),
-    [isPro, blurSettings.enabled, project],
+    () => !blurWillExport && blurSettings.enabled && !!project && segmentsHaveSpeedRamp(project.segments),
+    [blurWillExport, blurSettings.enabled, project],
   );
   const previewingOF = useMemo(
     () => !isPro && ofSettings.enabled && !!project && hasSlowSegments(project.segments),
@@ -197,7 +206,7 @@ export function VideoPlayer() {
         </div>
 
         {/* Bottom hint strip */}
-        {(hasSpeedRamp || previewingOF || (isPro && blurSettings.enabled && segmentsHaveSpeedRamp(project.segments))) && (
+        {(hasSpeedRamp || previewingOF || (blurWillExport && blurSettings.enabled && segmentsHaveSpeedRamp(project.segments))) && (
           <div
             style={{
               position: 'absolute',
@@ -212,7 +221,7 @@ export function VideoPlayer() {
               gap: 8,
             }}
           >
-            {isPro && blurSettings.enabled ? (
+            {blurWillExport && blurSettings.enabled ? (
               <span style={{ fontSize: 11, color: 'rgba(28,228,184,0.85)', fontWeight: 500 }}>
                 Motion blur preview — exact blur renders at export
               </span>
@@ -220,8 +229,12 @@ export function VideoPlayer() {
               <>
                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
                   {hasSpeedRamp
-                    ? 'Preview only — export with Pro for real motion blur'
-                    : 'AI smoothing preview — export with Pro for real frame interpolation'}
+                    ? (tier === 'guest'
+                        ? 'Preview only — sign in to export with motion blur'
+                        : 'Preview only — switch to Balanced, or upgrade for this intensity')
+                    : (tier === 'guest'
+                        ? 'AI smoothing preview — sign in and upgrade to export it'
+                        : 'AI smoothing preview — export with Pro for real frame interpolation')}
                 </span>
                 <button
                   type="button"
@@ -238,7 +251,7 @@ export function VideoPlayer() {
                     letterSpacing: '0.01em',
                   }}
                 >
-                  Upgrade
+                  {tier === 'guest' ? 'Sign in' : 'Upgrade'}
                 </button>
               </>
             )}

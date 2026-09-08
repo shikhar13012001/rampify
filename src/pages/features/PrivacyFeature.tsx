@@ -26,7 +26,7 @@ export function PrivacyFeature() {
         <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
           <li><strong>Google Sign-In</strong> — Firebase Authentication. We receive your email and a uid; we do not see your password.</li>
           <li><strong>Subscription check</strong> — a GET to <code>/api/check-subscription</code> with your Firebase ID token. Returns whether you're Pro.</li>
-          <li><strong>Stripe Checkout</strong> — if you upgrade, the browser redirects to Stripe's hosted checkout. We never see your card.</li>
+          <li><strong>Dodo Payments Checkout</strong> — if you upgrade, the browser redirects to Dodo's hosted checkout. We never see your card.</li>
         </ul>
       </FeatureSection>
 

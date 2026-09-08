@@ -2,23 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { FFmpegBridge, hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
 import type { OFPhase } from '@/lib/ffmpegBridge';
-import { CloudAPIEngine } from '@/lib/CloudAPIEngine';
-import { requiresCloudEngine } from '@/lib/ExportEngine';
-import type { ExportRequest } from '@/lib/ExportEngine';
+import { exportBlockedReason, isUnsupportedCombination, GUEST_EXPERIMENT } from '@/lib/planConfig';
 import {
   checkExportAllowed,
   EXPORT_LIMIT,
   SIGNED_IN_FREE_LIMIT,
   getRemainingExports,
   recordExport,
+  planTierFor,
+  shouldRecordExport,
 } from '@/lib/exportLimits';
-
-const CLOUD_PHASE_LABEL: Record<string, string> = {
-  uploading: 'Uploading to cloud…',
-  queued: 'Queued for cloud render…',
-  rendering: 'Rendering in the cloud…',
-  downloading: 'Preparing download…',
-};
 
 const OF_PHASE_LABEL: Record<OFPhase, string> = {
   interpolating: 'Interpolating frames…',
@@ -54,25 +47,31 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const [remaining, setRemaining] = useState(() => getRemainingExports());
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [ofPhase, setOfPhase] = useState<OFPhase | null>(null);
-  const [usingCloudEngine, setUsingCloudEngine] = useState(false);
   // Client-generated UUID per export attempt; makes recordExport idempotent.
   const exportIdRef = useRef<string | null>(null);
+  // The exportId a download was actually triggered/counted for — guards against
+  // the download-effect re-firing (e.g. an unrelated `project` change while
+  // phase is still 'done') and re-prompting a second browser download or a
+  // second recordExport call for the same completed render.
+  const recordedExportIdRef = useRef<string | null>(null);
 
   const bridgeRef = useRef<FFmpegBridge | null>(null);
-  const cloudEngineRef = useRef<CloudAPIEngine | null>(null);
 
-  // 4K + AI interpolation exceeds what the in-browser WASM pipeline can
-  // reliably handle — see requiresCloudEngine's doc comment in ExportEngine.ts.
-  const wouldUseCloud = useMemo(
-    () => requiresCloudEngine({
-      project: project!,
-      audioSettings,
-      blurSettings,
-      opticalFlowSettings: ofSettings,
-      resolution: exportResolution,
-    }),
-    [project, audioSettings, blurSettings, ofSettings, exportResolution],
+  const tier = planTierFor(!!user, isPro);
+
+  // Entitlement check — evaluated reactively as soon as settings change, not
+  // only when Start export is clicked, so a blocked configuration is visible
+  // before the user commits to waiting on anything.
+  const entitlementCtx = useMemo(
+    () => ({ blurSettings, opticalFlowSettings: ofSettings, resolution: exportResolution }),
+    [blurSettings, ofSettings, exportResolution],
   );
+  const blockedReason = useMemo(() => exportBlockedReason(tier, entitlementCtx), [tier, entitlementCtx]);
+  // Capability limit (not a plan gate) — no tier can render this combination
+  // locally, and there is no cloud fallback (see CLAUDE.md's Dodo/export
+  // sections — the designed cloud-export path was never built a working
+  // backend, so this modal no longer attempts it and blocks upfront instead).
+  const unsupportedCombo = useMemo(() => isUnsupportedCombination(entitlementCtx), [entitlementCtx]);
 
   // Detect OF mode: enabled + project has at least one slow segment.
   const useOFPipeline = useMemo(
@@ -87,10 +86,15 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const startExport = useCallback(async () => {
     if (!project) return;
 
-    // Free users can toggle blur / frame interpolation on to preview them, but
-    // exporting with either — or at 4K — still requires Pro. That's the only
-    // point the paywall shows up for these features.
-    if (!isPro && (blurSettings.enabled || ofSettings.enabled || exportResolution === '4k')) {
+    // Both checks are also surfaced in the idle-phase UI before this point is
+    // ever reached by a click — re-checked here only as a safety net (e.g.
+    // settings changing between render and click).
+    if (unsupportedCombo) return;
+    if (blockedReason) {
+      if (tier === 'guest') {
+        // No upgrade to sell a guest — the blocker is "sign in", not "pay".
+        return;
+      }
       useEditorStore.getState().setUpgradeModalOpen(true);
       return;
     }
@@ -113,48 +117,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     setExporting(true);
     setStartedAt(Date.now());
     exportIdRef.current = crypto.randomUUID();
-
-    // ── Cloud export path — 4K + AI interpolation only, everything else stays
-    // local. Isolated from the FFmpegBridge logic below so today's working
-    // local pipelines are untouched. ──────────────────────────────────────────
-    if (wouldUseCloud) {
-      setUsingCloudEngine(true);
-      const engine = new CloudAPIEngine();
-      cloudEngineRef.current = engine;
-
-      const request: ExportRequest = {
-        project,
-        audioSettings,
-        blurSettings,
-        opticalFlowSettings: ofSettings,
-        resolution: exportResolution,
-      };
-
-      try {
-        const result = await engine.start(request, (event) => {
-          setProgress(event.percent);
-          setSubStatus(CLOUD_PHASE_LABEL[event.phase] ?? event.message ?? '');
-          setExportProgress(event.percent);
-        });
-        const blob = result.blob ?? (result.url ? await fetch(result.url).then((r) => r.blob()) : null);
-        if (!blob) throw new Error('Cloud export finished without a downloadable file');
-        const url = URL.createObjectURL(blob);
-        setDownloadUrl(url);
-        setRemaining(getRemainingExports());
-        setPhase('done');
-      } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : String(err));
-        setPhase('error');
-      } finally {
-        setSubStatus('');
-        setExportProgress(null);
-        setExporting(false);
-        setStartedAt(null);
-        cloudEngineRef.current = null;
-      }
-      return;
-    }
-    setUsingCloudEngine(false);
+    recordedExportIdRef.current = null;
 
     const bridge = new FFmpegBridge();
     bridgeRef.current = bridge;
@@ -226,15 +189,13 @@ export function ExportModal({ onClose }: ExportModalProps) {
         onError: handleError,
       });
     }
-  }, [project, isPro, blurSettings, ofSettings, audioSettings, exportResolution, wouldUseCloud, useOFPipeline, setExportProgress, setExporting]);
+  }, [project, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, audioSettings, useOFPipeline, setExportProgress, setExporting]);
 
   const cancel = useCallback(() => {
     bridgeRef.current?.cancelOpticalFlow();
     bridgeRef.current?.cancelBlurExport();
     bridgeRef.current?.cancel();
     bridgeRef.current = null;
-    cloudEngineRef.current?.cancel();
-    cloudEngineRef.current = null;
     setPhase('idle');
     setProgress(0);
     setSubStatus('');
@@ -247,14 +208,27 @@ export function ExportModal({ onClose }: ExportModalProps) {
   useEffect(() => {
     return () => {
       bridgeRef.current?.cancel();
-      cloudEngineRef.current?.cancel();
       setExportProgress(null);
       setExporting(false);
     };
   }, [setExportProgress, setExporting]);
 
   useEffect(() => {
-    if (phase !== 'done' || !downloadUrl || !project) return;
+    if (!downloadUrl || !project) return;
+    // shouldRecordExport enforces the quota invariant: only a completed render
+    // that actually produced output consumes an allowance — a failed or
+    // cancelled render never reaches phase 'done' with a downloadUrl, so this
+    // is never true for those cases (see exportQuota.test.ts for the matrix).
+    if (!shouldRecordExport(phase, true)) return;
+    const exportId = exportIdRef.current;
+    // Guard against this effect re-firing for the SAME completed render (e.g.
+    // an unrelated `project` update while still in 'done' phase) — without
+    // this, a re-fire would both re-trigger the browser's download dialog and
+    // call recordExport a second time. The server dedupes by exportId too
+    // (belt-and-braces), but this avoids the spurious second download outright.
+    if (!exportId || recordedExportIdRef.current === exportId) return;
+    recordedExportIdRef.current = exportId;
+
     const anchor = document.createElement('a');
     anchor.href = downloadUrl;
     // Sanitize the user-supplied filename: strip extension, then remove any
@@ -266,10 +240,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     // Record the export AFTER triggering the download so the user only consumes
     // a quota slot when the file actually starts downloading. The exportId
     // makes the server-side write idempotent across retries.
-    const exportId = exportIdRef.current;
-    if (exportId) {
-      void recordExport(exportId).then(() => setRemaining(getRemainingExports()));
-    }
+    void recordExport(exportId).then(() => setRemaining(getRemainingExports()));
   }, [downloadUrl, phase, project]);
 
   useEffect(() => {
@@ -337,8 +308,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 </h2>
               </div>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-subtle)' }}>
-                {exportResolution === '4k' ? '4K' : '1080p'} MP4
-                {usingCloudEngine || (phase === 'idle' && wouldUseCloud) ? ' · cloud render' : ' via ffmpeg.wasm'}
+                {exportResolution === '4k' ? '4K' : '1080p'} MP4 via ffmpeg.wasm
               </p>
             </div>
             <button
@@ -369,83 +339,62 @@ export function ExportModal({ onClose }: ExportModalProps) {
             </button>
           </div>
 
-          {/* Export quota — hidden for Pro users */}
-          {!isPro && (
-          <div
-            style={{
-              borderRadius: 10,
-              border: `1px solid ${remaining > 0 ? 'rgba(45, 141, 141, 0.2)' : 'rgba(255, 77, 139, 0.2)'}`,
-              background: remaining > 0 ? 'rgba(45, 141, 141, 0.06)' : 'rgba(255, 77, 139, 0.06)',
-              padding: '9px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 12, color: remaining > 0 ? '#4a4a4a' : 'rgba(255, 77, 139, 0.85)' }}>
-              {user ? 'Free exports this month' : 'Guest exports (this session)'}
-            </span>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              {Array.from({ length: user ? SIGNED_IN_FREE_LIMIT : EXPORT_LIMIT }).map((_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    background: i < remaining ? '#2d8d8d' : 'rgba(10,10,10,0.08)',
-                    transition: 'background 0.2s',
-                  }}
-                />
-              ))}
-              <span
-                style={{
-                  marginLeft: 6,
-                  fontSize: 11,
-                  fontFamily: 'var(--font-mono)',
-                  fontWeight: 600,
-                  color: remaining > 0 ? '#2d8d8d' : '#ff4d8b',
-                }}
-              >
-                {remaining}/{user ? SIGNED_IN_FREE_LIMIT : EXPORT_LIMIT}
-              </span>
-            </div>
-          </div>
+          {/* Export quota — free tier always; guest tier only while the guest
+              export experiment is enabled (see planConfig.ts GUEST_EXPERIMENT).
+              Hidden entirely for Pro (unlimited) and for guests when the
+              experiment is off, since there's nothing to count — they get the
+              sign-in banner below instead. */}
+          {tier === 'free' && (
+            <QuotaPanel label="Free exports this month" remaining={remaining} limit={SIGNED_IN_FREE_LIMIT} />
+          )}
+          {tier === 'guest' && GUEST_EXPERIMENT.enabled && (
+            <QuotaPanel label="Guest exports (this session)" remaining={remaining} limit={EXPORT_LIMIT} />
           )}
 
-          {/* Resolution — 4K routes to the cloud engine when combined with AI interpolation */}
-          {phase === 'idle' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-                {(['1080p', '4k'] as const).map((res) => (
-                  <button
-                    key={res}
-                    type="button"
-                    onClick={() => setExportResolution(res)}
-                    style={{
-                      padding: '7px 0',
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      border: `1px solid ${exportResolution === res ? 'rgba(184, 164, 237, 0.45)' : '#e5dfd0'}`,
-                      background: exportResolution === res ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
-                      color: exportResolution === res ? '#8a6fd6' : 'var(--color-text-muted)',
-                      transition: 'background 0.12s, border-color 0.12s, color 0.12s',
-                    }}
-                  >
-                    {res === '4k' ? '4K' : '1080p'}
-                  </button>
-                ))}
-              </div>
-              {wouldUseCloud && (
-                <p style={{ margin: 0, fontSize: 11, color: '#8a6fd6', lineHeight: 1.4 }}>
-                  4K + frame interpolation exceeds what the browser can process reliably —
-                  this export renders in the cloud instead of locally.
-                </p>
-              )}
+          {/* Resolution — hidden for guests; the guest experiment (when enabled)
+              fixes them to GUEST_EXPERIMENT.resolution, nothing to choose. */}
+          {phase === 'idle' && tier !== 'guest' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+              {(['1080p', '4k'] as const).map((res) => (
+                <button
+                  key={res}
+                  type="button"
+                  onClick={() => setExportResolution(res)}
+                  style={{
+                    padding: '7px 0',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: `1px solid ${exportResolution === res ? 'rgba(184, 164, 237, 0.45)' : '#e5dfd0'}`,
+                    background: exportResolution === res ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
+                    color: exportResolution === res ? '#8a6fd6' : 'var(--color-text-muted)',
+                    transition: 'background 0.12s, border-color 0.12s, color 0.12s',
+                  }}
+                >
+                  {res === '4k' ? '4K' : '1080p'}
+                </button>
+              ))}
             </div>
+          )}
+
+          {/* Restriction banner — computed reactively from current settings, shown
+              as soon as the modal opens (not only after clicking Start), so the
+              user knows before spending any time waiting on a render that was
+              never going to be allowed. */}
+          {phase === 'idle' && unsupportedCombo && (
+            <Banner tone="neutral">
+              4K + AI frame interpolation isn't supported yet on any plan — the in-browser
+              pipeline can't reliably encode it. Try one or the other.
+            </Banner>
+          )}
+          {phase === 'idle' && !unsupportedCombo && blockedReason && (
+            <Banner tone={tier === 'guest' ? 'info' : 'upgrade'}>{blockedReason}</Banner>
+          )}
+          {phase === 'idle' && tier === 'guest' && !GUEST_EXPERIMENT.enabled && (
+            <Banner tone="info">
+              Sign in to export — free accounts get {SIGNED_IN_FREE_LIMIT} exports/month.
+            </Banner>
           )}
 
           {/* Pre-export time estimate (shown only in idle state) */}
@@ -617,21 +566,37 @@ export function ExportModal({ onClose }: ExportModalProps) {
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-            {phase === 'idle' && (
-              <>
-                <button type="button" onClick={onClose} style={ghostBtn}>
-                  Close
-                </button>
-                <button type="button" onClick={startExport} style={primaryBtn(false)}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Start export
-                </button>
-              </>
-            )}
+            {phase === 'idle' && (() => {
+              const guestNeedsSignIn = tier === 'guest' && !GUEST_EXPERIMENT.enabled;
+              const disabled = unsupportedCombo || guestNeedsSignIn;
+              const label = unsupportedCombo
+                ? 'Not supported'
+                : guestNeedsSignIn
+                  ? 'Sign in to export'
+                  : blockedReason
+                    ? (tier === 'guest' ? 'Sign in to export' : 'Upgrade to export')
+                    : 'Start export';
+              return (
+                <>
+                  <button type="button" onClick={onClose} style={ghostBtn}>
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={disabled ? undefined : startExport}
+                    disabled={disabled}
+                    style={primaryBtn(disabled)}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    {label}
+                  </button>
+                </>
+              );
+            })()}
 
             {phase === 'checking' && (
               <button type="button" style={primaryBtn(true)} disabled>
@@ -696,6 +661,78 @@ export function ExportModal({ onClose }: ExportModalProps) {
           </div>
         </div>
     </div>
+  );
+}
+
+function QuotaPanel({ label, remaining, limit }: { label: string; remaining: number; limit: number }) {
+  return (
+    <div
+      style={{
+        borderRadius: 10,
+        border: `1px solid ${remaining > 0 ? 'rgba(45, 141, 141, 0.2)' : 'rgba(255, 77, 139, 0.2)'}`,
+        background: remaining > 0 ? 'rgba(45, 141, 141, 0.06)' : 'rgba(255, 77, 139, 0.06)',
+        padding: '9px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+      }}
+    >
+      <span style={{ fontSize: 12, color: remaining > 0 ? '#4a4a4a' : 'rgba(255, 77, 139, 0.85)' }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {Array.from({ length: limit }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: i < remaining ? '#2d8d8d' : 'rgba(10,10,10,0.08)',
+              transition: 'background 0.2s',
+            }}
+          />
+        ))}
+        <span
+          style={{
+            marginLeft: 6,
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 600,
+            color: remaining > 0 ? '#2d8d8d' : '#ff4d8b',
+          }}
+        >
+          {remaining}/{limit}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const BANNER_TONE = {
+  neutral: { border: 'rgba(10,10,10,0.1)', background: 'rgba(10,10,10,0.03)', color: '#4a4a4a' },
+  info:    { border: 'rgba(184,164,237,0.3)', background: 'rgba(184,164,237,0.08)', color: '#7a5fc0' },
+  upgrade: { border: 'rgba(184,164,237,0.3)', background: 'rgba(184,164,237,0.08)', color: '#7a5fc0' },
+} as const;
+
+function Banner({ tone, children }: { tone: keyof typeof BANNER_TONE; children: React.ReactNode }) {
+  const c = BANNER_TONE[tone];
+  return (
+    <p
+      style={{
+        margin: 0,
+        fontSize: 12,
+        lineHeight: 1.5,
+        padding: '9px 12px',
+        borderRadius: 10,
+        border: `1px solid ${c.border}`,
+        background: c.background,
+        color: c.color,
+      }}
+    >
+      {children}
+    </p>
   );
 }
 

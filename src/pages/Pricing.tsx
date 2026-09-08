@@ -178,7 +178,7 @@ const BILLING_FAQS = [
   },
   {
     q: 'What payment methods do you accept?',
-    a: 'We use Stripe for billing, which supports all major credit and debit cards. Apple Pay and Google Pay are also supported on supported browsers.',
+    a: 'We use Dodo Payments for billing, which supports all major credit and debit cards, Apple Pay and Google Pay on supported browsers, and UPI for customers in India.',
   },
   {
     q: 'Do you offer refunds?',

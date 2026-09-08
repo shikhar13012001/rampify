@@ -5,6 +5,8 @@ import { formatTime } from '@/features/preview/formatTime';
 import { hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
 import { subscribeModelStatus, waitForWorkerReady } from '@/lib/slowMotionPipeline';
 import type { ModelStatus } from '@/lib/slowMotionPipeline';
+import { planTierFor } from '@/lib/exportLimits';
+import { canUseBlurIntensity, canUseOpticalFlow, type PlanTier } from '@/lib/planConfig';
 import type { BlurIntensity, OpticalFlowQuality, Segment } from '@/types/editor';
 
 function fmtDuration(s: number): string {
@@ -32,7 +34,9 @@ export function Sidebar() {
   const undo = useEditorStore((state) => state.undo);
   const history = useEditorStore((state) => state.history);
 
+  const user                = useEditorStore((state) => state.user);
   const isPro              = useEditorStore((state) => state.isPro);
+  const tier: PlanTier      = planTierFor(!!user, isPro);
   const blurSettings       = useEditorStore((state) => state.blurSettings);
   const setBlurEnabled     = useEditorStore((state) => state.setBlurEnabled);
   const setBlurIntensity   = useEditorStore((state) => state.setBlurIntensity);
@@ -169,7 +173,7 @@ export function Sidebar() {
             enabled={blurSettings.enabled}
             intensity={blurSettings.intensity}
             transitionCount={transitionCount}
-            isPro={isPro}
+            tier={tier}
             onToggle={setBlurEnabled}
             onIntensityChange={setBlurIntensity}
             onUpgrade={() => setUpgradeModalOpen(true)}
@@ -178,7 +182,7 @@ export function Sidebar() {
             enabled={ofSettings.enabled}
             quality={ofSettings.quality}
             segments={segments}
-            isPro={isPro}
+            tier={tier}
             onToggle={setOFEnabled}
             onQualityChange={setOFQuality}
             onUpgrade={() => setUpgradeModalOpen(true)}
@@ -466,7 +470,7 @@ function MotionBlurControl({
   enabled,
   intensity,
   transitionCount,
-  isPro,
+  tier,
   onToggle,
   onIntensityChange,
   onUpgrade,
@@ -474,11 +478,12 @@ function MotionBlurControl({
   enabled: boolean;
   intensity: BlurIntensity;
   transitionCount: number;
-  isPro: boolean;
+  tier: PlanTier;
   onToggle: (v: boolean) => void;
   onIntensityChange: (v: BlurIntensity) => void;
   onUpgrade: () => void;
 }) {
+  const canExportCurrent = canUseBlurIntensity(intensity, tier);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {/* Toggle row */}
@@ -497,7 +502,8 @@ function MotionBlurControl({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span>Motion blur</span>
-          {!isPro && <ProBadge onClick={onUpgrade} />}
+          {tier === 'guest' && <ProBadge onClick={onUpgrade} label="Account" />}
+          {tier === 'free' && <ProBadge onClick={onUpgrade} label="Balanced free" tone="ok" />}
           {enabled && transitionCount > 0 && (
             <span
               style={{
@@ -564,13 +570,16 @@ function MotionBlurControl({
 
       {enabled && (
         <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-text-subtle)', padding: '0 2px', lineHeight: 1.4 }}>
-          {isPro
+          {canExportCurrent
             ? 'Applied at export time. Intensity controls blur amount at each speed change.'
-            : 'Live preview in the player above. Exporting with blur requires Pro.'}
+            : tier === 'guest'
+              ? 'Live preview only — sign in to export with blur.'
+              : 'Live preview only — switch to Balanced, or upgrade for this intensity.'}
         </p>
       )}
 
-      {/* Intensity segmented control — only visible when enabled */}
+      {/* Intensity segmented control — only visible when enabled. A small dot
+          marks presets this tier can't actually export with (still previewable). */}
       {enabled && (
         <div
           style={{
@@ -580,27 +589,42 @@ function MotionBlurControl({
             padding: '0 2px 4px',
           }}
         >
-          {INTENSITY_LABELS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onIntensityChange(value)}
-              style={{
-                padding: '5px 0',
-                borderRadius: 7,
-                border: `1px solid ${intensity === value ? 'rgba(184, 164, 237, 0.45)' : 'var(--color-border)'}`,
-                background: intensity === value ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
-                color: intensity === value ? '#b8a4ed' : 'var(--color-text-subtle)',
-                fontSize: 10,
-                fontWeight: 600,
-                cursor: 'pointer',
-                letterSpacing: '-0.01em',
-                transition: 'background 0.12s, border-color 0.12s, color 0.12s',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          {INTENSITY_LABELS.map(({ value, label }) => {
+            const exportable = canUseBlurIntensity(value, tier);
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onIntensityChange(value)}
+                title={exportable ? undefined : 'Preview only at this tier — see the note below'}
+                style={{
+                  position: 'relative',
+                  padding: '5px 0',
+                  borderRadius: 7,
+                  border: `1px solid ${intensity === value ? 'rgba(184, 164, 237, 0.45)' : 'var(--color-border)'}`,
+                  background: intensity === value ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
+                  color: intensity === value ? '#b8a4ed' : 'var(--color-text-subtle)',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  letterSpacing: '-0.01em',
+                  transition: 'background 0.12s, border-color 0.12s, color 0.12s',
+                }}
+              >
+                {label}
+                {!exportable && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute', top: 3, right: 4,
+                      width: 4, height: 4, borderRadius: '50%',
+                      background: '#e8b94a',
+                    }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -623,7 +647,7 @@ function OpticalFlowControl({
   enabled,
   quality,
   segments,
-  isPro,
+  tier,
   onToggle,
   onQualityChange,
   onUpgrade,
@@ -631,18 +655,19 @@ function OpticalFlowControl({
   enabled: boolean;
   quality: OpticalFlowQuality;
   segments: Segment[];
-  isPro: boolean;
+  tier: PlanTier;
   onToggle: (v: boolean) => void;
   onQualityChange: (v: OpticalFlowQuality) => void;
   onUpgrade: () => void;
 }) {
   const [modelStatus, setModelStatusLocal] = useState<ModelStatus>('idle');
+  const isPro = canUseOpticalFlow(tier);
 
   useEffect(() => subscribeModelStatus(setModelStatusLocal), []);
 
   useEffect(() => {
     // Only pre-warm the (6 MB) AI model for Pro users who can actually export
-    // with it — free users just see the curve-editor preview, no download needed.
+    // with it — free/guest users just see the curve-editor preview, no download needed.
     if (enabled && isPro) waitForWorkerReady();
   }, [enabled, isPro]);
 
@@ -672,11 +697,14 @@ function OpticalFlowControl({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Frame interpolation
-            {!isPro && <ProBadge onClick={onUpgrade} />}
+            {tier === 'guest' && <ProBadge onClick={onUpgrade} label="Account" />}
+            {tier === 'free' && <ProBadge onClick={onUpgrade} />}
           </span>
           {enabled && !isPro && (
             <span style={{ fontSize: 9, color: 'var(--color-text-subtle)', lineHeight: 1.4 }}>
-              Preview only in the curve editor — exporting requires Pro.
+              {tier === 'guest'
+                ? 'Preview only in the curve editor — sign in and upgrade to export.'
+                : 'Preview only in the curve editor — exporting requires Pro.'}
             </span>
           )}
           {enabled && isPro && modelStatus === 'loading' && (
@@ -817,7 +845,16 @@ function OpticalFlowControl({
 /** Small inline "Pro" tag next to a feature label — click opens the upgrade modal.
  *  Unlike the old LockedOption, the feature itself stays fully interactive for
  *  free users; this just signals that exporting with it requires Pro. */
-function ProBadge({ onClick }: { onClick: () => void }) {
+function ProBadge({
+  onClick,
+  label = 'Pro',
+  tone = 'upsell',
+}: {
+  onClick: () => void;
+  label?: string;
+  tone?: 'upsell' | 'ok';
+}) {
+  const color = tone === 'ok' ? '#2d8d8d' : '#b8a4ed';
   return (
     <button
       type="button"
@@ -827,19 +864,19 @@ function ProBadge({ onClick }: { onClick: () => void }) {
       }}
       style={{
         borderRadius: 5,
-        backgroundColor: 'rgba(184, 164, 237, 0.12)',
-        border: '1px solid rgba(184, 164, 237, 0.3)',
-        color: '#b8a4ed',
+        backgroundColor: tone === 'ok' ? 'rgba(28, 228, 184, 0.1)' : 'rgba(184, 164, 237, 0.12)',
+        border: `1px solid ${tone === 'ok' ? 'rgba(28, 228, 184, 0.25)' : 'rgba(184, 164, 237, 0.3)'}`,
+        color,
         padding: '1px 6px',
         fontSize: 9,
         fontWeight: 700,
-        letterSpacing: '0.08em',
+        letterSpacing: '0.06em',
         textTransform: 'uppercase',
         flexShrink: 0,
         cursor: 'pointer',
       }}
     >
-      Pro
+      {label}
     </button>
   );
 }

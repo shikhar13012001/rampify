@@ -1,12 +1,20 @@
 # Rampify — Claude Code Guide
 
+## Validation sprint (in progress)
+
+Rampify is mid a four-week validation sprint (activation, acquisition, repeat use,
+payment — not further feature expansion). Before starting sprint-related work, read
+`docs/validation/WORKING_AGREEMENT.md` (rules of engagement — approval requirements,
+test-environment rules) and `docs/validation/STATUS.md` (current findings, priorities,
+and next action). Keep STATUS.md updated after every sprint task.
+
 ## Stack
 
 - React 19 + TypeScript 6 + Vite 8 + Tailwind CSS v4
 - Zustand v5 for global state
 - @ffmpeg/ffmpeg (wasm) for video processing, loaded in a Web Worker
 - Firebase (client SDK v10, modular) for Auth + Firestore
-- Stripe for subscription billing
+- Dodo Payments (Merchant of Record) for subscription billing
 - Vitest 4 for unit tests
 
 ## Path alias
@@ -51,7 +59,9 @@ npm run build         # type-check + bundle
 npm run test          # run Vitest once
 npm run test:watch
 vercel dev            # run frontend + API routes together locally
-stripe listen --forward-to localhost:3000/api/webhooks/stripe  # webhook dev
+# Dodo webhook dev: use the Dodo Dashboard's test-mode "Send test event" against
+# your `vercel dev` tunnel, or the Dodo CLI if/when one ships an equivalent to
+# `stripe listen`. See docs.dodopayments.com/developer-resources/webhooks.
 ```
 
 ## Environment variables
@@ -60,17 +70,21 @@ Copy `.env.example` to `.env.local` and fill in the values.
 
 **Server-side only (Vercel API routes / never exposed to browser):**
 ```
-STRIPE_SECRET_KEY              Stripe secret key (sk_test_… or sk_live_…)
-STRIPE_WEBHOOK_SECRET          From: stripe listen --print-secret
-STRIPE_PRO_MONTHLY_PRICE_ID    Stripe Price ID for $12/month recurring
-STRIPE_PRO_ANNUAL_PRICE_ID     Stripe Price ID for $96/year recurring
-STRIPE_PRO_PRICE_ID            Legacy fallback (used if MONTHLY is unset)
-STRIPE_WEBHOOK_DEV_BYPASS      Set to 1 ONLY for local `vercel dev` webhook testing.
+DODO_PAYMENTS_API_KEY          Dashboard → Developer → API Keys (sk_test_… while validating)
+DODO_PAYMENTS_WEBHOOK_KEY      Dashboard → Developer → Webhooks → your endpoint → signing secret
+DODO_PAYMENTS_ENVIRONMENT      "test_mode" or "live_mode"
+DODO_PRO_MONTHLY_PRODUCT_ID    Dodo product id for the $12/month recurring plan
+DODO_PRO_ANNUAL_PRODUCT_ID     Dodo product id for the $96/year recurring plan
+DODO_WEBHOOK_DEV_BYPASS        Set to 1 ONLY for local `vercel dev` webhook testing.
                                NEVER set in production/preview. When unset, the
                                webhook rejects empty bodies without a valid signature.
-ALLOWED_ORIGINS                Comma-separated production origins for Stripe Checkout redirects
+ALLOWED_ORIGINS                Comma-separated production origins for Dodo Checkout redirects
 FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY  Entire service account JSON as one line
 ```
+
+All of the above are validated at request time by `api/_env.ts`'s `getServerEnv()`
+(Zod schema) — a misconfigured deploy fails with a clear list of what's missing
+on the first request, rather than a confusing downstream SDK error.
 
 **Client-side (Vite public, prefixed VITE_):**
 ```
@@ -123,14 +137,17 @@ src/
     useKeyboardShortcuts.ts   — Space, arrows, S (split), Delete, Ctrl+Z, Ctrl+E
   pages/
     Landing.tsx
-    UpgradeSuccess.tsx        — polls /api/check-subscription after Stripe redirect (30s window)
+    UpgradeSuccess.tsx        — polls /api/check-subscription after Dodo Checkout redirect (30s window)
 
 api/                          — Vercel serverless functions (Node.js runtime)
-  _adminInit.ts               — Firebase Admin + Stripe singletons; shared CORS + env helpers
-  create-checkout-session.ts  — POST: creates Stripe Checkout session; Pro-guard + idempotency key
-  check-subscription.ts       — GET: returns { isPro, exportsThisMonth, exportsRemaining }
+  _env.ts                     — Zod-validated server env (Dodo + Firebase + ALLOWED_ORIGINS)
+  _adminInit.ts               — Firebase Admin + Dodo Payments singletons; shared CORS + env helpers
+  create-checkout-session.ts  — POST: creates a Dodo Checkout Session; Pro-guard; metadata.userId
+  check-subscription.ts       — GET: returns { isPro, exportsThisMonth, exportsRemaining } (provider-agnostic)
+  customer-portal.ts          — POST: creates a Dodo Customer Portal session URL for the signed-in user
   record-export.ts            — POST: idempotent server-side export log (server timestamp); enforces free cap
-  webhooks/stripe.ts          — Stripe webhook: idempotent via stripe_events; handles 8+ event types
+  webhooks/dodo.ts             — Dodo webhook: Standard Webhooks signature via client.webhooks.unwrap();
+                                 idempotent via dodo_events/{webhook-id}; handles payment/subscription events
 ```
 
 ### Export recording (canonical path)
@@ -173,17 +190,25 @@ usage analytics are complete, but the cap is not applied.
 - Optical flow path: OF-interpolated frames passed as `FrameFile[]` (JPEG sequence),
   read via ffmpeg's `image2` demuxer at the computed output framerate
 
-## Stripe + Firebase subscription flow
+## Dodo Payments + Firebase subscription flow
+
+Dodo Payments is Rampify's Merchant of Record (migrated from Stripe 2026-09-08) —
+it handles global tax compliance and natively supports UPI for Indian customers.
+It follows the [Standard Webhooks](https://www.standardwebhooks.com/) spec
+(`webhook-id` / `webhook-signature` / `webhook-timestamp` headers), verified via
+`client.webhooks.unwrap()`.
 
 ```
 User clicks "Start Pro"
   → UpgradeModal calls POST /api/create-checkout-session (with Firebase ID token)
-  → API verifies token, creates Stripe Checkout session, returns { url }
-  → Browser redirects to Stripe Checkout
+  → API verifies token, creates a Dodo Checkout Session with metadata: { userId },
+    returns { url }
+  → Browser redirects to Dodo Checkout
 
-User completes payment on Stripe
-  → Stripe fires checkout.session.completed webhook to POST /api/webhooks/stripe
-  → Webhook verifies signature, writes Firestore users/{uid}: { subscriptionTier: 'pro', ... }
+User completes payment on Dodo
+  → Dodo fires payment.succeeded / subscription.active to POST /api/webhooks/dodo
+  → Webhook verifies signature, reads metadata.userId, writes Firestore
+    users/{uid}: { subscriptionTier: 'pro', dodoCustomerId, ... }
   → Browser redirects to /upgrade/success
 
 /upgrade/success page
@@ -193,17 +218,28 @@ User completes payment on Stripe
 On next session (onAuthStateChanged in App.tsx)
   → Firebase auth resolves → fetches /api/check-subscription → isPro propagates to store
   → All Pro feature flags (blur, optical flow, beat sync) unlock without reload
+
+User manages/cancels from the account menu
+  → UserButton (Pro only) calls POST /api/customer-portal
+  → API looks up dodoCustomerId, creates a Dodo Customer Portal session, returns { url }
+  → Browser redirects to the portal; subscription.cancelled webhook later downgrades
+    the user to 'free' when they cancel there
 ```
 
-**Webhook async gap**: the user may return from Stripe before the webhook fires.
-`UpgradeSuccess.tsx` handles this with the 30-second polling window.
+**Webhook async gap**: the user may return from Dodo before the webhook fires.
+`UpgradeSuccess.tsx` handles this with the 30-second polling window (unchanged —
+this page is provider-agnostic, it only calls Rampify's own `/api/check-subscription`).
+
+**Event ordering**: per Dodo's docs, `subscription.cancelled` can arrive before
+`subscription.active` under network delay. `api/webhooks/dodo.ts` doesn't currently
+guard against this — a real risk to test before trusting this in production.
 
 ## Firestore schema
 
 ```
 users/{uid}
   subscriptionTier: 'free' | 'pro'
-  stripeCustomerId: string
+  dodoCustomerId:   string
   subscriptionEnd:  Timestamp
   updatedAt:        Timestamp
 
@@ -251,9 +287,12 @@ users/{uid}/export_logs/{logId}
       over 30 seconds, apply "Peak on beat" — verify curve has peaks at
       every detected beat position.
 
-[ ] Stripe test checkout flow completes and isPro flips to true
-    - Click Upgrade → complete Stripe test checkout (card 4242 4242 4242 4242)
-      → /upgrade/success polls → redirects to /editor with Pro badge visible.
+[ ] Dodo test-mode checkout flow completes and isPro flips to true
+    - Click Upgrade → complete checkout with a Dodo test-mode payment method
+      (test card, or UPI in Dodo's sandbox) → /upgrade/success polls →
+      redirects to /editor with Pro badge visible.
+[ ] "Manage subscription" opens the Dodo customer portal and cancellation
+    downgrades the user to free (subscription.cancelled webhook observed).
 
 [ ] Free user sees correct export limit (3/month)
     - Sign in, do not upgrade, attempt export — verify limit shown in TopBar.

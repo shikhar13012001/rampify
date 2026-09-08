@@ -1,6 +1,7 @@
 /**
- * Shared Firebase Admin + Stripe singletons for Vercel serverless functions.
- * Call initAdmin() at the top of every handler; the init is idempotent.
+ * Shared Firebase Admin + Dodo Payments singletons for Vercel serverless
+ * functions. Call initAdmin() at the top of every handler; the init is
+ * idempotent.
  */
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -8,7 +9,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import Stripe from 'stripe';
+import DodoPayments from 'dodopayments';
+import { getServerEnv } from './_env.js';
 
 // vercel dev sets VERCEL but VERCEL_ENV === 'development', so we must only
 // skip .env.local loading in real production/preview deployments.
@@ -78,16 +80,15 @@ export function adminDb() {
   return getFirestore();
 }
 
-let stripe: Stripe | null = null;
-export function stripeClient() {
-  if (stripe) return stripe;
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) {
-    throw new Error('STRIPE_SECRET_KEY not configured');
-  }
-  // Pin to match the Stripe dashboard pinned version for the rampify-720b4 account.
-  stripe = new Stripe(key, { apiVersion: '2026-05-27.dahlia' });
-  return stripe;
+let dodo: DodoPayments | null = null;
+export function dodoClient() {
+  if (dodo) return dodo;
+  const env = getServerEnv(); // throws with a clear message if misconfigured
+  dodo = new DodoPayments({
+    bearerToken: env.DODO_PAYMENTS_API_KEY,
+    environment: env.DODO_PAYMENTS_ENVIRONMENT,
+  });
+  return dodo;
 }
 
 /** Extract and verify Firebase ID token from Authorization header. */
@@ -103,7 +104,7 @@ export const FREE_MONTHLY_EXPORTS = 3;
 export const PRO_EXPORT_REMAINING = 999;
 
 /**
- * Resolve the allowed origin for Stripe success/cancel URLs and CORS.
+ * Resolve the allowed origin for Dodo Checkout return URLs and CORS.
  * Allowlist: ALLOWED_ORIGINS env (comma-separated), VERCEL_URL, localhost dev.
  * Falls back to the first ALLOWED_ORIGINS entry if the request origin is not allowed.
  */

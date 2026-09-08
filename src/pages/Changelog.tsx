@@ -4,6 +4,18 @@ import { Seo } from '@/components/Seo';
 
 const ENTRIES = [
   {
+    version: '2.5.0',
+    date: 'September 8, 2026',
+    tag: 'Improved',
+    tagColor: 'var(--color-clay-teal-bright)',
+    title: 'Switched billing to Dodo Payments',
+    changes: [
+      'Rampify now bills through Dodo Payments, our Merchant of Record — this adds UPI as a payment method for customers in India, alongside cards, Apple Pay, and Google Pay.',
+      'Dodo handles global tax compliance (VAT/GST) on our behalf, so pricing stays simple no matter where you\'re billed from.',
+      'Added a "Manage subscription" option in the account menu, backed by the Dodo customer portal.',
+    ],
+  },
+  {
     version: '2.4.0',
     date: 'June 24, 2026',
     tag: 'New',

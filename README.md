@@ -56,7 +56,7 @@ Rampify is a fully browser-based video speed ramping editor. Drop a clip, draw a
 | Beat detection | Custom STFT implementation in a Web Worker |
 | Auth | Firebase Auth v10 (Google One Tap / FedCM) |
 | Database | Firestore (subscription state, export logs) |
-| Payments | Stripe Checkout + webhooks |
+| Payments | Dodo Payments (Merchant of Record) — Checkout Sessions + webhooks |
 | API routes | Vercel Serverless Functions (Node.js, TypeScript) |
 | Deployment | Vercel |
 
@@ -67,12 +67,14 @@ Rampify is a fully browser-based video speed ramping editor. Drop a clip, draw a
 ```
 rampify/
 ├── api/                          # Vercel serverless functions
-│   ├── _adminInit.ts             # Firebase Admin + Stripe singletons
+│   ├── _env.ts                   # Zod-validated server env (Dodo + Firebase)
+│   ├── _adminInit.ts             # Firebase Admin + Dodo Payments singletons
 │   ├── create-checkout-session.ts
 │   ├── check-subscription.ts
+│   ├── customer-portal.ts        # Dodo Customer Portal session for the signed-in user
 │   ├── record-export.ts          # Server-side export count (idempotent, Admin SDK)
 │   └── webhooks/
-│       └── stripe.ts
+│       └── dodo.ts
 │
 ├── public/
 │   ├── models/
@@ -146,7 +148,7 @@ rampify/
 - **Node.js** ≥ 20
 - **npm** ≥ 10
 - A **Firebase** project with Authentication (Google provider) and Firestore enabled
-- A **Stripe** account with a product and two prices (monthly + annual)
+- A **Dodo Payments** account with two recurring products (monthly + annual)
 - **Vercel CLI** (for local API routes): `npm i -g vercel`
 
 ### Installation
@@ -179,11 +181,12 @@ VITE_FIREBASE_APP_ID=
 # ── Google Identity Services ──────────────────────────────────────────────────
 VITE_GOOGLE_CLIENT_ID=              # OAuth 2.0 client ID from Google Cloud Console
 
-# ── Stripe (server-only — never exposed to the browser) ──────────────────────
-STRIPE_SECRET_KEY=                  # sk_test_… or sk_live_…
-STRIPE_WEBHOOK_SECRET=              # whsec_… from: stripe listen --print-secret
-STRIPE_PRO_MONTHLY_PRICE_ID=        # price_… Monthly recurring price
-STRIPE_PRO_ANNUAL_PRICE_ID=         # price_… Annual recurring price
+# ── Dodo Payments (server-only — never exposed to the browser) ───────────────
+DODO_PAYMENTS_API_KEY=              # sk_test_… while validating — Dashboard → Developer → API Keys
+DODO_PAYMENTS_WEBHOOK_KEY=          # whsec_… — Dashboard → Developer → Webhooks → signing secret
+DODO_PAYMENTS_ENVIRONMENT=          # "test_mode" or "live_mode"
+DODO_PRO_MONTHLY_PRODUCT_ID=        # pdt_… Monthly recurring product
+DODO_PRO_ANNUAL_PRODUCT_ID=         # pdt_… Annual recurring product
 
 # ── Firebase Admin (server-only) ─────────────────────────────────────────────
 FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY= # Entire service account JSON as one line
@@ -207,13 +210,15 @@ npm run dev          # http://localhost:5173
 vercel dev           # http://localhost:3000
 ```
 
-### Forward Stripe webhooks locally
+### Test Dodo webhooks locally
 
-```bash
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
-```
+Dodo doesn't ship a CLI forwarder equivalent to `stripe listen`. Use the Dashboard's
+test-mode "Send test event" against your `vercel dev` tunnel (e.g. via `ngrok` or
+Vercel's own dev tunnel), or set `DODO_WEBHOOK_DEV_BYPASS=1` locally to skip
+signature verification entirely (never in production/preview — see `.env.example`).
 
-Copy the printed signing secret into `STRIPE_WEBHOOK_SECRET` in `.env.local`.
+Copy the signing secret from Dashboard → Developer → Webhooks into
+`DODO_PAYMENTS_WEBHOOK_KEY` in `.env.local`.
 
 ### Other commands
 
@@ -270,7 +275,8 @@ All routes are Vercel Serverless Functions in the `api/` directory.
 
 ### `POST /api/create-checkout-session`
 
-Creates a Stripe Checkout session for the authenticated user.
+Creates a Dodo Payments Checkout Session for the authenticated user, with
+`metadata.userId` set so the webhook can tie the payment back to a Firestore user.
 
 **Headers:** `Authorization: Bearer <Firebase ID token>`
 
@@ -281,14 +287,15 @@ Creates a Stripe Checkout session for the authenticated user.
 
 **Response:**
 ```json
-{ "url": "https://checkout.stripe.com/..." }
+{ "url": "https://checkout.dodopayments.com/..." }
 ```
 
 ---
 
 ### `GET /api/check-subscription`
 
-Returns the user's current subscription status and export counts.
+Returns the user's current subscription status and export counts. Provider-agnostic —
+reads only Firestore, unaffected by the payment-processor migration.
 
 **Headers:** `Authorization: Bearer <Firebase ID token>`
 
@@ -303,11 +310,31 @@ Returns the user's current subscription status and export counts.
 
 ---
 
-### `POST /api/webhooks/stripe`
+### `POST /api/customer-portal`
 
-Stripe webhook handler. Verifies the `stripe-signature` header and writes subscription state to Firestore on `checkout.session.completed` and `customer.subscription.deleted` events.
+Creates a Dodo Customer Portal session URL for the authenticated user, so they can
+manage or cancel their subscription. Returns 404 if the user has no `dodoCustomerId`
+on file (i.e. they've never completed checkout).
 
-**Required env var:** `STRIPE_WEBHOOK_SECRET`
+**Headers:** `Authorization: Bearer <Firebase ID token>`
+
+**Response:**
+```json
+{ "url": "https://.../customer-portal/..." }
+```
+
+---
+
+### `POST /api/webhooks/dodo`
+
+Dodo Payments webhook handler. Verifies the Standard Webhooks signature
+(`webhook-id` / `webhook-signature` / `webhook-timestamp` headers) via
+`client.webhooks.unwrap()` and writes subscription state to Firestore on
+`payment.succeeded`, `subscription.active`, `subscription.renewed` (grants Pro) and
+`subscription.cancelled`, `subscription.failed`, `subscription.expired`,
+`subscription.on_hold` (revokes Pro).
+
+**Required env var:** `DODO_PAYMENTS_WEBHOOK_KEY`
 
 ---
 
@@ -348,19 +375,26 @@ The `exportId` as Firestore doc ID makes the write idempotent — retrying the s
 ```
 User clicks "Start Pro"
   → POST /api/create-checkout-session (with Firebase ID token)
-  → Stripe Checkout session created → browser redirects to Stripe
+  → Dodo Checkout Session created (metadata.userId set) → browser redirects to Dodo
 
 User completes payment
-  → Stripe fires checkout.session.completed → POST /api/webhooks/stripe
-  → Webhook writes Firestore users/{uid}: { subscriptionTier: 'pro', ... }
+  → Dodo fires payment.succeeded / subscription.active → POST /api/webhooks/dodo
+  → Webhook writes Firestore users/{uid}: { subscriptionTier: 'pro', dodoCustomerId, ... }
   → Browser redirects to /upgrade/success
 
 /upgrade/success
   → Polls GET /api/check-subscription every 2s (up to 60s)
   → When isPro: true → sets store.isPro = true → redirects to /editor
+
+User manages/cancels
+  → Account menu → "Manage subscription" → POST /api/customer-portal
+  → Browser redirects to the Dodo customer portal
+  → subscription.cancelled webhook later downgrades the user to 'free'
 ```
 
 > **Webhook latency:** The user may arrive at `/upgrade/success` before the webhook fires. The 60-second polling window handles this gap gracefully.
+>
+> **Event ordering:** Dodo's docs note `subscription.cancelled` can arrive before `subscription.active` under network delay. The current webhook handler does not guard against this — verify in test mode before relying on it in production.
 
 ---
 
@@ -369,7 +403,7 @@ User completes payment
 ```
 users/{uid}
   subscriptionTier:  'free' | 'pro'
-  stripeCustomerId:  string
+  dodoCustomerId:    string
   subscriptionEnd:   Timestamp
   updatedAt:         Timestamp
 
@@ -388,15 +422,20 @@ users/{uid}/export_logs/{logId}
 3. Deploy. The `vercel.json` at the repo root configures:
    - SPA catch-all rewrite (`/` → `index.html`)
    - COOP + COEP headers on all routes
-   - Stripe webhook function memory (256 MB) and timeout (30s)
+   - Dodo webhook function memory (256 MB) and timeout (30s)
 
-### Stripe webhook endpoint
+### Dodo Payments webhook endpoint
 
-Register `https://your-domain.vercel.app/api/webhooks/stripe` in the Stripe Dashboard under **Developers → Webhooks**. Subscribe to:
-- `checkout.session.completed`
-- `customer.subscription.deleted`
+Register `https://your-domain.vercel.app/api/webhooks/dodo` in the Dodo Dashboard
+under **Developer → Webhooks**. Subscribe to at least:
+- `payment.succeeded`
+- `subscription.active`
+- `subscription.renewed`
+- `subscription.cancelled`
+- `subscription.failed`
+- `subscription.expired`
 
-Copy the signing secret into the `STRIPE_WEBHOOK_SECRET` env var and redeploy.
+Copy the signing secret into the `DODO_PAYMENTS_WEBHOOK_KEY` env var and redeploy.
 
 ---
 

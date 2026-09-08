@@ -15,7 +15,7 @@ const SECTIONS = [
     title: 'Information we collect',
     body: [
       'Account data: When you sign in with Google, we receive your email address, display name, and profile photo URL. We store your Firebase user ID and email in Firestore to manage your account.',
-      'Subscription data: Your Stripe customer ID, subscription tier, and billing period end date are stored in Firestore so we can keep your Pro status in sync.',
+      'Subscription data: Your Dodo Payments customer ID, subscription tier, and billing period end date are stored in Firestore so we can keep your Pro status in sync.',
       'Usage data: We store a count of your monthly exports in Firestore to enforce the free-plan limit. No content or filenames are stored — only a timestamp per export.',
       'Technical logs: Serverless API requests may be logged by Vercel for uptime and error monitoring. These logs contain no video content.',
     ],
@@ -41,7 +41,7 @@ const SECTIONS = [
     title: 'Third-party services',
     body: [
       'Firebase (Google): Authentication and Firestore database. Google processes your sign-in under their privacy policy.',
-      'Stripe: Payment processing. Stripe handles your card details — we never see or store them.',
+      'Dodo Payments: Our Merchant of Record for payment processing and global tax compliance. Dodo Payments handles your card, UPI, or other payment details — we never see or store them.',
       'Vercel: Hosting for our API routes and static assets. Vercel may log request metadata for infrastructure monitoring.',
     ],
   },
@@ -50,7 +50,7 @@ const SECTIONS = [
     body: [
       'Account data is retained until you request deletion. Email hello@rampify.app to delete your account.',
       'Export logs are retained indefinitely as an anonymous count — they contain no file content or metadata.',
-      'Stripe customer records are retained per Stripe\'s own retention policy, independent of Rampify.',
+      'Dodo Payments customer records are retained per Dodo Payments\' own retention policy, independent of Rampify.',
     ],
   },
   {

@@ -29,7 +29,7 @@ const SECTIONS = [
     title: '4. Subscriptions and billing',
     body: [
       'Rampify offers a Free plan (3 exports per month, 720p) and a Pro plan (unlimited exports, 4K, AI interpolation, beat sync). Pro is available monthly at $12/month or annually at $96/year.',
-      'Payment is processed by Stripe. We never see or store your card details.',
+      'Payment is processed by Dodo Payments, our Merchant of Record. We never see or store your card details.',
       'You can cancel at any time from the editor. Cancellation takes effect at the end of your billing period — you keep Pro access until then.',
       'If you\'re not satisfied within 14 days of your first Pro payment, contact hello@rampify.app for a full refund. After 14 days, you can cancel future billing but past payments are non-refundable.',
       'We may change prices with at least 30 days\' notice. Existing subscribers keep their current price until the next renewal.',

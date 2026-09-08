@@ -7,7 +7,8 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, getCurrentUserIdToken } from './firebase';
+import { useEditorStore } from '@/store/editorStore';
 
 export type { User };
 
@@ -75,7 +76,30 @@ interface UserButtonProps {
 export function UserButton({ user }: UserButtonProps) {
   const [open, setOpen] = useState(false);
   const [signOutError, setSignOutError] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isPro = useEditorStore(s => s.isPro);
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    setPortalError(false);
+    try {
+      const token = await getCurrentUserIdToken();
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/customer-portal', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'Could not open billing portal');
+      window.location.href = data.url;
+    } catch (err) {
+      console.error('[customer-portal]', err);
+      setPortalError(true);
+      setPortalLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -184,6 +208,35 @@ export function UserButton({ user }: UserButtonProps) {
           >
             {user.email}
           </div>
+          {isPro && (
+            <button
+              type="button"
+              onClick={handleManageSubscription}
+              disabled={portalLoading}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '9px 14px',
+                background: 'none',
+                border: 'none',
+                borderBottom: '1px solid #efe9da',
+                textAlign: 'left',
+                color: '#4a4a4a',
+                fontSize: 13,
+                cursor: portalLoading ? 'default' : 'pointer',
+                opacity: portalLoading ? 0.6 : 1,
+              }}
+              onMouseEnter={e => { if (!portalLoading) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(10,10,10,0.05)'; }}
+              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = '')}
+            >
+              {portalLoading ? 'Opening…' : 'Manage subscription'}
+            </button>
+          )}
+          {portalError && (
+            <div style={{ padding: '6px 14px', fontSize: 11, color: '#ff4d8b' }}>
+              Couldn't open billing portal — try again.
+            </div>
+          )}
           <button
             type="button"
             onClick={async () => {

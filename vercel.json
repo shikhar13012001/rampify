@@ -14,7 +14,7 @@
     }
   ],
   "functions": {
-    "api/webhooks/stripe.ts": {
+    "api/webhooks/dodo.ts": {
       "memory": 256,
       "maxDuration": 30
     },

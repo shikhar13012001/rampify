@@ -1,13 +1,41 @@
 import { useEditorStore } from '@/store/editorStore';
+import { GUEST_EXPERIMENT, SIGNED_IN_FREE_LIMIT, type PlanTier } from './planConfig';
+import { guestExportsRemaining, recordGuestExport, shouldRecordExport, type StorageLike } from './exportQuota';
 
-const GUEST_LIMIT = 1;
-export const EXPORT_LIMIT = GUEST_LIMIT;
-export const SIGNED_IN_FREE_LIMIT = 3;
+// Guest allowance is fully driven by GUEST_EXPERIMENT (see planConfig.ts) —
+// 0 while the experiment is disabled (the shipping default), matching the
+// hard sign-in wall this app has always had.
+export const EXPORT_LIMIT = GUEST_EXPERIMENT.allowance;
+export { SIGNED_IN_FREE_LIMIT };
 
 export interface ExportAllowance {
   allowed: boolean;
   remaining: number;
   reason?: string;
+}
+
+/** sessionStorage, guarded for non-browser environments (SSR, vitest's node
+ *  environment) — never throws, just degrades to "no storage available". */
+function guestStorage(): StorageLike | null {
+  try {
+    return typeof window !== 'undefined' ? window.sessionStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The one place "which tier is this?" is decided — components with reactive
+ *  `user`/`isPro` subscriptions should call this directly (planTierFor) rather
+ *  than re-deriving the mapping; non-reactive call sites use getPlanTier(). */
+export function planTierFor(hasUser: boolean, isPro: boolean): PlanTier {
+  if (isPro) return 'pro';
+  if (hasUser) return 'free';
+  return 'guest';
+}
+
+export function getPlanTier(): PlanTier {
+  const { user, isPro } = useEditorStore.getState();
+  return planTierFor(!!user, isPro);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -16,12 +44,14 @@ export interface ExportAllowance {
  * Synchronous remaining-count for the TopBar display.
  * - Pro users: returns 999 (shown as "Unlimited" by the caller)
  * - Signed-in free users: returns value from store (refreshed on auth)
- * - Guests: returns 0 (must sign in to export)
+ * - Guests: 0 unless GUEST_EXPERIMENT.enabled, then the sessionStorage-tracked
+ *   remaining count (see exportQuota.ts for its honest limitations).
  */
 export function getRemainingExports(): number {
   const { user, isPro, exportsRemaining } = useEditorStore.getState();
   if (isPro) return 999;
   if (user) return exportsRemaining;
+  if (GUEST_EXPERIMENT.enabled) return guestExportsRemaining(guestStorage(), GUEST_EXPERIMENT.allowance);
   return 0;
 }
 
@@ -60,7 +90,15 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
     };
   }
 
-  // Guest — require sign-in.
+  // Guest.
+  if (GUEST_EXPERIMENT.enabled) {
+    const remaining = guestExportsRemaining(guestStorage(), GUEST_EXPERIMENT.allowance);
+    return {
+      allowed: remaining > 0,
+      remaining,
+      reason: remaining <= 0 ? 'Your free guest export is used. Sign in for 3 more per month.' : undefined,
+    };
+  }
   return {
     allowed: false,
     remaining: 0,
@@ -69,19 +107,26 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
 }
 
 /**
- * Records a completed export via the /api/record-export endpoint.
- * The server writes `exportedAt` with a server-generated timestamp (cannot
- * be forged by the client) and enforces the monthly cap for free users.
+ * Records a completed export. Signed-in users go through the authoritative
+ * /api/record-export endpoint (server timestamp, enforces the free cap server-side).
+ * Guests — only reachable when GUEST_EXPERIMENT.enabled — count client-side via
+ * sessionStorage (exportQuota.ts); there is no server record of a guest export,
+ * by design (see GUEST_EXPERIMENT's doc comment in planConfig.ts for why, and
+ * its limitations).
  *
- * `exportId` is a client-generated UUID (crypto.randomUUID()) that makes the
- * write idempotent — retrying the same export overwrites the same doc instead
- * of double-counting.
- *
- * Pro exports are also logged (per spec) so usage analytics are complete.
+ * `exportId` is a client-generated UUID (crypto.randomUUID()) that makes both
+ * paths idempotent — a repeated callback with the same id (e.g. a re-fired
+ * effect) never double-counts. Callers must gate this call on
+ * `shouldRecordExport(phase, hasOutput)` (exportQuota.ts) so a failed or
+ * cancelled render never consumes an allowance.
  */
 export async function recordExport(exportId: string): Promise<void> {
   const { user } = useEditorStore.getState();
-  if (!user) return; // guests are blocked before reaching here
+
+  if (!user) {
+    if (GUEST_EXPERIMENT.enabled) recordGuestExport(guestStorage(), exportId);
+    return;
+  }
 
   try {
     const token = await user.getIdToken();
@@ -104,3 +149,5 @@ export async function recordExport(exportId: string): Promise<void> {
     console.error('[recordExport] failed:', err);
   }
 }
+
+export { shouldRecordExport };

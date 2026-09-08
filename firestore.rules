@@ -4,7 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ─── User profile ──────────────────────────────────────────────────────
-    // users/{uid} is written by the Stripe webhook via the Firebase Admin SDK
+    // users/{uid} is written by the Dodo Payments webhook via the Firebase Admin SDK
     // (Admin SDK bypasses these rules). Clients may read only their own doc.
     match /users/{uid} {
       allow read:  if request.auth != null && request.auth.uid == uid;

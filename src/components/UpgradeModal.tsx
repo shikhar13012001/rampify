@@ -12,14 +12,28 @@ type BillingCycle = 'monthly' | 'annual';
 type CheckoutState = 'idle' | 'loading' | 'error' | 'already-pro';
 
 const FEATURES = [
-  { icon: '◈', label: 'Motion blur', desc: 'Cinematic transitions on every speed change' },
+  { icon: '◈', label: 'Subtle & Cinematic blur', desc: 'Balanced blur is free — Pro unlocks every intensity' },
   { icon: '✦', label: 'AI frame interpolation', desc: 'Smooth slow motion at any frame rate' },
   { icon: '♪', label: 'Beat sync', desc: 'Auto velocity edits locked to the music' },
   { icon: '⬛', label: '4K export', desc: 'Full resolution output, no watermark' },
   { icon: '∞', label: 'Unlimited exports', desc: 'No monthly cap, ever' },
 ];
 
-const CHECKOUT_URL_PREFIXES = ['https://checkout.stripe.com/', 'https://pay.stripe.com/'];
+// Defense-in-depth: only navigate if the server actually returned a Dodo
+// checkout host, guarding against a misconfigured server returning an
+// arbitrary URL. Checked by hostname suffix (not an exact prefix list)
+// since Dodo's test-mode vs live-mode checkout may use different
+// subdomains — VERIFY the real domain against a generated test-mode
+// checkout URL before relying on this; "dodopayments.com" is inferred
+// from their product docs, not independently confirmed here.
+function isTrustedCheckoutUrl(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return protocol === 'https:' && hostname.endsWith('dodopayments.com');
+  } catch {
+    return false;
+  }
+}
 
 export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
   const [billing, setBilling] = useState<BillingCycle>('monthly');
@@ -29,7 +43,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
   const isPro = useEditorStore(s => s.isPro);
   // AbortController for the in-flight checkout fetch so we can cancel it if
   // the modal unmounts mid-request (otherwise a late response could redirect
-  // the browser to Stripe after the user dismissed the modal). The modal is
+  // the browser to checkout after the user dismissed the modal). The modal is
   // conditionally mounted by App.tsx, so unmount == close, and all transient
   // state (checkoutState / checkoutError) naturally resets on each open.
   const abortRef = useRef<AbortController | null>(null);
@@ -56,7 +70,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
 
     const controller = new AbortController();
     abortRef.current = controller;
-    // 10s timeout — Stripe checkout session creation is normally <1s.
+    // 10s timeout — checkout session creation is normally <1s.
     const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
@@ -93,9 +107,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
           (res.status === 404 ? 'API not running — use `vercel dev` for checkout' : `Server error ${res.status}`)
         );
       }
-      // Validate the redirect URL is a Stripe checkout host before navigating,
-      // guarding against a misconfigured server returning an arbitrary URL.
-      if (!CHECKOUT_URL_PREFIXES.some((p) => redirectUrl.startsWith(p))) {
+      if (!isTrustedCheckoutUrl(redirectUrl)) {
         throw new Error('Invalid checkout URL');
       }
       // If the request was aborted (modal closed / timed out), don't navigate.

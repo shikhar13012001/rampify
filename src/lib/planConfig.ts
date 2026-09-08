@@ -6,7 +6,9 @@
  * the enforced limits can never drift apart again.
  *
  * The matrix mirrors the published pricing table:
- *   Free — 1080p export, Balanced motion blur, 3 exports/month
+ *   Guest — 1080p export only, no blur, no AI interpolation (see
+ *           GUEST_EXPERIMENT below — disabled by default)
+ *   Free  — 1080p export, Balanced motion blur, 3 exports/month
  *   Pro   — 4K export, all motion-blur presets, AI frame interpolation
  *           (optical flow), beat sync, unlimited exports
  *
@@ -31,20 +33,49 @@ export const FREE_EXPORT_RESOLUTION: ExportResolution = '1080p';
 /** Monthly export cap for signed-in free users (server enforces the same number). */
 export const SIGNED_IN_FREE_LIMIT = 3;
 
-export function allowedBlurIntensities(isPro: boolean): BlurIntensity[] {
-  return isPro ? ALL_BLUR_INTENSITIES : [FREE_BLUR_INTENSITY];
+/**
+ * Guest-export experiment (validation sprint). Disabled by default; do NOT
+ * enable in production without following the steps in docs/validation/STATUS.md
+ * ("Guest export experiment" section).
+ *
+ * While enabled, an anonymous visitor may perform up to `allowance` *basic*
+ * exports (no blur, no AI interpolation — see allowedBlurIntensities /
+ * canUseOpticalFlow below, both return nothing/false for 'guest') at
+ * `resolution` before being asked to register. The count is kept in
+ * sessionStorage (client-side only — see exportQuota.ts for the honest
+ * limitations of that). Server-side billing entitlements stay auth-only and
+ * authoritative; guest exports never touch Firestore.
+ */
+export interface GuestExportExperiment {
+  enabled: boolean;
+  resolution: ExportResolution;
+  allowance: number;
 }
 
-export function canUseBlurIntensity(intensity: BlurIntensity, isPro: boolean): boolean {
-  return isPro || intensity === FREE_BLUR_INTENSITY;
+export const GUEST_EXPERIMENT: GuestExportExperiment = {
+  enabled: false,
+  resolution: FREE_EXPORT_RESOLUTION,
+  allowance: 1,
+};
+
+export function allowedBlurIntensities(tier: PlanTier): BlurIntensity[] {
+  if (tier === 'pro') return ALL_BLUR_INTENSITIES;
+  if (tier === 'free') return [FREE_BLUR_INTENSITY];
+  return []; // guest — basic export only, no blur, by design (see GUEST_EXPERIMENT doc above)
 }
 
-export function canUseOpticalFlow(isPro: boolean): boolean {
-  return isPro;
+export function canUseBlurIntensity(intensity: BlurIntensity, tier: PlanTier): boolean {
+  return allowedBlurIntensities(tier).includes(intensity);
 }
 
-export function canUseResolution(resolution: ExportResolution, isPro: boolean): boolean {
-  return isPro || resolution === FREE_EXPORT_RESOLUTION;
+export function canUseOpticalFlow(tier: PlanTier): boolean {
+  return tier === 'pro';
+}
+
+export function canUseResolution(resolution: ExportResolution, tier: PlanTier): boolean {
+  if (tier === 'pro') return true;
+  if (tier === 'free') return resolution === FREE_EXPORT_RESOLUTION;
+  return resolution === GUEST_EXPERIMENT.resolution;
 }
 
 export interface ExportEntitlementContext {
@@ -55,18 +86,24 @@ export interface ExportEntitlementContext {
 
 /**
  * Why the current export configuration is blocked for this tier, or null if
- * it is allowed. Callers show the reason (and open the upgrade modal for
- * upgrade-gated items) BEFORE any rendering starts.
+ * it is allowed. Callers show the reason (and open the upgrade modal, or
+ * prompt sign-in for guests) BEFORE any rendering starts — this is checked
+ * reactively as soon as the export UI is shown, not only on click, so a user
+ * never spends time waiting on a render that was never going to be allowed.
  */
-export function exportBlockedReason(isPro: boolean, ctx: ExportEntitlementContext): string | null {
-  if (ctx.blurSettings.enabled && !canUseBlurIntensity(ctx.blurSettings.intensity, isPro)) {
+export function exportBlockedReason(tier: PlanTier, ctx: ExportEntitlementContext): string | null {
+  if (ctx.blurSettings.enabled && !canUseBlurIntensity(ctx.blurSettings.intensity, tier)) {
+    if (tier === 'guest') return 'Motion blur requires an account. Sign in to use it — Balanced is free.';
     const label = ctx.blurSettings.intensity === 'subtle' ? 'Subtle' : 'Cinematic';
     return `The ${label} motion-blur preset requires Pro. The Balanced preset exports on Free.`;
   }
-  if (ctx.opticalFlowSettings.enabled && !canUseOpticalFlow(isPro)) {
-    return 'AI frame interpolation requires Pro.';
+  if (ctx.opticalFlowSettings.enabled && !canUseOpticalFlow(tier)) {
+    return tier === 'guest'
+      ? 'AI frame interpolation requires an account and Pro.'
+      : 'AI frame interpolation requires Pro.';
   }
-  if (!canUseResolution(ctx.resolution, isPro)) {
+  if (!canUseResolution(ctx.resolution, tier)) {
+    if (tier === 'guest') return `Guest exports are limited to ${GUEST_EXPERIMENT.resolution}. Sign in for more.`;
     return '4K export requires Pro.';
   }
   return null;
@@ -82,25 +119,3 @@ export function exportBlockedReason(isPro: boolean, ctx: ExportEntitlementContex
 export function isUnsupportedCombination(ctx: ExportEntitlementContext): boolean {
   return ctx.resolution === '4k' && ctx.opticalFlowSettings.enabled;
 }
-
-/**
- * Guest-export experiment (validation sprint). Disabled by default; do NOT
- * enable in production without following the steps in docs/validation/STATUS.md.
- *
- * While enabled, an anonymous visitor may perform up to `allowance` basic
- * exports at `resolution` before being asked to register. The count is kept
- * in sessionStorage (client-side only — see exportQuota.ts for the honest
- * limitations of that). Server-side billing entitlements stay auth-only and
- * authoritative; guest exports never touch Firestore.
- */
-export interface GuestExportExperiment {
-  enabled: boolean;
-  resolution: ExportResolution;
-  allowance: number;
-}
-
-export const GUEST_EXPERIMENT: GuestExportExperiment = {
-  enabled: false,
-  resolution: FREE_EXPORT_RESOLUTION,
-  allowance: 1,
-};

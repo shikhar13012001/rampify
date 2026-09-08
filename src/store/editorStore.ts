@@ -420,6 +420,17 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   setAuthLoading: (isAuthLoading) => set({ isAuthLoading }),
 }));
 
+// Dev-only test hook — lets an external driver (e.g. the Playwright
+// integration test in test/integration/) simulate a signed-in free-tier user
+// without real Firebase auth or a running API backend, and without touching
+// GUEST_EXPERIMENT.enabled (that flag is reserved for a separate, explicit
+// approval per docs/validation/WORKING_AGREEMENT.md §4). Stripped from
+// production builds — `import.meta.env.DEV` is statically false there, so
+// Vite dead-code-eliminates this whole block.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as unknown as { __rampifyStore?: typeof useEditorStore }).__rampifyStore = useEditorStore;
+}
+
 function normalizePoints(points: SpeedCurve['points']): SpeedCurve['points'] {
   const sorted = [...points]
     .sort((a, b) => a.time - b.time)

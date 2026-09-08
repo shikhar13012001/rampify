@@ -51,10 +51,17 @@ type InboundMsg = StartMsg | CancelMsg;
 
 const ffmpeg = new FFmpeg();
 let running = false;
+// Set while probeAudioSampleRate()'s throwaway `-i input.mp4` (no output) is
+// executing — that invocation still fires ffmpeg's 'progress' event with a
+// meaningless value (there's no encode happening), which without this guard
+// shows up as a spurious progress jump/flicker right at the start of any
+// chipmunk-mode (preservePitch: false) export.
+let suppressProgress = false;
 
 const recentLogs: string[] = [];
 
 ffmpeg.on('progress', ({ progress }) => {
+  if (suppressProgress) return;
   self.postMessage({ type: 'progress', progress: Math.round(progress * 100) });
 });
 
@@ -84,7 +91,12 @@ const FALLBACK_SAMPLE_RATE_HZ = 48000;
  */
 async function probeAudioSampleRate(): Promise<number> {
   recentLogs.length = 0;
-  await ffmpeg.exec(['-i', 'input.mp4']);
+  suppressProgress = true;
+  try {
+    await ffmpeg.exec(['-i', 'input.mp4']);
+  } finally {
+    suppressProgress = false;
+  }
   const match = recentLogs.join('\n').match(/Audio:.*?(\d+)\s*Hz/);
   return match ? parseInt(match[1], 10) : FALLBACK_SAMPLE_RATE_HZ;
 }
@@ -112,24 +124,48 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
   }
 
   if (msg.type === 'start') {
+    // Reject re-entrant starts — this worker is shared/reused across exports
+    // in one session (FFmpegBridge deliberately keeps it alive to avoid
+    // reloading the ~30MB core each time). Without this guard, a duplicate
+    // 'start' message (e.g. a UI double-click race) would run a second
+    // ffmpeg.exec() concurrently against the SAME single-threaded ffmpeg
+    // instance and virtual FS, corrupting whichever job's input.mp4 write
+    // loses the race. ExportModal.tsx also guards this with a synchronous ref
+    // check before the message is ever sent — this is the defense-in-depth
+    // backstop.
+    if (running) {
+      self.postMessage({ type: 'error', message: 'A job is already running on this worker' });
+      return;
+    }
     running = true;
+    // Every filename written to the virtual FS this run — deleted in the
+    // `finally` block below regardless of success/failure. Without this, the
+    // worker's WASM virtual FS (held in the shared worker's own memory,
+    // reused across every export in the session) accumulates every input,
+    // blur frame, and OF frame-sequence image forever — a slow-motion export
+    // alone can write hundreds of `of_NNNNNN.jpg` files, and a session with
+    // several exports would never reclaim any of it.
+    const writtenFiles: string[] = [];
     try {
       self.postMessage({ type: 'progress', progress: 0 });
       await loadFFmpeg();
 
       const inputData = await fetchFile(msg.videoUrl);
       await ffmpeg.writeFile('input.mp4', inputData);
+      writtenFiles.push('input.mp4');
 
       // Write blur frames to virtual FS before encoding.
       const blurFrames = msg.blurFrames ?? [];
       for (const bf of blurFrames) {
         await ffmpeg.writeFile(bf.filename, bf.data);
+        writtenFiles.push(bf.filename);
       }
 
       // Write optical-flow image sequence (one JPEG per frame).
       const frameFiles = msg.frameFiles ?? [];
       for (const ff of frameFiles) {
         await ffmpeg.writeFile(ff.name, ff.data);
+        writtenFiles.push(ff.name);
       }
 
       let af: string | null;
@@ -249,6 +285,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
       );
 
       const exitCode = await ffmpeg.exec(args);
+      writtenFiles.push(msg.outputName); // written by ffmpeg itself, but still ours to clean up
 
       if (exitCode !== 0) {
         const logSnippet = recentLogs.slice(-15).join('\n');
@@ -277,6 +314,16 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
     } catch (err) {
       self.postMessage({ type: 'error', message: String(err) });
     } finally {
+      // Best-effort cleanup — a delete failure here shouldn't mask whatever
+      // the actual job result was, and one missing/already-gone file
+      // shouldn't stop the rest from being cleaned up.
+      for (const name of writtenFiles) {
+        try {
+          await ffmpeg.deleteFile(name);
+        } catch {
+          // ignore — file may not exist if writeFile itself failed partway
+        }
+      }
       running = false;
     }
   }

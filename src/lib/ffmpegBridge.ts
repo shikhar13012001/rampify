@@ -53,11 +53,28 @@ const OF_INTERP_END = 65;
 
 // ─── Optical flow public helpers ──────────────────────────────────────────────
 
-/** Average speed of a segment (mean of control-point speeds). */
+/**
+ * True time-weighted average speed of a segment: total input duration divided
+ * by the curve's actual output duration (remapTime integrates the real
+ * variable-speed curve, not just its control points).
+ *
+ * NOT a mean of control-point speed values — that naive average was the
+ * previous implementation and is wrong whenever points aren't evenly spaced
+ * in time, which is the common case (e.g. the "Jump Cut" preset spends ~90%
+ * of its duration flat at 4x with brief transition points at the edges; the
+ * unweighted mean of its 7 point-speeds is ~2.7x, nowhere near the ~3.7x true
+ * average). Every caller here needs the true average: it feeds directly into
+ * the audio atempo factor (startProcessing/processWithBlur) and the optical-
+ * flow output framerate/duration (processWithOpticalFlow) — both of which
+ * must match what curveToFFmpegFilter's setpts filter actually produces, or
+ * audio drifts out of sync with video / OF output plays at the wrong length.
+ */
 function avgSegmentSpeed(seg: Segment): number {
-  const pts = seg.curve.points;
-  if (pts.length === 0) return 1;
-  return pts.reduce((s, p) => s + p.speed, 0) / pts.length;
+  const duration = seg.endTime - seg.startTime;
+  if (duration <= 0) return 1;
+  const outputDuration = remapTime(seg.curve, duration, duration);
+  if (outputDuration <= 1e-6) return 1; // pathological guard, shouldn't happen post-clamp
+  return duration / outputDuration;
 }
 
 /** True if any segment in the list has average speed below 0.6× threshold. */
@@ -133,7 +150,7 @@ export function findTransitionPoints(
  * itself (see ffmpegWorker.ts) — that path needs the real input sample rate, which
  * isn't known on the main thread, so it can't be precomputed here.
  */
-function buildAtempoFilters(avgSpeed: number): string[] {
+export function buildAtempoFilters(avgSpeed: number): string[] {
   const filters: string[] = [];
   let remaining = avgSpeed;
 
@@ -233,15 +250,16 @@ export class FFmpegBridge {
     this.callbacks = callbacks;
 
     const { file, segments } = project;
+    // NOTE: only segments[0] is ever exported — segments[1+] are silently
+    // dropped. Same pre-existing limitation as processWithOpticalFlow (which
+    // at least documents it inline); ExportModal.tsx now warns the user
+    // upfront when segments.length > 1 rather than leaving this silent.
     const segment = segments[0];
     const setptsFilter = segment
-      ? curveToFFmpegFilter(segment.curve, file.duration)
+      ? curveToFFmpegFilter(segment.curve, segment.endTime - segment.startTime)
       : 'setpts=PTS-STARTPTS';
 
-    const avgSpeed = segment
-      ? segment.curve.points.reduce((sum, p) => sum + p.speed, 0) /
-        Math.max(segment.curve.points.length, 1)
-      : 1;
+    const avgSpeed = segment ? avgSegmentSpeed(segment) : 1;
 
     const atempoFilters = buildAtempoFilters(avgSpeed);
 
@@ -435,15 +453,12 @@ export class FFmpegBridge {
     callbacks: BlurExportCallbacks,
   ): Promise<void> {
     const { file, segments } = project;
-    const segment = segments[0];
+    const segment = segments[0]; // see startProcessing's note — same limitation here
 
     const setptsFilter = segment
-      ? curveToFFmpegFilter(segment.curve, file.duration)
+      ? curveToFFmpegFilter(segment.curve, segment.endTime - segment.startTime)
       : 'setpts=PTS-STARTPTS';
-    const avgSpeed = segment
-      ? segment.curve.points.reduce((sum, p) => sum + p.speed, 0) /
-        Math.max(segment.curve.points.length, 1)
-      : 1;
+    const avgSpeed = segment ? avgSegmentSpeed(segment) : 1;
     const atempoFilters = buildAtempoFilters(avgSpeed);
 
     // ── Phase 1: extract frames + blur ──────────────────────────────────────

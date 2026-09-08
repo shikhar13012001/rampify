@@ -54,6 +54,14 @@ export function ExportModal({ onClose }: ExportModalProps) {
   // phase is still 'done') and re-prompting a second browser download or a
   // second recordExport call for the same completed render.
   const recordedExportIdRef = useRef<string | null>(null);
+  // Synchronous re-entrancy guard for startExport — a ref (not state) because
+  // it must block a second call within the SAME tick, before React has had a
+  // chance to re-render and remove the Start button. Without this, a fast
+  // double-click fires startExport() twice; both calls pass every check
+  // before either has updated `phase`, and both end up sending a 'start'
+  // message to the same shared ffmpeg worker — see ffmpegWorker.ts's matching
+  // guard for what that corrupts.
+  const startInFlightRef = useRef(false);
 
   const bridgeRef = useRef<FFmpegBridge | null>(null);
 
@@ -84,30 +92,38 @@ export function ExportModal({ onClose }: ExportModalProps) {
   );
 
   const startExport = useCallback(async () => {
-    if (!project) return;
+    // Synchronous re-entrancy guard — must be the very first thing, before
+    // any `await` or even the `!project` check, so a second synchronous call
+    // in the same tick (double-click) is rejected immediately. See the ref's
+    // doc comment for why this can't just rely on `phase` state.
+    if (startInFlightRef.current) return;
+    startInFlightRef.current = true;
 
-    // Both checks are also surfaced in the idle-phase UI before this point is
-    // ever reached by a click — re-checked here only as a safety net (e.g.
-    // settings changing between render and click).
-    if (unsupportedCombo) return;
-    if (blockedReason) {
-      if (tier === 'guest') {
-        // No upgrade to sell a guest — the blocker is "sign in", not "pay".
+    try {
+      if (!project) return;
+
+      // Both checks are also surfaced in the idle-phase UI before this point is
+      // ever reached by a click — re-checked here only as a safety net (e.g.
+      // settings changing between render and click).
+      if (unsupportedCombo) return;
+      if (blockedReason) {
+        if (tier === 'guest') {
+          // No upgrade to sell a guest — the blocker is "sign in", not "pay".
+          return;
+        }
+        useEditorStore.getState().setUpgradeModalOpen(true);
         return;
       }
-      useEditorStore.getState().setUpgradeModalOpen(true);
-      return;
-    }
 
-    setPhase('checking');
-    const allowance = await checkExportAllowed();
-    setRemaining(allowance.remaining);
+      setPhase('checking');
+      const allowance = await checkExportAllowed();
+      setRemaining(allowance.remaining);
 
-    if (!allowance.allowed) {
-      useEditorStore.getState().setUpgradeModalOpen(true);
-      setPhase('idle');
-      return;
-    }
+      if (!allowance.allowed) {
+        useEditorStore.getState().setUpgradeModalOpen(true);
+        setPhase('idle');
+        return;
+      }
 
     setPhase('processing');
     setProgress(0);

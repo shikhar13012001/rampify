@@ -1,17 +1,27 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import type { RefObject } from 'react';
 import type { SpeedCurve, SpeedPoint } from '@/types/editor';
 import { interpolateSpeed, MIN_SPEED, MAX_SPEED } from '@/lib/curveMath';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
-const PAD_L = 34;
-const PAD_R = 8;
-const PAD_T = 8;
-const PAD_B = 8;
+// Exported so CurveEditor.tsx can align HTML overlays (tooltip, Y-axis speed
+// controls, scrubber connector) pixel-for-pixel with the canvas drawing.
+export const PAD_L = 34;
+export const PAD_R = 8;
+export const PAD_T = 8;
+export const PAD_B = 8;
 const HIT_R = 10;
 const SAMPLES = 200;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface ActivePoint {
+  index: number;
+  time: number;
+  speed: number;
+  x: number;
+  y: number;
+}
 
 export interface CurveEditorOptions {
   curve: SpeedCurve;
@@ -20,6 +30,9 @@ export interface CurveEditorOptions {
   onChange: (curve: SpeedCurve) => void;
   minSpeed: number;
   maxSpeed: number;
+  /** Normalized [0,1] playhead position within this curve's segment, or null when the
+   *  playhead is outside the segment (or there is no active segment). */
+  playheadNorm: number | null;
 }
 
 interface DragState {
@@ -65,10 +78,11 @@ function computeGridSpeeds(viewMin: number, viewMax: number): number[] {
 
 export function useCurveEditor(
   canvasRef: RefObject<HTMLCanvasElement | null>,
-  { curve, width, height, onChange, minSpeed, maxSpeed }: CurveEditorOptions,
+  { curve, width, height, onChange, minSpeed, maxSpeed, playheadNorm }: CurveEditorOptions,
 ) {
   const dragRef  = useRef<DragState | null>(null);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex]   = useState<number | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const coords = useCallback(
     () => makeCoords(width, height, minSpeed, maxSpeed),
@@ -83,6 +97,19 @@ export function useCurveEditor(
     }
     return null;
   }, [curve.points, coords]);
+
+  // The point currently being interacted with — dragging takes priority over hover.
+  // Exposed so the parent component can render an HTML tooltip ("04.2s | 0.8x")
+  // positioned at the exact canvas coordinates of the active keyframe.
+  const activePoint = useMemo<ActivePoint | null>(() => {
+    const index = draggingIndex ?? hoveredIndex;
+    if (index === null) return null;
+    const pt = curve.points[index];
+    if (!pt) return null;
+    const { toCanvas } = coords();
+    const { x, y } = toCanvas(pt.time, pt.speed);
+    return { index, time: pt.time, speed: pt.speed, x, y };
+  }, [draggingIndex, hoveredIndex, curve.points, coords]);
 
   // ── Draw ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -133,7 +160,11 @@ export function useCurveEditor(
       ctx.fillText(`${s}×`, PAD_L - 5, y);
     }
 
-    // Curve fill — Clay lavender tint
+    // Curve fill — gradient "visual weight" tint, strongest right under the
+    // curve line and fading toward the baseline so intensity reads at a glance.
+    const fillGrad = ctx.createLinearGradient(0, PAD_T, 0, PAD_T + plotH);
+    fillGrad.addColorStop(0, 'rgba(45, 141, 141, 0.22)');
+    fillGrad.addColorStop(1, 'rgba(45, 141, 141, 0.02)');
     ctx.beginPath();
     for (let i = 0; i <= SAMPLES; i++) {
       const t = i / SAMPLES;
@@ -146,7 +177,7 @@ export function useCurveEditor(
     ctx.lineTo(PAD_L + plotW, baseY);
     ctx.lineTo(PAD_L, baseY);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(45, 141, 141, 0.1)';
+    ctx.fillStyle = fillGrad;
     ctx.fill();
 
     // Curve line — Clay teal-bright
@@ -163,25 +194,43 @@ export function useCurveEditor(
     ctx.setLineDash([]);
     ctx.stroke();
 
-    // Control points — Clay ink + teal-bright
+    // Unified scrubber needle — vertical line at the current playhead position,
+    // only drawn while the playhead is inside this segment.
+    if (playheadNorm !== null) {
+      const { x } = toCanvas(playheadNorm, 0);
+      ctx.beginPath();
+      ctx.moveTo(x, PAD_T);
+      ctx.lineTo(x, PAD_T + plotH);
+      ctx.strokeStyle = 'rgba(255, 77, 139, 0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Small cap at the top so the line visually "connects" upward toward the frame preview.
+      ctx.beginPath();
+      ctx.arc(x, PAD_T, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 77, 139, 0.95)';
+      ctx.fill();
+    }
+
+    // Control points — larger, hollow by default, solid-filled on hover/drag.
     for (let i = 0; i < curve.points.length; i++) {
       const pt = curve.points[i];
       const { x, y } = toCanvas(pt.time, pt.speed);
-      const isHovered   = hoveredIndex === i;
-      const isEndpoint  = i === 0 || i === curve.points.length - 1;
-      const r = isHovered ? 6 : 5;
+      const isActive   = hoveredIndex === i || draggingIndex === i;
+      const isEndpoint = i === 0 || i === curve.points.length - 1;
+      const ringColor  = isEndpoint ? '#b8a4ed' : '#2d8d8d';
+      const r = isActive ? 7 : 6;
 
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = isHovered ? '#0a0a0a' : (isEndpoint ? '#b8a4ed' : '#2d8d8d');
+      ctx.fillStyle = isActive ? ringColor : '#faf5e8';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 250, 240, 0.9)';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = isActive ? 2.5 : 2;
+      ctx.strokeStyle = ringColor;
       ctx.stroke();
     }
 
     ctx.restore();
-  }, [canvasRef, curve, width, height, hoveredIndex, minSpeed, maxSpeed]);
+  }, [canvasRef, curve, width, height, hoveredIndex, draggingIndex, minSpeed, maxSpeed, playheadNorm]);
 
   // ── Mouse events ──────────────────────────────────────────────────────────
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -195,6 +244,7 @@ export function useCurveEditor(
         index: hit,
         isEndpoint: hit === 0 || hit === curve.points.length - 1,
       };
+      setDraggingIndex(hit);
     } else {
       // Add point on click
       const { fromCanvas } = coords();
@@ -234,6 +284,7 @@ export function useCurveEditor(
 
   const onMouseUp = useCallback(() => {
     dragRef.current = null;
+    setDraggingIndex(null);
   }, []);
 
   const onContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -250,8 +301,9 @@ export function useCurveEditor(
 
   const onMouseLeave = useCallback(() => {
     setHoveredIndex(null);
+    setDraggingIndex(null);
     dragRef.current = null;
   }, []);
 
-  return { onMouseDown, onMouseMove, onMouseUp, onContextMenu, onMouseLeave };
+  return { onMouseDown, onMouseMove, onMouseUp, onContextMenu, onMouseLeave, activePoint };
 }

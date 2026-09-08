@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { saveProjectState } from '@/lib/projectPersistence';
 import { TopBar } from '@/components/TopBar';
 import { DropZone } from '@/components/DropZone';
@@ -14,14 +14,92 @@ import { Timeline } from '@/features/timeline/Timeline';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useEditorStore } from '@/store/editorStore';
 
+// Video preview pane height, in px — user-resizable via the drag handle below it.
+const MIN_PLAYER_H = 200;
+const MAX_PLAYER_H = 640;
+const DEFAULT_PLAYER_H = 360;
+
 export default function EditorRoute() {
   const project = useEditorStore((state) => state.project);
   const selectedSegmentId = useEditorStore((state) => state.selectedSegmentId);
   const updateSegmentCurve = useEditorStore((state) => state.updateSegmentCurve);
   const minSpeed = useEditorStore((state) => state.minSpeed);
   const maxSpeed = useEditorStore((state) => state.maxSpeed);
+  const setMinSpeed = useEditorStore((state) => state.setMinSpeed);
+  const setMaxSpeed = useEditorStore((state) => state.setMaxSpeed);
+  const playheadTime = useEditorStore((state) => state.playheadTime);
   const ofEnabled = useEditorStore((state) => state.opticalFlowSettings.enabled);
   const [exportOpen, setExportOpen] = useState(false);
+
+  // ── Resizable video preview pane ──────────────────────────────────────────
+  const mainRef = useRef<HTMLElement>(null);
+  const resizingRef = useRef(false);
+  const [playerHeight, setPlayerHeight] = useState(DEFAULT_PLAYER_H);
+
+  const onResizerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizingRef.current || !mainRef.current) return;
+      const top = mainRef.current.getBoundingClientRect().top;
+      const next = e.clientY - top;
+      setPlayerHeight(Math.max(MIN_PLAYER_H, Math.min(MAX_PLAYER_H, Math.round(next))));
+    };
+    const onUp = () => {
+      if (!resizingRef.current) return;
+      resizingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // ── Unified scrubber connector — a line from the video preview down to the
+  // playhead's position inside the curve editor, reported by CurveEditor as a
+  // viewport x-coordinate so it can be translated into `main`-relative space. ──
+  const [scrubberViewportX, setScrubberViewportX] = useState<number | null>(null);
+  const [scrubberLeft, setScrubberLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (scrubberViewportX === null || !mainRef.current) {
+      setScrubberLeft(null);
+      return;
+    }
+    setScrubberLeft(scrubberViewportX - mainRef.current.getBoundingClientRect().left);
+  }, [scrubberViewportX]);
+
+  // The connector's height must track the curve editor section's actual top —
+  // which shifts whenever the (collapsible) beat-sync panel above it resizes.
+  const beatSyncSectionRef = useRef<HTMLElement>(null);
+  const curveSectionRef = useRef<HTMLElement>(null);
+  const [connectorHeight, setConnectorHeight] = useState(DEFAULT_PLAYER_H + 8);
+
+  useEffect(() => {
+    const measure = () => {
+      if (!mainRef.current || !curveSectionRef.current) return;
+      const mainTop = mainRef.current.getBoundingClientRect().top;
+      const curveTop = curveSectionRef.current.getBoundingClientRect().top;
+      setConnectorHeight(Math.max(0, Math.round(curveTop - mainTop + 8)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (beatSyncSectionRef.current) ro.observe(beatSyncSectionRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [playerHeight]);
 
   useKeyboardShortcuts();
 
@@ -98,11 +176,12 @@ export default function EditorRoute() {
 
           {/* Main workspace */}
           <main
+            ref={mainRef}
             className="editor-main"
             style={{
               position: 'relative',
               display: 'grid',
-              gridTemplateRows: 'minmax(0, 1fr) auto 176px 100px',
+              gridTemplateRows: `${playerHeight}px 8px minmax(0, 1fr) 176px 100px`,
               minWidth: 0,
               minHeight: 0,
               overflow: 'hidden',
@@ -115,12 +194,34 @@ export default function EditorRoute() {
               </section>
             </ErrorBoundary>
 
+            {/* Drag handle — resize the video preview pane (useful when switching
+                between 9:16 vertical and 16:9 horizontal footage) */}
+            <div
+              onMouseDown={onResizerMouseDown}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize video preview"
+              style={{
+                height: 8,
+                cursor: 'row-resize',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'var(--color-panel)',
+                borderTop: '1px solid var(--color-border-subtle)',
+                borderBottom: '1px solid var(--color-border-subtle)',
+              }}
+            >
+              <div style={{ width: 32, height: 3, borderRadius: 999, background: 'var(--color-border-strong)' }} />
+            </div>
+
             {/* Beat Sync panel */}
             <ErrorBoundary>
               <section
+                ref={beatSyncSectionRef}
                 style={{
-                  borderTop: '1px solid var(--color-border-subtle)',
                   backgroundColor: 'var(--color-curve-bg)',
+                  overflowY: 'auto',
                 }}
               >
                 <BeatSyncPanel />
@@ -130,6 +231,7 @@ export default function EditorRoute() {
             {/* Curve editor */}
             <ErrorBoundary>
               <section
+                ref={curveSectionRef}
                 style={{
                   borderTop: '1px solid var(--color-border-subtle)',
                   borderBottom: '1px solid var(--color-border-subtle)',
@@ -144,7 +246,13 @@ export default function EditorRoute() {
                     height={148}
                     minSpeed={minSpeed}
                     maxSpeed={maxSpeed}
+                    onMinSpeedChange={setMinSpeed}
+                    onMaxSpeedChange={setMaxSpeed}
                     showSlowMotionHint={!ofEnabled}
+                    segmentStartTime={selectedSegment.startTime}
+                    segmentEndTime={selectedSegment.endTime}
+                    playheadTime={playheadTime}
+                    onScrubberX={setScrubberViewportX}
                   />
                 ) : (
                   <CurveEmptyState />
@@ -158,6 +266,23 @@ export default function EditorRoute() {
                 <Timeline />
               </section>
             </ErrorBoundary>
+
+            {/* Unified scrubber connector — visually extends the curve editor's
+                playhead needle up through the beat-sync gap toward the preview. */}
+            {scrubberLeft !== null && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: scrubberLeft,
+                  width: 1,
+                  height: connectorHeight,
+                  background: 'linear-gradient(180deg, rgba(255,77,139,0) 0%, rgba(255,77,139,0.55) 60%, rgba(255,77,139,0.85) 100%)',
+                  pointerEvents: 'none',
+                  zIndex: 3,
+                }}
+              />
+            )}
 
             <KeyboardHints />
           </main>

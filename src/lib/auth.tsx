@@ -224,28 +224,42 @@ export function UserButton({ user }: UserButtonProps) {
 
 // ─── Sign-in button (triggers Google One Tap overlay) ────────────────────────
 
+// GIS notDisplayed reasons that indicate a genuine failure, as opposed to
+// routine/expected states like the user having previously opted out.
+const GIS_FAILURE_REASONS = new Set([
+  'browser_not_supported',
+  'invalid_client',
+  'missing_client_id',
+  'secure_http_required',
+  'unregistered_origin',
+  'unknown_reason',
+]);
+
 export function SignInButton() {
   const [loading, setLoading] = useState(false);
-  // Initialize from the GIS load-failure flag so the message shows immediately
-  // on mount if the script already failed (script is async, may fail before or
-  // after React mounts — the click handler re-checks for the after case).
-  const [error, setError] = useState(() =>
-    typeof window !== 'undefined' && window.__gisLoadFailed
-      ? 'Google sign-in unavailable — try refreshing'
-      : ''
-  );
+  // No error is shown on mount even if the GIS script already failed to load —
+  // the button always renders as a plain default "Sign In" state. An error only
+  // surfaces as a transient toast, and only after the user explicitly clicks
+  // and the sign-in flow itself fails.
+  const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(''), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const handleClick = () => {
-    setError('');
+    setToast('');
     if (window.__gisLoadFailed) {
-      setError('Google sign-in unavailable — try refreshing');
+      setToast('Google sign-in unavailable — try refreshing');
       return;
     }
 
     initOneTap(() => setLoading(false));
 
     if (!window.google?.accounts.id) {
-      setError('Google not loaded — try refreshing');
+      setToast('Google sign-in unavailable — try refreshing');
       return;
     }
 
@@ -255,14 +269,18 @@ export function SignInButton() {
     // those cases; the success case is handled by initOneTap's onSuccess
     // (which fires signInWithCredential → onAuthStateChanged → setLoading(false)).
     window.google.accounts.id.prompt((notification) => {
-      if (notification && (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment())) {
+      if (!notification) return;
+      if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
         setLoading(false);
+        if (notification.isNotDisplayed() && GIS_FAILURE_REASONS.has(notification.getNotDisplayedReason())) {
+          setToast('Sign-in unavailable — try again');
+        }
       }
     });
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
       <button
         type="button"
         onClick={handleClick}
@@ -292,7 +310,35 @@ export function SignInButton() {
         <GoogleIcon />
         {loading ? 'Signing in…' : 'Sign in with Google'}
       </button>
-      {error && <span style={{ fontSize: 11, color: '#ff4d8b' }}>{error}</span>}
+
+      {/* Transient error toast — only shown after an explicit failed sign-in attempt */}
+      {toast && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: 6,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 10px',
+            borderRadius: 8,
+            background: '#2a1015',
+            border: '1px solid rgba(255, 77, 139, 0.35)',
+            color: '#ff9db8',
+            fontSize: 11,
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+            animation: 'fadeIn 0.15s ease',
+          }}
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

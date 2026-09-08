@@ -59,6 +59,14 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const startExport = useCallback(async () => {
     if (!project) return;
 
+    // Free users can toggle blur / frame interpolation on to preview them, but
+    // exporting with either still requires Pro — that's the only point the
+    // paywall shows up for these two features.
+    if (!isPro && (blurSettings.enabled || ofSettings.enabled)) {
+      useEditorStore.getState().setUpgradeModalOpen(true);
+      return;
+    }
+
     setPhase('checking');
     const allowance = await checkExportAllowed();
     setRemaining(allowance.remaining);
@@ -148,7 +156,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
         onError: handleError,
       });
     }
-  }, [project, blurSettings, ofSettings, useOFPipeline, setExportProgress, setExporting]);
+  }, [project, isPro, blurSettings, ofSettings, useOFPipeline, setExportProgress, setExporting]);
 
   const cancel = useCallback(() => {
     bridgeRef.current?.cancelOpticalFlow();

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { interpolateSpeed } from '@/lib/curveMath';
+import { hasSlowSegments } from '@/lib/ffmpegBridge';
 import { useEditorStore } from '@/store/editorStore';
 import type { Segment } from '@/types/editor';
 import { formatTime } from './formatTime';
@@ -101,27 +102,34 @@ export function VideoPlayer() {
 
   // ── Motion blur preview ──────────────────────────────────────────────────
   // Blur scales with how far the current speed deviates from 1×.
-  // Pro users see intensity-scaled blur when blur is enabled.
-  // Free users see a fixed teaser hint when there is any speed ramp present.
+  // Pro users see intensity-scaled blur whenever blur is enabled. Free users
+  // only see a preview once they explicitly flip the "Motion blur" toggle in
+  // the sidebar — it's no longer automatic just because a ramp exists.
   const INTENSITY_MULT: Record<string, number> = { subtle: 0.6, balanced: 1.2, cinematic: 2.2 };
   const blurPx = useMemo(() => {
-    if (!project) return 0;
+    if (!project || !blurSettings.enabled) return 0;
     const speedDelta = Math.abs(rawSpeed - 1);
-    if (isPro && blurSettings.enabled) {
+    if (isPro) {
       const mult = INTENSITY_MULT[blurSettings.intensity] ?? 1.2;
       return Math.min(8, speedDelta * 2.5 * mult);
     }
-    if (!isPro && segmentsHaveSpeedRamp(project.segments)) {
+    if (segmentsHaveSpeedRamp(project.segments)) {
       return Math.min(4, speedDelta * 1.8);
     }
     return 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project, isPro, blurSettings.enabled, blurSettings.intensity, rawSpeed]);
 
-  // Show the bottom hint strip only for free users who have a speed ramp
+  // Bottom hint strip: shown for free users previewing a Pro-only feature
+  // they've explicitly toggled on (blur or frame interpolation).
+  const ofSettings = useEditorStore((s) => s.opticalFlowSettings);
   const hasSpeedRamp = useMemo(
-    () => !isPro && !!project && segmentsHaveSpeedRamp(project.segments),
-    [isPro, project],
+    () => !isPro && blurSettings.enabled && !!project && segmentsHaveSpeedRamp(project.segments),
+    [isPro, blurSettings.enabled, project],
+  );
+  const previewingOF = useMemo(
+    () => !isPro && ofSettings.enabled && !!project && hasSlowSegments(project.segments),
+    [isPro, ofSettings.enabled, project],
   );
 
   if (!project) return null;
@@ -189,7 +197,7 @@ export function VideoPlayer() {
         </div>
 
         {/* Bottom hint strip */}
-        {(hasSpeedRamp || (isPro && blurSettings.enabled && segmentsHaveSpeedRamp(project.segments))) && (
+        {(hasSpeedRamp || previewingOF || (isPro && blurSettings.enabled && segmentsHaveSpeedRamp(project.segments))) && (
           <div
             style={{
               position: 'absolute',
@@ -211,7 +219,9 @@ export function VideoPlayer() {
             ) : (
               <>
                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>
-                  Preview only — export with Pro for real motion blur
+                  {hasSpeedRamp
+                    ? 'Preview only — export with Pro for real motion blur'
+                    : 'AI smoothing preview — export with Pro for real frame interpolation'}
                 </span>
                 <button
                   type="button"

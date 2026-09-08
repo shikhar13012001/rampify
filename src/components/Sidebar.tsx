@@ -32,11 +32,6 @@ export function Sidebar() {
   const undo = useEditorStore((state) => state.undo);
   const history = useEditorStore((state) => state.history);
 
-  const minSpeed = useEditorStore((state) => state.minSpeed);
-  const maxSpeed = useEditorStore((state) => state.maxSpeed);
-  const setMinSpeed = useEditorStore((state) => state.setMinSpeed);
-  const setMaxSpeed = useEditorStore((state) => state.setMaxSpeed);
-
   const isPro              = useEditorStore((state) => state.isPro);
   const blurSettings       = useEditorStore((state) => state.blurSettings);
   const setBlurEnabled     = useEditorStore((state) => state.setBlurEnabled);
@@ -62,6 +57,7 @@ export function Sidebar() {
   const [lockAudio, setLockAudio] = useState(true);
   const [pitchCorrection, setPitchCorrection] = useState(true);
   const [muteDuringRamp, setMuteDuringRamp] = useState(false);
+  const [fileInfoOpen, setFileInfoOpen] = useState(false);
 
   if (!project) return null;
 
@@ -70,17 +66,52 @@ export function Sidebar() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {/* File info */}
+      {/* File info — collapsed summary by default */}
       <SectionCard>
-        <SectionLabel>File</SectionLabel>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <InfoRow label="Name" value={file.name} mono clip />
-          <InfoRow label="Duration" value={fmtDuration(file.duration)} />
-          {file.width > 0 && file.height > 0 && (
-            <InfoRow label="Resolution" value={`${file.width} × ${file.height}`} />
-          )}
-          {file.size != null && <InfoRow label="Size" value={fmtFileSize(file.size)} />}
-        </div>
+        <button
+          type="button"
+          onClick={() => setFileInfoOpen((v) => !v)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            width: '100%',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+          aria-expanded={fileInfoOpen}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              color: 'var(--color-text-muted)',
+              fontFamily: 'var(--font-mono)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+            }}
+            title={file.name}
+          >
+            {file.name} · {fmtDuration(file.duration)}
+            {file.width > 0 && file.height > 0 ? ` · ${file.width}×${file.height}` : ''}
+          </span>
+          <ChevronIcon open={fileInfoOpen} />
+        </button>
+        {fileInfoOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 4 }}>
+            <InfoRow label="Name" value={file.name} mono clip />
+            <InfoRow label="Duration" value={fmtDuration(file.duration)} />
+            {file.width > 0 && file.height > 0 && (
+              <InfoRow label="Resolution" value={`${file.width} × ${file.height}`} />
+            )}
+            {file.size != null && <InfoRow label="Size" value={fmtFileSize(file.size)} />}
+          </div>
+        )}
       </SectionCard>
 
       {/* Segments */}
@@ -123,59 +154,29 @@ export function Sidebar() {
         </div>
       </SectionCard>
 
-      {/* Speed range */}
-      <SectionCard>
-        <SectionLabel>Speed range</SectionLabel>
-        <div style={{ display: 'grid', gap: 14, paddingTop: 4 }}>
-          <SliderRow
-            label="Min speed"
-            value={minSpeed}
-            displayValue={`${minSpeed.toFixed(1)}x`}
-            min={0.1}
-            max={1}
-            step={0.1}
-            onChange={setMinSpeed}
-            accentColor="var(--color-accent)"
-          />
-          <SliderRow
-            label="Max speed"
-            value={maxSpeed}
-            displayValue={`${maxSpeed.toFixed(1)}x`}
-            min={1}
-            max={10}
-            step={0.1}
-            onChange={setMaxSpeed}
-            accentColor="var(--color-warning)"
-          />
-        </div>
-      </SectionCard>
-
-      {/* Output */}
+      {/* Output — toggles are always interactive; free users get a live preview
+          and only hit the upgrade paywall when they try to export. */}
       <SectionCard>
         <SectionLabel>Output</SectionLabel>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {isPro ? (
-            <MotionBlurControl
-              enabled={blurSettings.enabled}
-              intensity={blurSettings.intensity}
-              transitionCount={transitionCount}
-              onToggle={setBlurEnabled}
-              onIntensityChange={setBlurIntensity}
-            />
-          ) : (
-            <LockedOption label="Motion blur" onUpgrade={() => setUpgradeModalOpen(true)} />
-          )}
-          {isPro ? (
-            <OpticalFlowControl
-              enabled={ofSettings.enabled}
-              quality={ofSettings.quality}
-              segments={segments}
-              onToggle={setOFEnabled}
-              onQualityChange={setOFQuality}
-            />
-          ) : (
-            <LockedOption label="Frame interpolation" onUpgrade={() => setUpgradeModalOpen(true)} />
-          )}
+          <MotionBlurControl
+            enabled={blurSettings.enabled}
+            intensity={blurSettings.intensity}
+            transitionCount={transitionCount}
+            isPro={isPro}
+            onToggle={setBlurEnabled}
+            onIntensityChange={setBlurIntensity}
+            onUpgrade={() => setUpgradeModalOpen(true)}
+          />
+          <OpticalFlowControl
+            enabled={ofSettings.enabled}
+            quality={ofSettings.quality}
+            segments={segments}
+            isPro={isPro}
+            onToggle={setOFEnabled}
+            onQualityChange={setOFQuality}
+            onUpgrade={() => setUpgradeModalOpen(true)}
+          />
         </div>
       </SectionCard>
 
@@ -449,53 +450,6 @@ function ToggleRow({
   );
 }
 
-function SliderRow({
-  label,
-  value,
-  displayValue,
-  min,
-  max,
-  step,
-  onChange,
-  accentColor,
-}: {
-  label: string;
-  value: number;
-  displayValue: string;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-  accentColor: string;
-}) {
-  return (
-    <label style={{ display: 'grid', gap: 6, padding: '0 2px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{label}</span>
-        <span
-          style={{
-            fontSize: 11,
-            fontFamily: 'var(--font-mono)',
-            fontWeight: 600,
-            color: accentColor,
-          }}
-        >
-          {displayValue}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        style={{ accentColor }}
-      />
-    </label>
-  );
-}
-
 const INTENSITY_LABELS: { value: BlurIntensity; label: string }[] = [
   { value: 'subtle',     label: 'Subtle' },
   { value: 'balanced',   label: 'Balanced' },
@@ -506,14 +460,18 @@ function MotionBlurControl({
   enabled,
   intensity,
   transitionCount,
+  isPro,
   onToggle,
   onIntensityChange,
+  onUpgrade,
 }: {
   enabled: boolean;
   intensity: BlurIntensity;
   transitionCount: number;
+  isPro: boolean;
   onToggle: (v: boolean) => void;
   onIntensityChange: (v: BlurIntensity) => void;
+  onUpgrade: () => void;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -533,6 +491,7 @@ function MotionBlurControl({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span>Motion blur</span>
+          {!isPro && <ProBadge onClick={onUpgrade} />}
           {enabled && transitionCount > 0 && (
             <span
               style={{
@@ -599,7 +558,9 @@ function MotionBlurControl({
 
       {enabled && (
         <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-text-subtle)', padding: '0 2px', lineHeight: 1.4 }}>
-          Applied at export time. Intensity controls blur amount at each speed change.
+          {isPro
+            ? 'Applied at export time. Intensity controls blur amount at each speed change.'
+            : 'Live preview in the player above. Exporting with blur requires Pro.'}
         </p>
       )}
 
@@ -656,22 +617,28 @@ function OpticalFlowControl({
   enabled,
   quality,
   segments,
+  isPro,
   onToggle,
   onQualityChange,
+  onUpgrade,
 }: {
   enabled: boolean;
   quality: OpticalFlowQuality;
   segments: Segment[];
+  isPro: boolean;
   onToggle: (v: boolean) => void;
   onQualityChange: (v: OpticalFlowQuality) => void;
+  onUpgrade: () => void;
 }) {
   const [modelStatus, setModelStatusLocal] = useState<ModelStatus>('idle');
 
   useEffect(() => subscribeModelStatus(setModelStatusLocal), []);
 
   useEffect(() => {
-    if (enabled) waitForWorkerReady();
-  }, [enabled]);
+    // Only pre-warm the (6 MB) AI model for Pro users who can actually export
+    // with it — free users just see the curve-editor preview, no download needed.
+    if (enabled && isPro) waitForWorkerReady();
+  }, [enabled, isPro]);
 
   const hasSlowSegs = useMemo(() => hasSlowSegments(segments), [segments]);
 
@@ -697,8 +664,16 @@ function OpticalFlowControl({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span>Frame interpolation</span>
-          {enabled && modelStatus === 'loading' && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Frame interpolation
+            {!isPro && <ProBadge onClick={onUpgrade} />}
+          </span>
+          {enabled && !isPro && (
+            <span style={{ fontSize: 9, color: 'var(--color-text-subtle)', lineHeight: 1.4 }}>
+              Preview only in the curve editor — exporting requires Pro.
+            </span>
+          )}
+          {enabled && isPro && modelStatus === 'loading' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontSize: 9, color: '#8a8a8a', fontFamily: 'var(--font-mono)' }}>
                 Downloading AI model (6 MB)…
@@ -833,49 +808,33 @@ function OpticalFlowControl({
   );
 }
 
-function LockedOption({ label, onUpgrade }: { label: string; onUpgrade: () => void }) {
+/** Small inline "Pro" tag next to a feature label — click opens the upgrade modal.
+ *  Unlike the old LockedOption, the feature itself stays fully interactive for
+ *  free users; this just signals that exporting with it requires Pro. */
+function ProBadge({ onClick }: { onClick: () => void }) {
   return (
-    <div
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 10,
-        fontSize: 12,
-        color: 'var(--color-text-subtle)',
-        padding: '6px 2px',
-        opacity: 0.55,
-        userSelect: 'none',
+        borderRadius: 5,
+        backgroundColor: 'rgba(184, 164, 237, 0.12)',
+        border: '1px solid rgba(184, 164, 237, 0.3)',
+        color: '#b8a4ed',
+        padding: '1px 6px',
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        flexShrink: 0,
+        cursor: 'pointer',
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-          <rect x="3" y="11" width="18" height="11" rx="2" />
-          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-        </svg>
-        {label}
-      </span>
-      <button
-        type="button"
-        onClick={onUpgrade}
-        style={{
-          borderRadius: 5,
-          backgroundColor: 'rgba(184, 164, 237, 0.12)',
-          border: '1px solid rgba(184, 164, 237, 0.3)',
-          color: '#b8a4ed',
-          padding: '2px 7px',
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          flexShrink: 0,
-          cursor: 'pointer',
-          opacity: 1,
-        }}
-      >
-        Upgrade
-      </button>
-    </div>
+      Pro
+    </button>
   );
 }
 
@@ -942,6 +901,25 @@ function UndoIcon({ active }: { active: boolean }) {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? '#b8a4ed' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="1 4 1 10 7 10" />
       <path d="M3.51 15a9 9 0 1 0 .49-4.5" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--color-text-subtle)"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+    >
+      <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }

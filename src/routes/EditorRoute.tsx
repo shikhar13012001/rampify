@@ -14,6 +14,13 @@ import { VideoPlayer } from '@/features/preview/VideoPlayer';
 import { Timeline } from '@/features/timeline/Timeline';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useEditorStore } from '@/store/editorStore';
+import { trackEvent } from '@/lib/analytics';
+
+// How long to wait after the last curve edit in a burst before recording
+// curve_changed — dragging a control point fires many state updates per
+// second; this collapses a whole drag gesture (or several rapid clicks) into
+// one event instead of flooding the funnel with one per intermediate frame.
+const CURVE_CHANGE_DEBOUNCE_MS = 800;
 
 // Video preview pane height, in px — user-resizable via the drag handle below it.
 const MIN_PLAYER_H = 200;
@@ -104,6 +111,46 @@ export default function EditorRoute() {
   }, [playerHeight]);
 
   useKeyboardShortcuts();
+
+  useEffect(() => {
+    trackEvent({ name: 'editor_opened' });
+  }, []);
+
+  // curve_changed — subscribes directly to the store (rather than a `project`
+  // prop/selector dependency) so this only reacts to an actual segments-array
+  // replacement, not every unrelated store update (playhead ticking during
+  // playback, export progress, etc.) — a naive `useEffect` keyed on `project`
+  // would re-fire the debounce timer on those too and the event would nearly
+  // never actually send while the video is playing.
+  useEffect(() => {
+    let prevSegments = useEditorStore.getState().project?.segments ?? null;
+    const initialProject = useEditorStore.getState().project;
+    let prevFileKey = initialProject ? `${initialProject.file.name}:${initialProject.file.duration}` : null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsubscribe = useEditorStore.subscribe((state) => {
+      const segments = state.project?.segments ?? null;
+      if (segments === prevSegments) return; // unrelated state change — ignore
+      prevSegments = segments;
+
+      const fileKey = state.project ? `${state.project.file.name}:${state.project.file.duration}` : null;
+      const isNewFile = fileKey !== prevFileKey;
+      prevFileKey = fileKey;
+      // A new/restored clip replaces `segments` too, but that's clip_loaded's
+      // signal, not a curve edit — skip it here.
+      if (isNewFile || !segments) return;
+
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        trackEvent({ name: 'curve_changed', props: { segmentCount: segments.length } });
+      }, CURVE_CHANGE_DEBOUNCE_MS);
+    });
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, []);
 
   // Persist project curves/settings to localStorage on every relevant change.
   // The video file itself isn't saved (binary), but the curve/settings are enough

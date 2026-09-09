@@ -2,9 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
-import { Seo } from '@/components/Seo';
-
-const SITE_URL = 'https://rampify-eight.vercel.app';
+import { Seo, SITE_URL } from '@/components/Seo';
 
 interface FeaturePageLayoutProps {
   path: string;            // e.g. '/features/speed-ramp'

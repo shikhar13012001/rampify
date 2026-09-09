@@ -2,8 +2,9 @@
 
 > Four-week sprint. Objectives: reliable first export, measurable activation, relevant
 > acquisition, repeat use, and payment. **Not** a general-purpose video editor expansion.
-> Updated: 2026-09-08. This is a read-only audit — **no application behavior was changed
-> in this task.**
+> Updated: 2026-09-08 (export-pipeline reliability task — see "Implementation status" and
+> `docs/validation/RESULTS.md` for what changed). Earlier audits in this file were
+> read-only; this update is not — see the new entry below.
 
 ## Provenance — why this file replaces a prior version
 
@@ -64,7 +65,7 @@ Provenance above) — nothing to report there now.
 | Build | `npm run build` (`tsc -b && vite build`) | **PASS** — 108 modules, zero type errors |
 | Unit tests | `npm run test` (`vitest run`) | **PASS** — 6 files, 111/111 tests |
 | Lint | `npm run lint` (`eslint .`) | **1 pre-existing error** — `src/components/DropZone.tsx:24` (`react-hooks/set-state-in-effect`, calling `setSavedFileName()` synchronously in a mount effect). Lint is not a build gate; build and tests both pass regardless. |
-| Manual export smoke test | — | **NOT PERFORMED** — no E2E test of the video export pipeline exists in the repo, and this task did not launch a browser (per WORKING_AGREEMENT §9, this must be stated explicitly whenever the export path is discussed). |
+| Manual export smoke test | — | **STILL NOT PERFORMED BY CLAUDE** — see the export-pipeline reliability task below: real browser automation was attempted (Playwright), blocked on a Chromium version mismatch, and dropped per explicit user instruction in favor of a manual checklist for the user to run by hand. `docs/validation/RESULTS.md` has the checklist, generated test fixtures (`test/fixtures/*.mp4`), and a validation script (`test/fixtures/validate-output.sh`). No E2E test processing real media through the real app exists as of this update — that requirement remains unmet. |
 
 Framework/architecture, confirmed by reading the actual files (not assumed from CLAUDE.md):
 React 19 + Vite 8 + TypeScript 6, client-side-only SPA (`vercel.json` rewrites every
@@ -228,10 +229,12 @@ closed; the backend-build direction is still undecided); items 4 and 5 untouched
    download-succeeded (H5), and consider a lightweight post-download validity check
    (e.g. confirm the blob is non-trivial size and has a valid video header) before
    consuming quota.
-8. Fix the canonical/crawler-content mismatch (H1/H2): either pre-render the 13 sitemap
-   routes (SSG or a prerender step) or, as a smaller first move, at least make
-   `index.html`'s static `<title>`/description/canonical match the page most likely to be
-   crawled cold, and dedupe `SITE_URL` (`Seo.tsx:14` vs `FeaturePageLayout.tsx:7`).
+8. ~~Fix the canonical/crawler-content mismatch (H1/H2)~~ **Done for the 3 prioritized
+   routes** (`/`, `/pricing`, `/features/speed-ramp`) — see the "Technical SEO fixes task"
+   entry in Implementation status and `docs/validation/SEO.md`. The other 10 sitemap
+   routes still serve the generic homepage shell pre-hydration; extending
+   `scripts/prerender-seo.mjs`'s ROUTES list to them is mechanical (copy the pattern) but
+   undone. `SITE_URL` is deduped (`Seo.tsx` exports it; `FeaturePageLayout.tsx` imports it).
 
 **P2 — smaller correctness/consistency fixes:**
 9. `DropZone.tsx:24` lint fix (`react-hooks/set-state-in-effect`) — pre-existing, does not
@@ -380,13 +383,223 @@ sessionStorage-tracked event to a later signup — currently nothing does that c
   `npm run test` — pass, 7 files, 124/124. `npm run lint` — same 1 pre-existing
   `DropZone.tsx:24` error as every prior task, unrelated to this task's changes.
 
+- **Export-pipeline reliability task (this update)** — full detail, evidence, and the
+  manual test checklist live in `docs/validation/RESULTS.md`; summarized here per
+  WORKING_AGREEMENT §8:
+  - **Attempted real-browser automated testing (Playwright)**, per the task's explicit
+    requirement that at least one automated test process real media. Blocked on a
+    Chromium version mismatch (`npx playwright install chromium` needed to fix it — that
+    tool call was rejected). Per the user's explicit follow-up ("no need for chromium or
+    playright, just give instructions to check system manully"), this whole approach was
+    dropped: `playwright` uninstalled, the driver script deleted. **No automated test in
+    this repo processes real media through the real app** — flagged honestly rather than
+    claimed done. Substitute delivered instead: real ffmpeg-generated test fixtures
+    (`test/fixtures/*.mp4`, synthetic/no licensing concern), a validation script
+    (`validate-output.sh`), and a manual checklist in RESULTS.md covering all 8 scenarios
+    the task named.
+  - **Found and fixed, via code audit (verified by `npm run build` + `npm run test`, not
+    by browser observation)**:
+    - `avgSegmentSpeed()` in `ffmpegBridge.ts` used an unweighted mean of curve
+      control-point speeds instead of a time-weighted average — fed a wrong value into
+      audio atempo and optical-flow output duration/framerate for any non-flat curve.
+      Fixed to `duration / remapTime(curve, duration, duration)`, matching the same math
+      the video path already used. See RESULTS.md for the Jump Cut preset's measured
+      naive-vs-correct values (2.7× vs 3.7×).
+    - `curveToFFmpegFilter` was called with the whole file's duration instead of the
+      segment's own span — fixed alongside the above.
+    - ffmpeg.wasm virtual-filesystem files (input, blur frames, OF frames, output) were
+      never deleted across the session's shared worker — real leak risk for "repeated
+      exports in one session." Fixed: every written filename is now tracked and deleted
+      in a `finally` block after each job.
+    - Export Blob object URLs were never revoked — fixed via a `useEffect` that revokes
+      the previous URL on replacement and on unmount.
+    - No re-entrancy guard on `startExport()` or the worker's `'start'` handler — a fast
+      double-click could interleave two jobs against the same shared worker/virtual FS.
+      Fixed with a synchronous ref guard client-side and a `running` check worker-side.
+    - The pitch-preserving-off audio-probe ffmpeg call fired spurious progress events —
+      suppressed during that internal call.
+    - Raw ffmpeg error dumps were shown directly as the primary error UI text — added
+      `friendlyErrorMessage()` mapping to short actionable text, raw detail moved to a
+      collapsed `<details>`.
+  - **Found and documented, not fixed (deferred per this task's "prioritize the basic
+    path" instruction)**:
+    - **Multi-segment exports silently drop every segment but the first** (HIGH — a real
+      feature-sized fix, not a bug-sized one). Mitigated with an upfront warning banner in
+      `ExportModal.tsx` when `segments.length > 1`, so users are warned before rendering
+      rather than after. The underlying gap is unresolved — should be a new P0/P1 item
+      (see Priorities — not yet renumbered into that list, flagging here so it isn't lost).
+    - **Bezier-curve preview/export mismatch**: the live preview uses Catmull-Rom
+      smoothing for `curve.type === 'bezier'`, but `curveToFFmpegFilter`/`remapTime`
+      always treat points as linear regardless of type — most built-in presets are
+      bezier-type, so what's previewed and what's exported are different curves. Not
+      fixed — needs its own validation pass (ffmpeg expression complexity/limits).
+    - **User-confirmed-usable-output still doesn't exist** — render-completed and
+      download-initiated are now cleanly separated concepts in code (see RESULTS.md), but
+      nothing confirms the user actually got a working file. Same open gap H5 already
+      named; not closed by this task.
+  - **Added**: `src/lib/browserCapabilities.ts` (`checkExportCapabilities()` — checks
+    WebAssembly/SharedArrayBuffer/`window.crossOriginIsolated`), wired as a non-blocking
+    warning in `DropZone.tsx` and a hard block (disabled Start button) in `ExportModal.tsx`.
+    Unit-tested with mocked globals; never observed catching a real unsupported browser,
+    since none was available to test — flagged so this isn't read as verified-working.
+  - **COOP/COEP inspected, not changed** — confirmed live via `curl -sI` against the dev
+    server, matches `vite.config.ts`/`vercel.json`. No regression testing of
+    auth/checkout/worker-loading was needed since nothing in this category changed.
+  - Full manual testing checklist, untested/unverified items, and file-by-file detail:
+    `docs/validation/RESULTS.md`.
+  - Fresh baseline: `npm run build` — pass, 109 modules, zero errors. `npm run test` —
+    pass, 8 files, 129/129 (was 124/124 before this task; +5 for
+    `browserCapabilities.test.ts`). `npm run lint` — same 1 pre-existing `DropZone.tsx`
+    error (line shifted), unrelated to this task.
+
+- **Activation-funnel instrumentation task (2026-09-09)** — full detail in
+  `docs/validation/METRICS.md`; summarized here per WORKING_AGREEMENT §8.
+  Directly resolves P1 item 6 ("Add analytics") below — first time this repo
+  has had any event tracking (previously zero: no analytics dependency, no
+  event code anywhere, confirmed in the earlier audit).
+  - **New, first-party, minimal-PII event pipeline**: `src/lib/analytics.ts`
+    (client `trackEvent()`, consent/DNT handling, anon/session identity,
+    acquisition capture, test-session tagging), `src/lib/exportAnalytics.ts`
+    (pure event builders + the activation-proxy predicate),
+    `api/_analyticsEvents.ts` + `api/track-event.ts` (server-side schema
+    validation + idempotent Firestore write, same pattern as
+    `api/record-export.ts`), `scripts/inspect-journey.mjs` (CLI journey
+    viewer — deliberately not a new dashboard).
+  - **All 13 requested events wired**: landing_view, editor_opened,
+    clip_loaded, curve_changed, export_started, export_render_completed,
+    export_failed, export_cancelled, download_initiated, signup_completed,
+    upgrade_viewed, checkout_started, payment_succeeded. The last is written
+    **only** server-side, directly inside the already-signature-verified
+    Dodo webhook handler — never accepted as a trusted claim from the client.
+  - **Real bug caught and fixed while wiring `export_render_completed`**:
+    the callbacks that fire it read `startedAt` from React state, but state
+    set earlier in the same `startExport()` call isn't visible in closures
+    created before the next render — a classic stale-closure bug that would
+    have made every export's reported `durationMs` wrong (based on whatever
+    `startedAt` was on the *previous* render, typically `null`). Fixed by
+    capturing `exportStartTime` as a local `const` at the point `setStartedAt`
+    is called, and using that local in the closures instead of the state var.
+  - **Added a first playability check to this app**: `probeVideoPlayability()`
+    in `ExportModal.tsx` — a detached `<video>` + `loadedmetadata` probe
+    (container/duration decode, not a full-frame decode), run non-blocking
+    after the download/UI already updated. This is what makes the
+    activation proxy's "validated playable output" real rather than
+    aspirational — previously nothing in this app checked output playability
+    at all (RESULTS.md's H5-adjacent finding). Still a partial check, not a
+    full decode — documented as such in METRICS.md.
+  - **Demo-clip / test-session distinction**: both fields exist and are
+    tested (`isDemoClip`, `isTestSession`), but `isDemoClip` is currently
+    always `false` — no demo-clip loading feature exists anywhere in this
+    app (confirmed by grep before writing this). The field is real
+    infrastructure for a feature that doesn't exist yet, not dead code for
+    one that was removed.
+  - **Consent**: no consent-banner UI exists in this app (confirmed by grep
+    before this task) or was added by it — DNT is honored automatically;
+    the infra for a future banner (`getAnalyticsConsent`/`setAnalyticsConsent`)
+    exists but isn't wired to any UI. Flagged explicitly in METRICS.md as a
+    real, disclosed limitation, not GDPR/CCPA-grade consent management.
+  - **Tests**: 48 new tests (`analytics.test.ts` 23, `exportAnalytics.test.ts`
+    14, `api/_analyticsEvents.test.ts` 12 — some overlap in counting shared
+    setup) covering event order, dedup-id freshness, cancellation, failure
+    stage classification, consent handling, demo exclusion, and
+    test-session exclusion, per the task's explicit list. **Not tested**: an
+    actual `trackEvent()` call reaching a real Firestore document — no
+    Firestore emulator/mocking exists in this repo's test infra (same
+    pre-existing gap as `record-export.ts`/`webhooks/dodo.ts`) — stated
+    plainly in METRICS.md rather than implied as covered.
+  - Fresh baseline: `npm run build` — pass, 111 modules, zero errors.
+    `npm run test` — pass, 11 files, 177/177 (was 129/129 before this task).
+    `npm run lint` — same 1 pre-existing `DropZone.tsx` error, unrelated.
+  - Not yet done: nothing in this event pipeline has been observed actually
+    reaching Firestore in a real browser (same "no live browser testing
+    performed" caveat as every prior task in this file) — the next action
+    below covers verifying that.
+
+- **Technical SEO fixes task (2026-09-09)** — full detail in
+  `docs/validation/SEO.md`; summarized here per WORKING_AGREEMENT §8.
+  Resolves H1 ("canonical disagrees with rendered canonicals") and H2
+  ("feature routes initially return generic homepage content") for the 3
+  prioritized routes (`/`, `/pricing`, `/features/speed-ramp`); P1 item 8
+  below is now done for those 3, not yet for the other 10 sitemap routes.
+  - **New**: `scripts/prerender-seo.mjs` (postbuild step — real per-route
+    static HTML: unique title/description/canonical/OG/Twitter/breadcrumb
+    JSON-LD/body content for the 3 prioritized routes, plus
+    production-vs-preview `robots` meta + `robots.txt` gating via
+    `VERCEL_ENV`), wired into `package.json`'s `build` script.
+  - **`vercel.json`**: SPA rewrite narrowed from "everything except
+    api/assets" to an explicit list of the real routes in `src/App.tsx` —
+    unknown/typo'd paths now fall through to a real 404 instead of a
+    soft-200 homepage response. Added `"trailingSlash": false` explicitly.
+  - **Deliberately not real SSR**: considered and rejected — several
+    marketing components transitively import `src/lib/firebase.ts`, whose
+    `getAuth()`/`getFirestore()` calls at module load have unverified
+    behavior under Node/`renderToString`. Extended the existing
+    hand-authored-static-fallback pattern (already used for `index.html`'s
+    pre-hydration content) to 2 more routes instead, per
+    WORKING_AGREEMENT §1's "no framework rewrite" and this task's own
+    "smallest approach, do not rewrite the editor into another framework."
+  - **Deduped `SITE_URL`**: `Seo.tsx` now exports it; `FeaturePageLayout.tsx`
+    imports instead of keeping its own copy (this exact duplication was
+    named in H1's original finding).
+  - **Verified already correct, not changed**: heading structure (exactly
+    one `<h1>` on `Landing.tsx`/`Pricing.tsx`/`FeaturePageLayout.tsx`,
+    confirmed by grep), sitemap already excludes `/editor` and
+    `/upgrade/success`, hydrated social metadata was already complete and
+    per-route via the existing `Seo.tsx`.
+  - **Disclosed, not fixed**: `FAQPage`/`SoftwareApplication`/`Organization`
+    JSON-LD is identical across all 3 prerendered routes (soft
+    duplicate-structured-data concern per Google's guidance, not an error;
+    fixing which FAQs belong where is a separate scope decision).
+  - **Tests**: `test/seo/prerendered-routes.test.ts` runs two REAL
+    `npm run build`s (default env, then `VERCEL_ENV=production`) and asserts
+    against actual `dist/` output — unique title/description/canonical/og:url
+    per route, exactly one correct `<h1>`, a regression guard against the
+    homepage's h1 leaking onto other routes, breadcrumb JSON-LD, crawlable
+    internal links restricted to real known routes, robots
+    meta/robots.txt correctly gated both ways, sitemap still excludes
+    private routes. `test/seo/vercel-routing.test.ts` tests the actual
+    rewrite regex from `vercel.json` (known routes match, unknown/asset
+    paths don't) — pure, no build needed.
+  - **Not verified — explicit, same honesty standard as RESULTS.md**: the
+    hydrated DOM, a live Vercel deployment's actual rewrite/404/static-file-
+    priority behavior, direct browser navigation, and whether Google has
+    indexed anything. `docs/validation/SEO.md` has the manual checklist
+    (including a full Search Console inspection checklist) — none of it has
+    been run, since it needs a real deployment.
+  - Fresh baseline: `npm run build` — pass, zero type errors (plus the new
+    postbuild step, verified working). `npm run test` — pass, 13 files,
+    197/197 (was 177/177 before this task; +20 for the 2 new SEO test
+    files). `npm run lint` — same 1 pre-existing `DropZone.tsx` error.
+
 ## Next action
 
-Manually verify in a real browser (nothing above proves the UI actually behaves as coded):
+**Verify the analytics pipeline actually reaches Firestore in a real
+browser** before trusting any of it: open the app via `vercel dev` (needed
+for `/api/track-event` to exist — plain `npm run dev` has no API routes),
+click through a basic session (land on `/`, open the editor, load a clip,
+draw a curve, export, let it download), then run
+`window.__rampifyJourney()` in devtools to get the sessionId, then
+`node --env-file=.env.local scripts/inspect-journey.mjs --session <id>` to
+confirm the same events actually landed in Firestore in the right order.
+Then sign in and upgrade to Pro in Dodo test mode to confirm
+`payment_succeeded` appears (server-side only, so this is the only way to
+see it at all).
+
+After that, the remaining still-open items accumulate across this file:
+**Run the manual testing checklist in `docs/validation/RESULTS.md`** — this is the actual
+next step now: nothing in this repo has yet been observed running in a real browser, and
+that's the single biggest gap across every task in this file so far. Priority order within
+the checklist: normal-clip-with-audio and no-audio exports first (basic path correctness),
+then repeated-exports-in-one-session and duplicate-submission (this task's leak/race fixes),
+then variable-speed timing (validates the avgSegmentSpeed fix against an independent
+analytical duration), then the rest.
+
+After that, the still-open items from earlier audits remain, now with one more added:
 a free user toggling Balanced blur and exporting successfully; a free user toggling
 Subtle/Cinematic and seeing the upfront block; the guest sign-in banner with the experiment
 off; then, in a local/test build only, flip `GUEST_EXPERIMENT.enabled = true` and verify a
-guest gets exactly one 1080p export before being blocked. After that: the three still-open
-P0 items (cloud-export backend decision, testimonials, cancel-claim re-verification), then
-P1 analytics — still nothing in the repo can measure whether the guest experiment, once
-someone decides to actually turn it on, moves any of the sprint's five objectives.
+guest gets exactly one 1080p export before being blocked; the multi-segment warning banner
+actually appearing when a split clip is exported. Then: the three still-open P0 items
+(cloud-export backend decision, testimonials, cancel-claim re-verification), then P1
+analytics, then the newly-found multi-segment-export gap and bezier preview/export
+mismatch (both currently undecided — need a product call on whether/when to fix properly).

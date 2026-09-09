@@ -48,6 +48,53 @@ async function resolveUserId(db: ReturnType<typeof adminDb>, event: BillingEvent
   return snap.empty ? null : snap.docs[0].id;
 }
 
+/**
+ * payment_succeeded is the one analytics event that must be server-verified
+ * (see docs/validation/METRICS.md) — it is written HERE, directly to
+ * Firestore, and never accepted from the client via api/track-event.ts (that
+ * endpoint's schema doesn't special-case it; nothing stops a client from
+ * POSTing a payment_succeeded event there, but doing so would just record an
+ * unverified client claim under 'props', not the real funnel signal — the
+ * webhook-sourced doc below, keyed by the Standard Webhooks delivery id, is
+ * the one this app's own tooling and docs treat as authoritative).
+ *
+ * Doc id includes webhookId, which is already unique per delivery and is the
+ * same id this handler's outer idempotency check dedupes on — so this can
+ * only ever be written once per real Dodo event.
+ */
+async function recordPaymentSucceeded(
+  db: ReturnType<typeof adminDb>,
+  webhookId: string,
+  event: BillingEvent,
+  userId: string,
+  context: 'initial' | 'renewal',
+): Promise<void> {
+  try {
+    await db.collection('analytics_events').doc(`payment_succeeded:${webhookId}`).set({
+      name: 'payment_succeeded',
+      timestamp: new Date(),
+      receivedAt: new Date(),
+      sessionId: null,
+      anonId: null,
+      uid: userId,
+      isTestSession: false,
+      exportId: null,
+      appVersion: null,
+      acquisition: null,
+      capabilities: null,
+      props: {
+        context,
+        billingPeriod: (event.data.metadata?.billingPeriod as string | undefined) ?? null,
+        eventType: event.type,
+      },
+    });
+  } catch (err) {
+    // Never let analytics recording fail the webhook itself — Pro was
+    // already granted (or is about to be, by the caller) regardless.
+    console.error('[dodo-webhook] failed to record payment_succeeded analytics event:', err);
+  }
+}
+
 async function setTier(
   db: ReturnType<typeof adminDb>,
   userId: string,
@@ -146,6 +193,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           extra.subscriptionEnd = new Date(billingEvent.data.next_billing_date);
         }
         await setTier(db, userId, 'pro', extra);
+        await recordPaymentSucceeded(
+          db,
+          webhookId,
+          billingEvent,
+          userId,
+          event.type === 'subscription.renewed' ? 'renewal' : 'initial',
+        );
         break;
       }
 

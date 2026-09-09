@@ -13,6 +13,52 @@ import {
   planTierFor,
   shouldRecordExport,
 } from '@/lib/exportLimits';
+import { trackEvent, classifyErrorStage } from '@/lib/analytics';
+import {
+  exportStartedEvent,
+  exportRenderCompletedEvent,
+  exportFailedEvent,
+  exportCancelledEvent,
+  downloadInitiatedEvent,
+  type ExportEventContext,
+} from '@/lib/exportAnalytics';
+
+/**
+ * Best-effort, non-blocking playability probe: loads `url` (the export's own
+ * blob: URL) into a detached <video> and waits for loadedmetadata (a real
+ * decode of the container/duration, not just a byte-size check) or a
+ * timeout. This is the closest thing this app has to "validated playable
+ * output" for the activation proxy defined in docs/validation/METRICS.md —
+ * it does NOT fully decode every frame (that would be expensive and slow),
+ * so a file that fails partway through would still read as validated here.
+ * Never awaited by the UI — see trackRenderCompleted below, which fires this
+ * after the download/UI state is already settled.
+ */
+function probeVideoPlayability(url: string, timeoutMs = 3000): Promise<boolean | null> {
+  return new Promise((resolve) => {
+    let done = false;
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+
+    const finish = (result: boolean | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      video.removeEventListener('loadedmetadata', onLoaded);
+      video.removeEventListener('error', onError);
+      video.src = '';
+      resolve(result);
+    };
+    const onLoaded = () => finish(Number.isFinite(video.duration) && video.duration > 0);
+    const onError = () => finish(false);
+    const timer = setTimeout(() => finish(null), timeoutMs);
+
+    video.addEventListener('loadedmetadata', onLoaded);
+    video.addEventListener('error', onError);
+    video.src = url;
+  });
+}
 
 const OF_PHASE_LABEL: Record<OFPhase, string> = {
   interpolating: 'Interpolating frames…',
@@ -67,6 +113,37 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const bridgeRef = useRef<FFmpegBridge | null>(null);
 
   const tier = planTierFor(!!user, isPro);
+
+  // Shared analytics context builder — every export_* event references the
+  // same exportId (exportIdRef.current) so they can be joined/deduped by
+  // export. isDemoClip is always false: no demo-clip loader exists anywhere
+  // in this app yet (see DropZone.tsx's clip_loaded, which is always 'own') —
+  // the field exists so the funnel already distinguishes it the moment one ships.
+  const buildExportEventContext = useCallback(
+    (): ExportEventContext => ({
+      exportId: exportIdRef.current ?? 'unknown',
+      tier,
+      resolution: exportResolution,
+      blurEnabled: blurSettings.enabled,
+      ofEnabled: ofSettings.enabled,
+      isDemoClip: false,
+    }),
+    [tier, exportResolution, blurSettings.enabled, ofSettings.enabled],
+  );
+
+  // Fires export_render_completed AFTER the UI has already been updated
+  // (setDownloadUrl/setPhase in the caller) — the playability probe can take
+  // up to a few seconds and must never delay the download or the "done" UI.
+  const trackRenderCompleted = useCallback(
+    (url: string, startedAtMs: number | null) => {
+      const durationMs = startedAtMs ? Date.now() - startedAtMs : 0;
+      const ctx = buildExportEventContext();
+      void probeVideoPlayability(url).then((validated) => {
+        trackEvent(exportRenderCompletedEvent(ctx, durationMs, validated));
+      });
+    },
+    [buildExportEventContext],
+  );
 
   // Capability check (see DropZone.tsx for the same check, shown earlier as a
   // dismissible warning) — this is the hard block: computed once since
@@ -139,9 +216,18 @@ export function ExportModal({ onClose }: ExportModalProps) {
       setErrorMessage('');
       setExportProgress(0);
       setExporting(true);
-      setStartedAt(Date.now());
+      // Captured as a local, not read back from the `startedAt` state var in
+      // the callbacks below: those closures are created once per startExport
+      // call, before React re-renders with the new state, so `startedAt`
+      // inside them would still be whatever it was on the PREVIOUS render
+      // (typically null) — a classic stale-closure trap. The state is still
+      // set (for the UI's elapsed-time estimate, which re-reads it on every
+      // render), this local is only for these closures' own analytics use.
+      const exportStartTime = Date.now();
+      setStartedAt(exportStartTime);
       exportIdRef.current = crypto.randomUUID();
       recordedExportIdRef.current = null;
+      trackEvent(exportStartedEvent(buildExportEventContext()));
 
       const bridge = new FFmpegBridge();
       bridgeRef.current = bridge;
@@ -156,12 +242,15 @@ export function ExportModal({ onClose }: ExportModalProps) {
         setExportProgress(null);
         setExporting(false);
         setStartedAt(null);
+        trackRenderCompleted(url, exportStartTime);
       };
 
       const handleError = (message: string) => {
         // Full technical detail (e.g. an ffmpeg log dump) goes to the console,
-        // not the UI — see friendlyErrorMessage() for what the user sees.
+        // not the UI — see friendlyErrorMessage() for what the user sees. Only
+        // a coarse, closed-set stage tag (never the raw text) goes to analytics.
         console.error('[export] failed:', message);
+        trackEvent(exportFailedEvent(buildExportEventContext(), classifyErrorStage(message)));
         setErrorMessage(message);
         setPhase('error');
         setSubStatus('');
@@ -212,6 +301,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
             setExportProgress(null);
             setExporting(false);
             setStartedAt(null);
+            trackRenderCompleted(url, exportStartTime);
           },
           onError: handleError,
         });
@@ -225,9 +315,16 @@ export function ExportModal({ onClose }: ExportModalProps) {
       // an export is genuinely in flight.
       startInFlightRef.current = false;
     }
-  }, [project, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, audioSettings, useOFPipeline, setExportProgress, setExporting]);
+  }, [project, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, audioSettings, useOFPipeline, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
 
   const cancel = useCallback(() => {
+    // Only an actually-in-flight export (bridgeRef set by startExport, not
+    // yet cleared) counts as a real cancellation — this button is only shown
+    // during phase 'processing', but guard here too rather than trusting a
+    // possibly-stale `phase` closure value.
+    if (bridgeRef.current) {
+      trackEvent(exportCancelledEvent(buildExportEventContext(), startedAt ? Date.now() - startedAt : 0));
+    }
     bridgeRef.current?.cancelOpticalFlow();
     bridgeRef.current?.cancelBlurExport();
     bridgeRef.current?.cancel();
@@ -239,7 +336,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     setExportProgress(null);
     setExporting(false);
     setStartedAt(null);
-  }, [setExportProgress, setExporting]);
+  }, [setExportProgress, setExporting, buildExportEventContext, startedAt]);
 
   useEffect(() => {
     return () => {
@@ -284,11 +381,17 @@ export function ExportModal({ onClose }: ExportModalProps) {
     const safeName = baseName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
     anchor.download = safeName + '_rampified.mp4';
     anchor.click();
+    // download_initiated is distinct from export_render_completed (fired
+    // earlier, in trackRenderCompleted) — this is the "download initiated"
+    // half of the render-completed / download-initiated / user-confirmed
+    // split docs/validation/METRICS.md defines; it does NOT mean the browser
+    // actually finished saving the file, only that this anchor.click() ran.
+    trackEvent(downloadInitiatedEvent(buildExportEventContext()));
     // Record the export AFTER triggering the download so the user only consumes
     // a quota slot when the file actually starts downloading. The exportId
     // makes the server-side write idempotent across retries.
     void recordExport(exportId).then(() => setRemaining(getRemainingExports()));
-  }, [downloadUrl, phase, project]);
+  }, [downloadUrl, phase, project, buildExportEventContext]);
 
   useEffect(() => {
     if (phase !== 'processing') return;
@@ -707,6 +810,10 @@ export function ExportModal({ onClose }: ExportModalProps) {
                     const safeName = baseName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
                     anchor.download = safeName + '_rampified.mp4';
                     anchor.click();
+                    // Each manual repeat click is its own download_initiated —
+                    // it doesn't re-consume quota (see the effect above) but
+                    // is still a real, distinct user action worth counting.
+                    trackEvent(downloadInitiatedEvent(buildExportEventContext()));
                   }}
                   style={primaryBtn(false)}
                 >

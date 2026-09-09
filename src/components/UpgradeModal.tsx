@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getCurrentUserIdToken } from '@/lib/firebase';
 import { useEditorStore } from '@/store/editorStore';
+import { trackEvent } from '@/lib/analytics';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -54,6 +55,16 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
       abortRef.current?.abort();
     };
   }, []);
+
+  // upgrade_viewed — only for an actual offer view, not the "you're already
+  // Pro" confirmation panel rendered further down when isPro is true. App.tsx
+  // only mounts this component while isOpen is true, so this effectively
+  // fires once per modal open.
+  useEffect(() => {
+    if (isOpen && !isPro) {
+      trackEvent({ name: 'upgrade_viewed' });
+    }
+  }, [isOpen, isPro]);
 
   if (!isOpen) return null;
 
@@ -112,6 +123,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
       }
       // If the request was aborted (modal closed / timed out), don't navigate.
       if (controller.signal.aborted) return;
+      trackEvent({ name: 'checkout_started', props: { billingPeriod: billing } });
       window.location.href = redirectUrl;
     } catch (err) {
       if (controller.signal.aborted) {

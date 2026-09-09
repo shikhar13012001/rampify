@@ -10,8 +10,11 @@ interface SeoProps {
   jsonLd?: Record<string, unknown>[];
 }
 
-// Canonical base URL — matches the URL in index.html's <link rel="canonical">.
-const SITE_URL = 'https://rampify-eight.vercel.app';
+// Canonical base URL — matches the URL in index.html's <link rel="canonical">,
+// and the SITE_URL baked into scripts/prerender-seo.mjs's static output for
+// the prerendered routes. Exported so FeaturePageLayout.tsx doesn't keep its
+// own separate copy (it used to — see docs/validation/STATUS.md's H1 finding).
+export const SITE_URL = 'https://rampify-eight.vercel.app';
 
 export function Seo({ title, description, path, socialTitle, jsonLd }: SeoProps) {
   const canonicalUrl = `${SITE_URL}${path}`;

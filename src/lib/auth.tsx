@@ -5,10 +5,12 @@ import {
   signInWithCredential,
   signOut as fbSignOut,
   onAuthStateChanged,
+  getAdditionalUserInfo,
   type User,
 } from 'firebase/auth';
 import { auth, getCurrentUserIdToken } from './firebase';
 import { useEditorStore } from '@/store/editorStore';
+import { trackEvent } from './analytics';
 
 export type { User };
 
@@ -42,6 +44,13 @@ function initOneTap(onSuccess: (user: User) => void) {
     callback: async (response: { credential: string }) => {
       const credential = GoogleAuthProvider.credential(response.credential);
       const result = await signInWithCredential(auth, credential);
+      // getAdditionalUserInfo().isNewUser is true only on the request that
+      // actually created the Firebase account — every subsequent sign-in
+      // (same browser or a new one) reports false. This is what separates
+      // signup_completed from an ordinary login, per docs/validation/METRICS.md.
+      if (getAdditionalUserInfo(result)?.isNewUser) {
+        trackEvent({ name: 'signup_completed' });
+      }
       onSuccess(result.user);
     },
     auto_select: false,

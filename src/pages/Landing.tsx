@@ -1,10 +1,19 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { PricingTable } from '@/components/marketing/PricingTable';
 import { Seo } from '@/components/Seo';
+import { trackEvent } from '@/lib/analytics';
 
 export function Landing() {
+  useEffect(() => {
+    trackEvent({ name: 'landing_view' });
+    // Mount-once: a client-side route change back to "/" (e.g. via the logo
+    // link) re-mounts this component, which is the correct "new view" signal —
+    // no dependency array churn to worry about since there's nothing to depend on.
+  }, []);
+
   return (
     <div className="clay-page">
       <Seo

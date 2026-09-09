@@ -3,6 +3,7 @@ import { useEditorStore } from '@/store/editorStore';
 import { loadProjectState } from '@/lib/projectPersistence';
 import { readVideoMetadata, isAcceptedVideoFile, getRejectedFileMessage } from '@/lib/videoMetadata';
 import { checkExportCapabilities } from '@/lib/browserCapabilities';
+import { trackEvent } from '@/lib/analytics';
 
 function getSavedFileName(): string | null {
   try {
@@ -59,6 +60,25 @@ export function DropZone() {
         } else {
           setProject({ file: videoFile, segments: [] });
         }
+
+        // clip_loaded — always 'own' today: there is no bundled/demo-clip
+        // loader anywhere in this app (only the drag-drop / file-picker path
+        // above and the saved-session restore branch, both of which are the
+        // user's own file). The 'own' | 'demo' distinction the funnel needs
+        // is real in the schema now so a future demo-clip feature can set
+        // 'demo' without any analytics changes — see exportAnalytics.ts's
+        // ExportEventContext.isDemoClip doc comment for the same note.
+        trackEvent({
+          name: 'clip_loaded',
+          props: {
+            source: 'own',
+            isRestoredSession: !!saved,
+            durationSec: Math.round(videoFile.duration * 10) / 10,
+            width: videoFile.width,
+            height: videoFile.height,
+            sizeMB: videoFile.size != null ? Math.round((videoFile.size / (1024 * 1024)) * 10) / 10 : null,
+          },
+        });
       } catch (err) {
         setProject(null);
         setError(

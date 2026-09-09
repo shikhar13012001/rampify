@@ -2,8 +2,18 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, './package.json'), 'utf-8')) as { version: string };
 
 export default defineConfig({
+  // Exposed to client code as the literal string, so analytics events can
+  // report which build emitted them without a network round-trip. package.json's
+  // version isn't currently bumped per release (still "0.0.0") — see
+  // docs/validation/METRICS.md for that limitation.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

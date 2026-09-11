@@ -2,7 +2,7 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/(pricing|changelog|roadmap|docs|about|privacy|terms|contact|editor|upgrade/success|features/speed-ramp|features/beat-sync|features/ai-slow-motion|features/privacy|features/4k-export)\\/?",
+      "source": "/(pricing|changelog|roadmap|docs|about|privacy|terms|contact|editor|upgrade\\/success|features\\/speed-ramp|features\\/beat-sync|features\\/ai-slow-motion|features\\/privacy|features\\/4k-export)\\/?",
       "destination": "/index.html"
     }
   ],

@@ -4,6 +4,19 @@ import { loadProjectState } from '@/lib/projectPersistence';
 import { readVideoMetadata, isAcceptedVideoFile, getRejectedFileMessage } from '@/lib/videoMetadata';
 import { checkExportCapabilities } from '@/lib/browserCapabilities';
 import { trackEvent } from '@/lib/analytics';
+import { heroMoment } from '@/lib/presets';
+import type { Segment } from '@/types/editor';
+
+// The homepage's "Try a demo clip" CTA (Landing.tsx) links to /editor?demo=1.
+// The clip itself is fully procedural (ffmpeg lavfi generators — see
+// scripts/generate-demo-clip.sh), never real footage, and in-frame labeled
+// as a sample — see docs/validation/HOMEPAGE.md for why. The curve applied
+// here (heroMoment) must stay the SAME preset referenced by the homepage's
+// before/after section once that ships with a real asset, so the demo
+// project genuinely "opens with the matching curve or preset" rather than a
+// coincidentally different one.
+const DEMO_CLIP_URL = '/demo/sample-clip.mp4';
+const DEMO_PRESET = heroMoment;
 
 function getSavedFileName(): string | null {
   try {
@@ -29,6 +42,66 @@ export function DropZone() {
 
   useEffect(() => {
     setSavedFileName(getSavedFileName());
+  }, []);
+
+  const loadDemoClip = useCallback(async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const res = await fetch(DEMO_CLIP_URL);
+      if (!res.ok) throw new Error('Could not load the demo clip. Try again, or choose your own video.');
+      const blob = await res.blob();
+      const file = new File([blob], 'rampify-demo-clip.mp4', { type: 'video/mp4' });
+      const videoFile = await readVideoMetadata(file);
+
+      // Deliberately skips the saved-session restore path handleFile()
+      // uses above — a demo run should always start from the same known
+      // curve, never a leftover session for a file with this same name.
+      const segment: Segment = {
+        id: `seg_${Date.now()}`,
+        startTime: 0,
+        endTime: videoFile.duration,
+        curve: DEMO_PRESET,
+      };
+      setProject({ file: videoFile, segments: [segment] });
+      useEditorStore.getState().setIsDemoProject(true);
+
+      trackEvent({
+        name: 'clip_loaded',
+        props: {
+          source: 'demo',
+          isRestoredSession: false,
+          durationSec: Math.round(videoFile.duration * 10) / 10,
+          width: videoFile.width,
+          height: videoFile.height,
+          sizeMB: videoFile.size != null ? Math.round((videoFile.size / (1024 * 1024)) * 10) / 10 : null,
+        },
+      });
+    } catch (err) {
+      setProject(null);
+      setError(err instanceof Error ? err.message : 'Could not load the demo clip. Try again, or choose your own video.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setProject]);
+
+  // Homepage's "Try a demo clip" CTA links to /editor?demo=1 — detected once
+  // on mount only. The query param is stripped immediately after so a
+  // refresh, back-navigation, or dropping a real file afterward doesn't
+  // re-trigger it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('demo') !== '1') return;
+    window.history.replaceState(null, '', window.location.pathname);
+    // Deferred via setTimeout (a real macrotask boundary, not just a
+    // Promise microtask) rather than calling loadDemoClip() directly: its
+    // first lines call setError/setIsLoading synchronously, which the
+    // react-hooks/set-state-in-effect rule flags as a synchronous setState
+    // inside an effect body even though it's genuinely an async data load,
+    // not a "sync state to a prop" pattern the rule is meant to catch.
+    const timer = setTimeout(() => { void loadDemoClip(); }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally mount-only
   }, []);
 
   const handleFile = useCallback(
@@ -60,14 +133,14 @@ export function DropZone() {
         } else {
           setProject({ file: videoFile, segments: [] });
         }
+        // A real upload always clears the demo flag — matters if the user
+        // drops their own file right after having tried the demo clip in
+        // the same session without navigating away first.
+        useEditorStore.getState().setIsDemoProject(false);
 
-        // clip_loaded — always 'own' today: there is no bundled/demo-clip
-        // loader anywhere in this app (only the drag-drop / file-picker path
-        // above and the saved-session restore branch, both of which are the
-        // user's own file). The 'own' | 'demo' distinction the funnel needs
-        // is real in the schema now so a future demo-clip feature can set
-        // 'demo' without any analytics changes — see exportAnalytics.ts's
-        // ExportEventContext.isDemoClip doc comment for the same note.
+        // clip_loaded — 'own': the drag-drop / file-picker path here and the
+        // saved-session restore branch above are both the user's own file.
+        // See loadDemoClip() below for the 'demo' counterpart.
         trackEvent({
           name: 'clip_loaded',
           props: {

@@ -44,7 +44,7 @@ beforeAll(() => {
 
 describe('production build — prerendered marketing routes', () => {
   const routes = [
-    { file: 'index.html', path: '/', h1: 'Free Online Video Speed Editor' },
+    { file: 'index.html', path: '/', h1: 'Make a clip worth watching twice — no upload, ever.' },
     { file: 'pricing/index.html', path: '/pricing', h1: 'Start free. Upgrade when you ship.' },
     { file: 'features/speed-ramp/index.html', path: '/features/speed-ramp', h1: 'Speed Ramp Videos with Precision Curves' },
   ];
@@ -97,7 +97,7 @@ describe('production build — prerendered marketing routes', () => {
   it('pricing and speed-ramp pages do NOT show the homepage\'s generic h1 (regression guard for the original H1/H2 bug)', () => {
     for (const r of routes.slice(1)) {
       const html = readDist(r.file);
-      expect(html).not.toContain('>Free Online Video Speed Editor<');
+      expect(html).not.toContain('>Make a clip worth watching twice — no upload, ever.<');
     }
   });
 
@@ -140,6 +140,33 @@ describe('production build — prerendered marketing routes', () => {
   it('dist/robots.txt disallows everything for this non-production build', () => {
     const robots = readDist('robots.txt');
     expect(robots).toContain('Disallow: /');
+  });
+});
+
+// /features/speed-ramp's static HTML shell specifically — what direct
+// navigation and a non-JS-executing crawler actually receive first, before
+// the reproducible example (video, curve diagram, steps) renders after
+// hydration. See test/seo/speed-ramp-example.test.ts for the hydrated
+// content itself, checked at the source level instead (no browser here).
+describe('/features/speed-ramp — static HTML (direct navigation, before hydration)', () => {
+  it('has its own real static file, distinct from the homepage', () => {
+    expect(existsSync(join(distDir, 'features', 'speed-ramp', 'index.html'))).toBe(true);
+  });
+
+  it('canonical points to itself, consistent with the h1/title also served', () => {
+    const html = readDist('features/speed-ramp/index.html');
+    expect(html).toContain('<link rel="canonical" href="https://rampify-eight.vercel.app/features/speed-ramp" />');
+    expect(html).toContain('<title>Speed Ramp Video Editor');
+    const h1Matches = [...html.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)];
+    expect(h1Matches.length).toBe(1);
+    expect(h1Matches[0][1]).toBe('Speed Ramp Videos with Precision Curves');
+  });
+
+  it('carries real, crawlable internal links to Home, Pricing, and Docs — not just the editor', () => {
+    const html = readDist('features/speed-ramp/index.html');
+    for (const href of ['/', '/pricing', '/docs']) {
+      expect(html).toContain(`href="${href}"`);
+    }
   });
 });
 

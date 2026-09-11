@@ -65,9 +65,9 @@ const ROUTES = [
     title: 'Speed Ramp Videos Online — No Installs, No Uploads | Rampify',
     description:
       'Draw speed curves, AI slow motion, beat sync, and 4K export — all in the browser. Your footage never leaves your machine. Free to start, no installs required.',
-    h1: 'Free Online Video Speed Editor',
+    h1: 'Make a clip worth watching twice — no upload, ever.',
     intro:
-      'Rampify is a browser-based speed ramp editor. Draw speed curves, add AI slow motion, sync cuts to beats, and export up to 4K — entirely in the browser. No installs, no uploads. Your footage never leaves your machine.',
+      'Rampify is a browser-based speed ramp editor. Choose a clip already on your device, shape its speed with a curve, and preview the result instantly. Your footage stays on your machine the whole time.',
     breadcrumb: null,
   },
   {
@@ -97,6 +97,172 @@ const ROUTES = [
       { name: 'Home', item: SITE_URL },
       { name: 'Features', item: `${SITE_URL}/#features` },
       { name: 'Speed Ramp', item: `${SITE_URL}/features/speed-ramp` },
+    ],
+  },
+  // Extended to cover the rest of public/sitemap.xml's 13 URLs (this task's
+  // technical-SEO audit found these 10 still self-canonicalized to "/" and
+  // served the homepage's title/description in the raw HTTP response —
+  // duplicate-content at sitemap scale). Every title/description/h1 below is
+  // copied verbatim from that page's own <Seo>/<FeaturePageLayout> props or
+  // real <h1> text (see src/pages/*.tsx) — none of it is newly authored, so
+  // raw HTML and the hydrated DOM can't drift apart. Body content stays
+  // minimal (no per-page custom intro paragraph beyond the real description)
+  // — the smallest fix that closes the duplicate-canonical/title problem for
+  // all 13 sitemap URLs, not a full content-prerendering pass for every page.
+  {
+    path: '/features/beat-sync',
+    outFile: 'features/beat-sync/index.html',
+    title: 'Beat Sync — Auto-Sync Video Cuts to Music | Rampify',
+    description:
+      'Beat sync detects BPM and onset times with STFT spectral flux analysis, then snaps speed-curve keypoints to the beat. No manual tapping required.',
+    h1: 'Sync Video Cuts to the Beat Automatically',
+    intro:
+      'Beat sync detects BPM and onset times with STFT spectral flux analysis, then snaps speed-curve keypoints to the beat. No manual tapping required.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Features', item: `${SITE_URL}/#features` },
+      { name: 'Beat Sync', item: `${SITE_URL}/features/beat-sync` },
+    ],
+  },
+  {
+    path: '/features/ai-slow-motion',
+    outFile: 'features/ai-slow-motion/index.html',
+    title: 'AI Slow Motion — RIFE Frame Interpolation in Browser | Rampify',
+    description:
+      'AI slow motion via RIFE neural network runs in your browser with ONNX Runtime Web. GPU-accelerated when available, CPU fallback otherwise. No uploads, no cloud GPU.',
+    h1: 'AI Slow Motion with RIFE, In Your Browser',
+    intro:
+      'AI slow motion via RIFE neural network runs in your browser with ONNX Runtime Web. GPU-accelerated when available, CPU fallback otherwise. No uploads, no cloud GPU.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Features', item: `${SITE_URL}/#features` },
+      { name: 'AI Slow Motion', item: `${SITE_URL}/features/ai-slow-motion` },
+    ],
+  },
+  {
+    path: '/features/4k-export',
+    outFile: 'features/4k-export/index.html',
+    title: '4K Video Export in the Browser — No Installs | Rampify',
+    description: 'Export speed-ramped video at up to 4K resolution via ffmpeg.wasm. MP4 (H.264). Local-first — no uploads, no cloud rendering.',
+    h1: 'Export 4K Video from Your Browser',
+    intro: 'Export speed-ramped video at up to 4K resolution via ffmpeg.wasm. MP4 (H.264). Local-first — no uploads, no cloud rendering.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Features', item: `${SITE_URL}/#features` },
+      { name: '4K Export', item: `${SITE_URL}/features/4k-export` },
+    ],
+  },
+  {
+    path: '/features/privacy',
+    outFile: 'features/privacy/index.html',
+    title: 'Privacy-First Video Editing — No Uploads, No Cloud | Rampify',
+    description:
+      'Rampify is local-first: your video is processed in your browser via WebAssembly. No uploads, no cloud rendering, no surveillance. Your footage never leaves your machine.',
+    h1: 'Your Footage Never Leaves Your Machine',
+    intro:
+      'Rampify is local-first: your video is processed in your browser via WebAssembly. No uploads, no cloud rendering, no surveillance. Your footage never leaves your machine.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Features', item: `${SITE_URL}/#features` },
+      { name: 'Privacy', item: `${SITE_URL}/features/privacy` },
+    ],
+  },
+  {
+    path: '/docs',
+    outFile: 'docs/index.html',
+    title: 'Docs — Rampify Video Speed Editor Help & Tutorials',
+    description:
+      'Rampify documentation: speed curve editor, AI slow motion, beat sync, motion blur, 4K export, and privacy. Learn how to ramp video speed in the browser.',
+    h1: 'Learn Rampify',
+    intro:
+      'Rampify documentation: speed curve editor, AI slow motion, beat sync, motion blur, 4K export, and privacy. Learn how to ramp video speed in the browser.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Docs', item: `${SITE_URL}/docs` },
+    ],
+  },
+  {
+    path: '/changelog',
+    outFile: 'changelog/index.html',
+    title: "Changelog — Rampify Update History & New Features",
+    description:
+      "Rampify release notes: AI frame interpolation, beat sync, motion blur, 4K export, and editor improvements. See what's new in the browser-based speed ramp editor.",
+    h1: "What's new",
+    intro:
+      "Rampify release notes: AI frame interpolation, beat sync, motion blur, 4K export, and editor improvements. See what's new in the browser-based speed ramp editor.",
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Changelog', item: `${SITE_URL}/changelog` },
+    ],
+  },
+  {
+    path: '/roadmap',
+    outFile: 'roadmap/index.html',
+    title: "Roadmap — What's Next for Rampify Speed Editor",
+    description:
+      'Rampify public roadmap: timeline ruler, multi-clip project support, keyboard shortcut editor, LUTs, caption track, and more. Vote on what we build next.',
+    h1: 'Where Rampify is going',
+    intro:
+      'Rampify public roadmap: timeline ruler, multi-clip project support, keyboard shortcut editor, LUTs, caption track, and more. Vote on what we build next.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Roadmap', item: `${SITE_URL}/roadmap` },
+    ],
+  },
+  {
+    path: '/about',
+    outFile: 'about/index.html',
+    title: 'About — Rampify: Local-First Video Speed Editor',
+    description:
+      'Rampify is a local-first, browser-based video speed ramping editor. No uploads, no cloud rendering. Built on ffmpeg.wasm, RIFE AI, and WebAssembly.',
+    h1: 'Speed ramping, without the friction.',
+    intro:
+      'Rampify is a local-first, browser-based video speed ramping editor. No uploads, no cloud rendering. Built on ffmpeg.wasm, RIFE AI, and WebAssembly.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'About', item: `${SITE_URL}/about` },
+    ],
+  },
+  {
+    path: '/contact',
+    outFile: 'contact/index.html',
+    title: 'Contact — Rampify Support & Inquiries',
+    description:
+      'Contact the Rampify team: general inquiries at hello@rampify.app, bug reports, partnership ideas, or feedback. We email you back, no ticketing system.',
+    h1: 'Say hello',
+    intro:
+      'Contact the Rampify team: general inquiries at hello@rampify.app, bug reports, partnership ideas, or feedback. We email you back, no ticketing system.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Contact', item: `${SITE_URL}/contact` },
+    ],
+  },
+  {
+    path: '/privacy',
+    outFile: 'privacy/index.html',
+    title: 'Privacy Policy — Local-First Video Editing | Rampify',
+    description:
+      'Rampify privacy policy: your video footage never leaves your device. We collect only your email and subscription status. No ads, no cross-site tracking, no data sales.',
+    h1: 'Privacy Policy',
+    intro:
+      'Rampify privacy policy: your video footage never leaves your device. We collect only your email and subscription status. No ads, no cross-site tracking, no data sales.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Privacy', item: `${SITE_URL}/privacy` },
+    ],
+  },
+  {
+    path: '/terms',
+    outFile: 'terms/index.html',
+    title: 'Terms of Service — Rampify Video Speed Editor',
+    description:
+      'Rampify terms of service: acceptable use, subscription billing, refunds, and liability for a browser-based local-first video editing tool.',
+    h1: 'Terms of Service',
+    intro:
+      'Rampify terms of service: acceptable use, subscription billing, refunds, and liability for a browser-based local-first video editing tool.',
+    breadcrumb: [
+      { name: 'Home', item: SITE_URL },
+      { name: 'Terms', item: `${SITE_URL}/terms` },
     ],
   },
 ];

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getCurrentUserIdToken } from '@/lib/firebase';
 import { useEditorStore } from '@/store/editorStore';
 import { trackEvent } from '@/lib/analytics';
+import { getPreferredBillingPeriod, setPreferredBillingPeriod } from '@/lib/billingPreference';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -37,7 +38,16 @@ function isTrustedCheckoutUrl(url: string): boolean {
 }
 
 export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
-  const [billing, setBilling] = useState<BillingCycle>('monthly');
+  // Initialized from sessionStorage, not a hardcoded 'monthly' default, so a
+  // plan chosen before this modal had to close (e.g. to sign in, or from
+  // the pricing page — see PricingTable.tsx) survives the remount. App.tsx
+  // only mounts this component while isOpen is true, so every open is a
+  // fresh mount that would otherwise have reset this to 'monthly' every time.
+  const [billing, setBillingState] = useState<BillingCycle>(() => getPreferredBillingPeriod());
+  const setBilling = (period: BillingCycle) => {
+    setBillingState(period);
+    setPreferredBillingPeriod(period);
+  };
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('idle');
   const [checkoutError, setCheckoutError] = useState('');
   const user = useEditorStore(s => s.user);

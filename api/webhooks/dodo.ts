@@ -220,10 +220,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         break;
       }
 
+      // ── Revoke Pro on a successful refund ────────────────────────────────
+      // Confirmed bug, fixed in this task's billing audit: this used to be
+      // in the "informational — no tier change" list below, meaning a
+      // refunded customer kept Pro access indefinitely — directly
+      // contradicting Pricing.tsx's own refund-policy FAQ. Refund's payload
+      // shape has a `customer` but no `metadata` (unlike Payment/
+      // Subscription — see BillingEvent's doc comment above), so this goes
+      // straight to the customer_id lookup rather than resolveUserId()'s
+      // metadata-first path, which doesn't apply to this payload type.
+      // Applies to partial refunds too (not just full ones) — the
+      // conservative choice: keeping Pro access after ANY refund the
+      // customer didn't have corrected is worse than a partial refund
+      // occasionally over-triggering a downgrade a support agent can fix.
+      case 'refund.succeeded': {
+        // Same TS limitation noted above for BillingEvent: the compiler can't
+        // correlate `event.type` with `event.data.payload_type` across this
+        // switch, so a cast is needed here too — safe per Dodo's API
+        // contract, a refund.succeeded event's data is always a Refund payload.
+        const refundEvent = event as DodoEvent & { data: Extract<DodoEvent['data'], { payload_type: 'Refund' }> };
+        await downgradeByCustomer(db, refundEvent.data.customer?.customer_id);
+        break;
+      }
+
       // ── Informational — no tier change ────────────────────────────────────
       case 'payment.processing':
       case 'subscription.plan_changed':
-      case 'refund.succeeded':
       case 'refund.failed':
       case 'dispute.opened':
       case 'dispute.expired':

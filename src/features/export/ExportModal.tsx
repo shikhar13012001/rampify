@@ -78,6 +78,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const project  = useEditorStore((state) => state.project);
   const user     = useEditorStore((state) => state.user);
   const isPro    = useEditorStore((state) => state.isPro);
+  const isDemoProject = useEditorStore((state) => state.isDemoProject);
   const setExportProgress = useEditorStore((state) => state.setExportProgress);
   const setExporting = useEditorStore((state) => state.setExporting);
   const blurSettings = useEditorStore((state) => state.blurSettings);
@@ -116,9 +117,10 @@ export function ExportModal({ onClose }: ExportModalProps) {
 
   // Shared analytics context builder — every export_* event references the
   // same exportId (exportIdRef.current) so they can be joined/deduped by
-  // export. isDemoClip is always false: no demo-clip loader exists anywhere
-  // in this app yet (see DropZone.tsx's clip_loaded, which is always 'own') —
-  // the field exists so the funnel already distinguishes it the moment one ships.
+  // export. isDemoClip comes straight from the store's isDemoProject flag,
+  // set by DropZone.tsx's loadDemoClip()/handleFile() — so an export of the
+  // homepage's demo clip is correctly excluded from qualifiesAsActivation()
+  // (exportAnalytics.ts), never conflated with a real own-clip export.
   const buildExportEventContext = useCallback(
     (): ExportEventContext => ({
       exportId: exportIdRef.current ?? 'unknown',
@@ -126,9 +128,9 @@ export function ExportModal({ onClose }: ExportModalProps) {
       resolution: exportResolution,
       blurEnabled: blurSettings.enabled,
       ofEnabled: ofSettings.enabled,
-      isDemoClip: false,
+      isDemoClip: isDemoProject,
     }),
-    [tier, exportResolution, blurSettings.enabled, ofSettings.enabled],
+    [tier, exportResolution, blurSettings.enabled, ofSettings.enabled, isDemoProject],
   );
 
   // Fires export_render_completed AFTER the UI has already been updated

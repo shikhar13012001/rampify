@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { PricingTable } from '@/components/marketing/PricingTable';
+import { BeforeAfterDemo } from '@/components/marketing/BeforeAfterDemo';
 import { Seo } from '@/components/Seo';
 import { trackEvent } from '@/lib/analytics';
+import { SIGNED_IN_FREE_LIMIT } from '@/lib/planConfig';
 
 export function Landing() {
   useEffect(() => {
@@ -25,6 +27,10 @@ export function Landing() {
 
       {/* ── Hero band ────────────────────────────────────────────────────── */}
       <HeroBand />
+
+      {/* ── Before/after — renders nothing until a real export asset exists;
+           see BeforeAfterDemo.tsx and docs/validation/HOMEPAGE.md ────────── */}
+      <BeforeAfterDemo />
 
       {/* ── Logo cloud ───────────────────────────────────────────────────── */}
       <LogoCloud />
@@ -104,11 +110,11 @@ function HeroBand() {
             animationDelay: '0.05s',
           }}
         >
-          Speed ramp
+          Make a clip
           <br />
-          your videos.
+          worth watching twice.
           <br />
-          <span style={{ color: 'var(--color-clay-pink)' }}>No installs.</span>
+          <span style={{ color: 'var(--color-clay-pink)' }}>No upload, ever.</span>
         </h1>
 
         <p
@@ -120,7 +126,19 @@ function HeroBand() {
             animationDelay: '0.1s',
           }}
         >
-          Drop a clip, draw your speed curve, and export without leaving the browser. Precise timing control without the timeline clutter — powered by ffmpeg.wasm and RIFE AI interpolation.
+          Choose a clip already on your device, shape its speed with a curve, and preview the result instantly. Your footage stays on your machine the whole time.
+        </p>
+        <p
+          className="clay-reveal"
+          style={{
+            margin: '10px 0 0',
+            maxWidth: 480,
+            fontSize: 13,
+            color: 'var(--color-clay-ink-muted)',
+            animationDelay: '0.12s',
+          }}
+        >
+          Runs on ffmpeg.wasm and RIFE frame interpolation, entirely in the browser.
         </p>
 
         <div
@@ -145,12 +163,12 @@ function HeroBand() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-2px)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(0)'; }}
           >
-            Start editing free
+            Choose your video
             <ArrowRight />
           </Link>
 
-          <a
-            href="#features"
+          <Link
+            to="/editor?demo=1"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -166,9 +184,27 @@ function HeroBand() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'var(--color-clay-card)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'; }}
           >
-            See how it works
-          </a>
+            Try a demo clip
+          </Link>
         </div>
+
+        {/* Free-plan limits + supported-browser guidance, right next to the
+            CTAs — SIGNED_IN_FREE_LIMIT is the same constant that gates
+            exports server-side (planConfig.ts), and the browser wording
+            matches the exact copy shown in the export-capability warnings
+            (DropZone.tsx / ExportModal.tsx) so this line never drifts from
+            what the app actually enforces. */}
+        <p
+          className="clay-reveal"
+          style={{
+            margin: '14px 0 0',
+            fontSize: 12,
+            color: 'var(--color-clay-ink-muted)',
+            animationDelay: '0.17s',
+          }}
+        >
+          Free: {SIGNED_IN_FREE_LIMIT} exports/month, sign in to export · Try an up-to-date Chrome, Firefox, or Edge
+        </p>
 
         {/* Trust line */}
         <div

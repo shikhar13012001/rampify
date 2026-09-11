@@ -71,6 +71,12 @@ interface EditorState {
   exportsRemaining: number;
   // Global upgrade modal (opened from any locked feature)
   upgradeModalOpen: boolean;
+  // True while the currently-loaded project is the homepage's bundled demo
+  // clip (see DropZone.tsx's loadDemoClip()), false for anything the user
+  // supplied themselves. Read by ExportModal.tsx to tag export_* analytics
+  // events so demo activity never counts toward own-clip activation (see
+  // src/lib/exportAnalytics.ts's qualifiesAsActivation()).
+  isDemoProject: boolean;
 }
 
 interface EditorActions {
@@ -99,6 +105,7 @@ interface EditorActions {
   setExportCounts: (thisMonth: number, remaining: number) => void;
   setUpgradeModalOpen: (open: boolean) => void;
   setAuthLoading: (loading: boolean) => void;
+  setIsDemoProject: (isDemo: boolean) => void;
 }
 
 export const useEditorStore = create<EditorState & EditorActions>((set) => ({
@@ -122,9 +129,10 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   audioSettings: { preservePitch: true },
   exportResolution: '1080p',
   beatMarkers: [],
+  isDemoProject: false,
 
   setProject: (project) =>
-    set({
+    set((state) => ({
       project: hasValidProjectFile(project)
         ? {
             ...project,
@@ -140,7 +148,13 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
       exportProgress: null,
       isExporting: false,
       history: [],
-    }),
+      // Clearing the project always clears the demo flag too — "no project
+      // loaded" can't also be "a demo project is loaded". Loading a NEW
+      // project (demo or real) leaves this alone; the caller (DropZone.tsx)
+      // is responsible for calling setIsDemoProject() itself right alongside
+      // setProject() for that case.
+      isDemoProject: project === null ? false : state.isDemoProject,
+    })),
 
   setPlayheadTime: (playheadTime) => set({ playheadTime }),
 
@@ -418,6 +432,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
     set({ exportsThisMonth, exportsRemaining }),
   setUpgradeModalOpen: (upgradeModalOpen) => set({ upgradeModalOpen }),
   setAuthLoading: (isAuthLoading) => set({ isAuthLoading }),
+  setIsDemoProject: (isDemoProject) => set({ isDemoProject }),
 }));
 
 // Dev-only test hook — lets an external driver (e.g. the Playwright

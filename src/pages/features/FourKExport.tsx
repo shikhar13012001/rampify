@@ -5,17 +5,16 @@ export function FourKExportFeature() {
     <FeaturePageLayout
       path="/features/4k-export"
       title="4K Video Export in the Browser — No Installs | Rampify"
-      description="Export speed-ramped video at up to 4K resolution via ffmpeg.wasm. MP4 (H.264) or WebM (VP9). Local-first — no uploads, no cloud rendering."
+      description="Export speed-ramped video at up to 4K resolution via ffmpeg.wasm. MP4 (H.264). Local-first — no uploads, no cloud rendering."
       eyebrow="4K export"
       h1="Export 4K Video from Your Browser"
-      intro="Rampify encodes your edited timeline to MP4 or WebM at up to 3840×2160 using ffmpeg.wasm in a Web Worker. The file is written directly to your disk — no upload, no cloud queue, no waiting in line."
+      intro="Rampify encodes your edited timeline to MP4 at up to 3840×2160 using ffmpeg.wasm in a Web Worker. The file is written directly to your disk — no upload, no cloud queue, no waiting in line."
     >
       <FeatureSection heading="Formats and resolutions">
         <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
-          <li><strong>MP4 (H.264)</strong> — universal compatibility. Up to 4K on Pro, 1080p on Free.</li>
-          <li><strong>WebM (VP9)</strong> — smaller files, modern browsers. Up to 4K on Pro.</li>
-          <li><strong>Resolution options</strong> — 720p, 1080p, 1440p, 2160p (4K).</li>
-          <li><strong>Frame rate</strong> — matches source by default; override up to 60fps.</li>
+          <li><strong>MP4 (H.264)</strong> — the only export format. Universal compatibility.</li>
+          <li><strong>Resolution options</strong> — 1080p on Free, 1080p or 4K (2160p) on Pro.</li>
+          <li><strong>Frame rate</strong> — matches your source clip's frame rate; there's no separate override.</li>
         </ul>
       </FeatureSection>
 

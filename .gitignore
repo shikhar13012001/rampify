@@ -27,3 +27,9 @@ dist-ssr
 api/keys/
 
 .vercel
+
+# Owner-provided analytics/Search Console exports for the weekly reporting
+# workflow (docs/validation/WEEKLY_REPORT.md) — raw data, never committed.
+# See validation-data/README.md (tracked) for the expected file formats.
+validation-data/*
+!validation-data/README.md

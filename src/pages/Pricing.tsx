@@ -44,76 +44,13 @@ export function Pricing() {
         </div>
       </section>
 
+      {/* PricingTable now includes its own comparison table (Free vs. Pro
+          only, sourced from planConfig.ts) — the separate, Studio-including,
+          720p-claiming comparison table that used to live here was removed
+          as a duplicate. See docs/validation/BILLING.md. */}
       <section style={{ padding: '32px 24px 96px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <PricingTable />
-        </div>
-      </section>
-
-      {/* Comparison table */}
-      <section style={{ padding: '0 24px 96px' }}>
-        <div style={{ maxWidth: 800, margin: '0 auto' }}>
-          <h2
-            className="clay-display"
-            style={{ margin: '0 0 32px', fontSize: 'clamp(28px, 3vw, 36px)', textAlign: 'center' }}
-          >
-            Compare plans
-          </h2>
-
-          <div
-            style={{
-              borderRadius: 24,
-              border: '1px solid var(--color-clay-line)',
-              overflow: 'hidden',
-              backgroundColor: 'var(--color-clay-canvas)',
-            }}
-          >
-            {COMPARISON_ROWS.map((row, i) => (
-              <div
-                key={row.label}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                  padding: '16px 24px',
-                  borderBottom: i < COMPARISON_ROWS.length - 1 ? '1px solid var(--color-clay-line)' : 'none',
-                  backgroundColor: row.header ? 'var(--color-clay-card)' : 'transparent',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: row.header ? 12 : 14,
-                    fontWeight: row.header ? 600 : 500,
-                    textTransform: row.header ? 'uppercase' : 'none',
-                    letterSpacing: row.header ? '0.08em' : '0',
-                    color: 'var(--color-clay-ink)',
-                  }}
-                >
-                  {row.label}
-                </div>
-                {row.values.map((val, j) => (
-                  <div
-                    key={j}
-                    style={{
-                      fontSize: 14,
-                      fontWeight: row.header ? 600 : 400,
-                      color: 'var(--color-clay-ink-soft)',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {val === true ? (
-                      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ display: 'inline-block' }}>
-                        <path d="M3 8.5l3.5 3.5L13 5" stroke="var(--color-clay-teal-bright)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    ) : val === false ? (
-                      <span style={{ color: 'var(--color-clay-ink-muted)', opacity: 0.4 }}>—</span>
-                    ) : (
-                      val
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -157,24 +94,10 @@ export function Pricing() {
   );
 }
 
-const COMPARISON_ROWS = [
-  { label: 'Feature', values: ['Free', 'Pro', 'Studio (soon)'], header: true },
-  { label: 'Monthly exports', values: ['3', 'Unlimited', 'Unlimited'] },
-  { label: 'Max resolution', values: ['720p', '4K', '8K'] },
-  { label: 'Watermark', values: [false, false, false] },
-  { label: 'Speed curve editor', values: [true, true, true] },
-  { label: 'Motion blur', values: ['Balanced', 'All presets', 'All presets'] },
-  { label: 'AI frame interpolation', values: [false, true, true] },
-  { label: 'Beat sync', values: [false, true, true] },
-  { label: 'Batch processing API', values: [false, false, true] },
-  { label: 'Team seats', values: ['1', '1', '5'] },
-  { label: 'Support', values: ['Community', 'Priority', 'Dedicated'] },
-];
-
 const BILLING_FAQS = [
   {
     q: 'Can I cancel anytime?',
-    a: 'Yes. Cancel from the account menu with one click. No questions, no retention emails. Your Pro access continues until the end of your billing period, then you drop to the free plan.',
+    a: 'Yes, and there\'s no retention flow or cancellation questionnaire. Open the account menu and choose "Manage subscription" — that takes you to our billing partner\'s customer portal, where you confirm the cancellation. Your Pro access continues until the end of your billing period, then you drop to the free plan.',
   },
   {
     q: 'What payment methods do you accept?',

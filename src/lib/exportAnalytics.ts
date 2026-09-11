@@ -14,11 +14,11 @@ export interface ExportEventContext {
   resolution: '1080p' | '4k';
   blurEnabled: boolean;
   ofEnabled: boolean;
-  /** true for a bundled/demo clip, false for a clip the user supplied
-   *  themselves. See DropZone.tsx / clip_loaded — no demo-clip loading UI
-   *  exists in the app yet, so this is currently always false in practice;
-   *  the field exists so the funnel can already distinguish it the moment
-   *  one ships, and so qualifiesAsActivation() below has something to check. */
+  /** true for the homepage's bundled demo clip, false for a clip the user
+   *  supplied themselves. Sourced from editorStore's isDemoProject flag —
+   *  see DropZone.tsx's loadDemoClip() (sets it true) and handleFile() (sets
+   *  it false). Used by qualifiesAsActivation() below to exclude demo runs
+   *  from own-clip activation counting. */
   isDemoClip: boolean;
 }
 

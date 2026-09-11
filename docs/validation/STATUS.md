@@ -571,7 +571,348 @@ sessionStorage-tracked event to a later signup — currently nothing does that c
     197/197 (was 177/177 before this task; +20 for the 2 new SEO test
     files). `npm run lint` — same 1 pre-existing `DropZone.tsx` error.
 
+- **Homepage & first-use experience task (2026-09-09)** — full detail in
+  `docs/validation/HOMEPAGE.md`; summarized here per WORKING_AGREEMENT §8.
+  Reframes the homepage hero and adds a real "try it now" first-use path
+  around one promise: a useful speed-ramped clip without uploading footage.
+  - **Hero rewrite** (`Landing.tsx`): outcome-first headline/copy, tech
+    details moved below and visually de-emphasized, two CTAs — "Choose your
+    video" (`/editor`) and new "Try a demo clip" (`/editor?demo=1`) — plus a
+    free-limit + browser-support line right under them, sourced from the
+    real `SIGNED_IN_FREE_LIMIT` constant and the exact existing capability-
+    warning copy (not new/invented claims). Visual identity (Clay design
+    system, layout, the curve mockup visual) untouched.
+  - **Before/after demo NOT fabricated**: `BeforeAfterDemo.tsx` is a fully
+    built, reduced-motion-aware component gated behind
+    `BEFORE_AFTER_ASSET.available` (currently `false` — renders nothing on
+    the live page). No real, rights-established export asset exists in this
+    repo or could be produced in this environment (no browser — same
+    constraint as the rest of this sprint). The exact required asset (a
+    licensed source clip, exported through the real app with the "Hero
+    Moment" preset, plus poster frames) is documented in HOMEPAGE.md as an
+    explicit open item, not silently skipped.
+  - **Demo project, real and working**: `DropZone.tsx`'s `loadDemoClip()`
+    (triggered by `/editor?demo=1`) fetches a new procedurally-generated
+    sample clip (`public/demo/sample-clip.mp4`, ffmpeg `mandelbrot` + tone,
+    in-frame labeled "not real footage" — `scripts/generate-demo-clip.sh`)
+    and applies the "Hero Moment" preset curve — the same preset named in
+    the before/after asset spec, so the two stay consistent once that asset
+    exists. This is legitimately real (not fabricated): it's a functional
+    sample to try the tool with, not a claimed finished demonstration, and
+    the export a user gets from it is a genuine real export.
+  - **Demo activity now genuinely separated from own-clip activation**:
+    `editorStore.ts` gained `isDemoProject` (set by `loadDemoClip()`/
+    `handleFile()`, reset on `setProject(null)`); `ExportModal.tsx`'s
+    analytics context now reads it instead of a hardcoded `false` — closes
+    the gap flagged in the analytics task ("infrastructure for a feature
+    that doesn't exist yet") now that the feature exists.
+    `qualifiesAsActivation()`'s existing exclusion logic is now actually
+    exercised for real.
+  - **No large-asset preload**: verified via build output — the homepage's
+    own bundle grew ~3KB (copy/component code only); the lazy `EditorRoute`
+    chunk and the ffmpeg/ONNX wasm chunk sizes are unchanged.
+  - **Kept in sync**: `index.html`'s pre-hydration fallback and
+    `scripts/prerender-seo.mjs`'s homepage entry (from the SEO task,
+    same session) were updated to match the new hero copy — otherwise this
+    task would have reintroduced the exact raw-HTML/hydrated-DOM mismatch
+    the SEO task had just fixed.
+  - **Tests**: `src/store/editorStore.test.ts` (new, real store logic),
+    `src/lib/presets.test.ts` (new, catalog integrity + the demo preset's
+    presence), `test/homepage/demo-clip.test.ts` (new, real asset file
+    validation), `test/homepage/hero-cta.test.ts` (new, static routing/copy
+    consistency checks). 213/213 passing (was 197/197 before this task).
+  - **Not verified — explicit, same honesty standard as every prior task
+    this sprint**: keyboard access, small-screen layout, reduced-motion
+    behavior, demo loading, CTA routing, and the complete first-use journey
+    all require a real browser and were not exercised. HOMEPAGE.md has the
+    full manual checklist for each. No screenshots were produced — this
+    environment has no browser/screenshot tool, and the before/after asset
+    they'd depend on doesn't exist yet either.
+  - Fresh baseline: `npm run build` — pass, zero type errors. `npm run
+    test` — pass, 17 files, 213/213. `npm run lint` — same 1 pre-existing
+    `DropZone.tsx` error as every prior task (two NEW set-state-in-effect
+    violations this task's own code initially introduced were fixed, not
+    left alongside the pre-existing one).
+
+- **/features/speed-ramp reproducible-example task (2026-09-09)** — full
+  detail in `docs/validation/SPEED_RAMP_EXAMPLE.md`; summarized here per
+  WORKING_AGREEMENT §8. Improves the existing feature page in place (no new
+  route, no CMS, no comparison-page factory) around one worked, reproducible
+  example, distinct in purpose from the homepage (homepage = choose the
+  tool; this page = learn one specific workflow).
+  - **One real, reproducible example added**: the same procedurally-
+    generated sample clip from the homepage task (real ffprobe specs shown:
+    640×360, 30fps, 6s), the actual "Hero Moment" preset imported directly
+    from `presets.ts` (not re-typed), a static SVG diagram plotted from its
+    real 6 control points (drawn piecewise-linear — matching what export
+    actually renders, not the smoothed preview — and the caption says so),
+    numbered reproduction steps matching the real UI flow, a technically-
+    grounded "when slow motion looks poor" explanation (frame-holding vs.
+    AI interpolation, referencing CLAUDE.md's already-documented hardware
+    limitation), and export/free-plan limits pulled from the real
+    `SIGNED_IN_FREE_LIMIT`/`FREE_BLUR_INTENSITY` constants.
+  - **"Finished result" honestly not fabricated**: no real app-produced
+    export of this clip exists (no browser in this environment, same
+    constraint as the rest of this sprint). Rather than fake one or show
+    nothing, the page's CTA ("Reproduce this in the editor" →
+    `/editor?demo=1`, reusing the homepage task's exact demo-loading
+    mechanism) makes seeing the real result the reproduction step itself.
+  - **Three pre-existing false claims found and corrected** while auditing
+    this exact content against the real codebase: a stale, wrong preset
+    list ("ramp up, ramp down, smooth, bounce, freeze" — none are real
+    presets), a false "WebM (VP9)" export claim (grepped the whole export
+    pipeline — MP4/H.264 only, always), and a false "negative speeds
+    (reverse) supported" claim (`curveMath.ts`'s `MIN_SPEED = 0.1` is a
+    hard floor; no reverse code path exists anywhere). All three
+    regression-guarded in the new tests.
+  - **Reused, not rebuilt**: `scripts/prerender-seo.mjs`'s
+    `/features/speed-ramp` entry, `Seo.tsx`/`FeaturePageLayout.tsx`'s
+    canonical/OG wiring, `FeatureSection`'s `<h2>` pattern, and the demo-
+    loading mechanism are all unchanged — only this page's body content
+    grew. Page still has exactly one `<h1>`.
+  - **Tests**: `test/seo/prerendered-routes.test.ts` extended with a real-
+    production-build describe block for this route's static HTML shell
+    (own file, self-consistent canonical/h1, real crawlable links).
+    `test/seo/speed-ramp-example.test.ts` (new) — source-level checks for
+    the hydrated-only example content plus the three false-claim regression
+    guards. 225/225 passing (was 213/213 before this task).
+  - **Not verified — explicit, same standard as every prior task**: direct
+    navigation, initial HTML, canonical consistency, internal links, and
+    the example-to-editor journey all require a real browser and were not
+    exercised. Full manual checklist in SPEED_RAMP_EXAMPLE.md.
+  - Fresh baseline: `npm run build` — pass, zero type errors. `npm run
+    test` — pass, 18 files, 225/225. `npm run lint` — same 1 pre-existing
+    `DropZone.tsx` error, unrelated.
+
+- **First-export usability research task (2026-09-09) — no research existed,
+  so none was fabricated.** A task asked to identify "the largest
+  first-export obstacles" from "actual user observations" in
+  `docs/validation/RESEARCH.md`. That file, and every other filename in
+  `docs/`, was checked (grepped for participant/observation/usability/
+  think-aloud/user-test language): zero matches — **no usability session of
+  any kind has ever been run on this app, on record.** Per that task's own
+  explicit instruction for exactly this case, no obstacle was invented, no
+  fix was implemented, and no ranking was produced.
+  - **Delivered instead**: `docs/validation/RESEARCH.md` — a research
+    instrument, clearly headed "NO SESSIONS HAVE BEEN RUN," containing the
+    first-export task script (outcome-based, not tool-based, so it observes
+    real behavior rather than instruction-following), session logistics
+    guidance, a per-participant observation log template with the exact
+    fields a real finding would need (what was attempted, what happened,
+    assistance needed, whether it prevented a usable export), explicit
+    guidance separating Observations from Interpretations from Feature
+    requests (with worked examples of each), a cross-participant
+    aggregation table for after real sessions run, the ranking rule
+    (impact on completing the existing workflow, not novelty), and a retest
+    script using the identical task for after any future fix ships.
+  - **No code changed.** No regression tests were added — there is no
+    changed behavior to regress-test, since implementing a fix without
+    supporting evidence is exactly what this task instructed against.
+    "Preserve the established offer and analytics definitions" is trivially
+    satisfied by not touching entitlement/analytics code at all this task.
+  - **Next real step, not taken by this task**: recruit 3-5 participants
+    unfamiliar with Rampify, run `RESEARCH.md`'s Section 1 task with each,
+    fill in Section 3 per session, then a follow-up task can do the actual
+    ranking/fixing this task's instructions describe — with real evidence
+    behind it.
+
+- **Paid conversion path audit (2026-09-09) — CRITICAL PROVIDER-CONFIG FINDING,
+  not fixed by this task.** Full detail in `docs/validation/BILLING.md`;
+  summarized here per WORKING_AGREEMENT §8.
+  - **`PRO_ANNUAL_PRODUCT` (Dodo dashboard) is configured to bill $96 every
+    MONTH, not every YEAR** — verified directly against the live test-mode
+    Dodo API (`node --env-file=.env.local scripts/verify-dodo-products.mjs`,
+    new, read-only, makes no checkout/charge). The advertised price ($96)
+    matches; the billing interval doesn't — a 12× overcharge versus what's
+    advertised if this reached a real customer. **Not silently fixed** —
+    reported per this task's explicit instruction; correcting it requires
+    owner action directly in the Dodo dashboard (Products → Pricing →
+    change payment frequency Month → Year), out of scope for this task to
+    do via API. **Annual billing should not be offered to real customers
+    until this is corrected and re-verified.**
+  - **Confirmed and fixed: `refund.succeeded` never revoked Pro access** —
+    was in the webhook's "informational, no tier change" case list,
+    directly contradicting the site's own 14-day refund-policy FAQ. Fixed
+    to call the same `downgradeByCustomer()` helper cancellation already
+    uses, resolved via the refund payload's own `customer.customer_id`
+    (confirmed present in the installed SDK's Refund type). Applies to
+    partial refunds too (conservative choice).
+  - **Confirmed and fixed: pricing copy disagreed with the real entitlement
+    config** — Free tier advertised "720p," the real limit
+    (`planConfig.ts`'s `FREE_EXPORT_RESOLUTION`) is 1080p. `PricingTable.tsx`
+    now imports the real constants instead of separately hardcoded numbers.
+  - **Confirmed and fixed: chosen billing period didn't survive closing/
+    reopening the upgrade modal** (e.g. to sign in) — was local component
+    state, reset to 'monthly' every remount. New
+    `src/lib/billingPreference.ts` (sessionStorage-backed) fixes this and
+    is shared by both `UpgradeModal.tsx` and the pricing page.
+  - **Offer simplified around Free and Pro** — was 4 competing cards (Free,
+    Pro, a separate "Pro Annual" card, and a fully-unwired Studio card
+    advertising 8K/batch-API/team-seats that exist nowhere in this
+    codebase). Now: 2 cards, Pro's monthly/annual choice is one toggle
+    (matching `UpgradeModal.tsx`'s existing pattern), Studio de-emphasized
+    to one honest "in development" line. No existing subscriber affected —
+    Studio never had a product id, entitlement gate, or working CTA.
+  - **Also fixed while auditing the same content: the pricing page's Pro
+    CTA was a dead end** — used to navigate to `/editor` identically to the
+    Free CTA, disconnected from checkout entirely. Now opens the real
+    upgrade flow directly, pre-set to the chosen billing period.
+  - **Verified, unchanged, all confirmed correct**: payment confirmation is
+    server-side only, webhook auth+idempotency (duplicate delivery cannot
+    create a duplicate entitlement), checkout-success URL alone cannot
+    grant Pro, checkout runs in test mode, instrumentation
+    (`upgrade_viewed`/`checkout_started`/`payment_succeeded`) from the
+    earlier analytics task is still correctly wired.
+  - **Confirmed still-open, not fixed**: delayed/out-of-order webhook
+    events (e.g. a stale cancellation arriving after a fresh resubscribe)
+    can leave the wrong final tier — a correctness risk distinct from
+    duplication, already flagged in CLAUDE.md before this task, still
+    unresolved; recommended as its own focused follow-up given the risk of
+    a subtle billing regression with no test harness to catch one here.
+  - **Documented, not built**: client-only enforcement limitation — only
+    export COUNT is server-enforced; feature-level gates (blur/AI
+    interpolation/resolution) run client-side only, with no custom DRM
+    built or recommended to close that gap.
+  - **Tests**: `src/lib/billingPreference.test.ts`,
+    `test/billing/pricing-copy.test.ts`, `test/billing/webhook-audit.test.ts`
+    (all new) — 250/250 passing (was 241/241 before this task).
+  - Fresh baseline: `npm run build` — pass, zero type errors. `npm run
+    test` — pass, 21 files, 250/250. `npm run lint` — same 1 pre-existing
+    `DropZone.tsx` error.
+  - Full test purchase checklist and owner actions required before live
+    launch: `docs/validation/BILLING.md`.
+
+- **Distribution kit task (2026-09-09) — documentation only, no code
+  changed.** `docs/validation/LAUNCH.md` (new): three demonstration scripts
+  (before/after, curve mechanics, no-upload workflow — all scripts for the
+  owner to record for real, none claim a recording already exists), two
+  community-post drafts framed as useful without clicking through, one
+  personalized tutorial-creator outreach template, one usability-session
+  invite (reuses `RESEARCH.md` §1's task verbatim, not a new one), a
+  campaign naming convention + tracked UTM URLs built on the already-real
+  `captureAcquisitionOnce()` acquisition tracking (`METRICS.md`), and a
+  weekly experiment-log table. Every founder-facing draft explicitly
+  discloses founder involvement; no testimonial, endorsement, or result is
+  invented anywhere (none exist yet — `RESEARCH.md` still has zero sessions
+  run).
+  - **Community rules verification**: browsing was available and used.
+    Product Hunt and Hacker News's Show HN guidelines were fetched directly
+    from their own pages and cited with URLs. Reddit — the most obviously
+    relevant channel for this audience — **could not be verified**: this
+    session's fetch tool was blocked outright by reddit.com/old.reddit.com;
+    a web search surfaced only third-party SEO summaries, not Reddit's own
+    rules, and those were explicitly NOT cited as fact. Indie Hackers,
+    Discord, and Facebook Groups are labeled the same way — investigate
+    directly before posting. `LAUNCH.md` §7 has the full breakdown of what
+    was verified vs. blocked, with the exact URLs attempted.
+  - **Cross-task consistency check**: `LAUNCH.md` explicitly carries
+    forward the still-open critical finding from the billing audit —
+    annual pricing must not be mentioned or emphasized in any outreach
+    until the Dodo annual-billing-interval misconfiguration is fixed.
+    No draft in this kit references annual pricing.
+  - No build/test/lint changes — this task touched no application code,
+    confirmed via `git status` before writing the summary.
+
+- **Weekly reporting workflow task (2026-09-09)**. Smallest reusable
+  workflow supported by existing infrastructure — a local script pair plus
+  Markdown, explicitly not a dashboard application.
+  - **`scripts/export-analytics-events.mjs`** (owner-run, needs real
+    Firestore credentials): pulls `analytics_events` for a date range into
+    `validation-data/analytics-events.json` (gitignored — new
+    `validation-data/*` rule in `.gitignore`, with only
+    `validation-data/README.md` tracked, documenting every expected file
+    format so raw data itself never needs to be committed to keep the
+    format documented).
+  - **`scripts/lib/reportMetrics.mjs`** (new, pure, no I/O) +
+    **`scripts/generate-weekly-report.mjs`** (new, I/O + Markdown
+    rendering): computes qualified visitors, editor starts, demo-vs-own
+    clip loads, first-activation (mirrors `exportAnalytics.ts`'s
+    `qualifiesAsActivation()` exactly, including which of the two
+    join-events' timestamps counts as "activated at"), the full export
+    funnel, signups, checkout starts — all grouped by acquisition source +
+    landing page — plus verified paying customers (explicitly reported as
+    **not** attributable to source, since `payment_succeeded` carries no
+    session/acquisition data at all, per `METRICS.md`), median time to
+    first activation, and failure-stage tallies. Search Console handling
+    follows every stated rule: CTR from summed clicks/impressions (not
+    averaged per-row CTR — a synthetic fixture in the test suite proves
+    the two give different, and the averaged one wrong, answers), branded/
+    non-branded query separation, an explicit "up to 1,000 rows, some
+    omitted entirely" caveat instead of assuming the export is exhaustive,
+    no assumption that query/page totals equal property totals, no single
+    aggregate "position" number presented as any query's actual rank, and
+    a lag warning when a requested window ends too recently to be complete.
+  - **Tests**: `test/reporting/reportMetrics.test.ts` (new, 35 tests) —
+    every calculation exercised with fixtures explicitly labeled synthetic
+    in the file's own header comment, never real data.
+  - **The actual `docs/validation/WEEKLY_REPORT.md` deliverable** was
+    generated by really running the script against the current (empty)
+    `validation-data/` — it honestly reports "no analytics data available"
+    and "no recommendation — insufficient data" rather than being
+    populated with anything invented, exactly as instructed. (The script
+    was also test-run once against clearly-synthetic local data, visually
+    verified, then that data was deleted before generating the real,
+    honest report — the synthetic run itself was never committed or left
+    in place.)
+  - Fresh baseline: `npm run build` — pass. `npm run test` — pass, 22
+    files, 285/285 (was 250/250 before this task). `npm run lint` — same 1
+    pre-existing `DropZone.tsx` error.
+
+- **Go/no-go decision task (2026-09-09)** — `docs/validation/DECISION.md`
+  (new). Evaluated the founder's proposed operating thresholds
+  (exposure/activation/reliability/repeat-use/signups/payment/SEO) against
+  the actual supplied data. Verified directly for this task, not assumed:
+  ran `scripts/export-analytics-events.mjs` for the widest possible window
+  (2020-01-01 to today) against real production Firestore — **zero
+  `analytics_events` documents exist, ever.** Every threshold is therefore
+  unmeasurable, not failed — decision: **E, insufficient evidence, with a
+  capped follow-up experiment** (not A/B/C/D — explicitly reasoned through
+  why each of those doesn't fit an all-zero evidence base). Next actions:
+  fix the still-open Dodo annual-billing bug first, then run one capped
+  2-week exposure+activation experiment (one `LAUNCH.md` channel + 3-5
+  `RESEARCH.md` usability sessions), then re-run the weekly report against
+  whatever real data that produces. No code changed by this task.
+
+- **Release-readiness review (2026-09-09)** — delivered in chat, not a new
+  file (the task asked for a returned report, not a document). Verdict:
+  **ready with limitations**. `npm run build`/`npm run test`
+  (285/285)/`npm run lint` all re-run clean for this review; the single
+  lint error is the same pre-existing `DropZone.tsx` one every prior task
+  this sprint has already re-confirmed, not a regression. Full diff (15
+  modified + ~22 new files, nothing committed all sprint) inspected for
+  secrets (none found), accidental raw data (`validation-data/` confirmed
+  empty except its own README), and unrelated changes (none found — each
+  file's diff matches its documented task). Real gaps surfaced and
+  disclosed rather than hidden: `loadDemoClip()` and
+  `generate-weekly-report.mjs` have no direct unit test of their own
+  control flow (only their pure dependencies are tested); no browser has
+  ever run this app live, so every UI/export claim rests on code
+  inspection + automated tests only. Blocking for a real release, not for
+  this code landing: the still-open Dodo annual-billing-interval
+  misconfiguration (see above).
+
 ## Next action
+
+**Fix `PRO_ANNUAL_PRODUCT`'s billing interval in the Dodo dashboard** (Month
+→ Year) — this is now the single most urgent item in this entire file: a
+live, provider-side misconfiguration that would 12× overcharge any real
+customer who chose annual billing. Re-verify with
+`node --env-file=.env.local scripts/verify-dodo-products.mjs` afterward,
+then work through `docs/validation/BILLING.md`'s test purchase checklist
+before considering the paid conversion path launch-ready.
+
+After that, the earlier still-open next actions remain:
+
+**Run the first-export usability sessions in `docs/validation/RESEARCH.md`**
+— this is now the actual blocker for the "measurable activation" /
+"reliable first export" objectives having any user-facing evidence behind
+them at all: every fix in this validation sprint so far has been driven by
+code audit, not by watching a real person try to use the product. Recruit
+3-5 first-time participants, run the task in RESEARCH.md's Section 1,
+log each session in Section 3, and only then bring a follow-up task to rank
+obstacles and implement the top two well-supported fixes.
+
+After that, the earlier still-open next action remains:
 
 **Verify the analytics pipeline actually reaches Firestore in a real
 browser** before trusting any of it: open the app via `vercel dev` (needed

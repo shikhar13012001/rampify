@@ -1,12 +1,38 @@
-{ 
-  
+{
   "permissions": {
-    "defaultMode": "auto",
     "allow": [
       "Bash(npm audit:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "Bash(cat:*)"
-    ]
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(for r:*)",
+      "Read(//d/claude-work/rampify/rampify/$HOME/.claude/skills/seo-sxo/**)",
+      "Read(//d/claude-work/rampify/rampify/$HOME/.claude/skills/seo/**)",
+      "Bash(\"/c/Users/ishgu/.claude/skills/seo/scripts/claude-seo\" run:*)",
+      "Bash(for p:*)",
+      "Bash(cd:*)",
+      "Bash(cygpath:*)",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS -o /dev/null -D - -H \"Accept-Encoding: br, gzip\" \"https://rampify-eight.vercel.app/\" | grep -iE \"content-\\(length|encoding|type\\)|cache-control|x-vercel-cache\"; echo \"=== /pricing ===\"; MSYS_NO_PATHCONV=1 curl -sS -o /dev/null -D - -H \"Accept-Encoding: br, gzip\" \"https://rampify-eight.vercel.app/pricing\" | grep -iE \"content-\\(length|encoding|type\\)|cache-control|x-vercel-cache\"; echo \"=== /features/speed-ramp ===\"; MSYS_NO_PATHCONV=1 curl -sS -o /dev/null -D - -H \"Accept-Encoding: br, gzip\" \"https://rampify-eight.vercel.app/features/speed-ramp\" | grep -iE \"content-\\(length|encoding|type\\)|cache-control|x-vercel-cache\")",
+      "Bash(md5sum:*)",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS --compressed -o /tmp/rampify-perf/main.js \"https://rampify-eight.vercel.app/assets/index-DjFxzVzA.js\" && wc -c /tmp/rampify-perf/main.js)",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS --compressed -o \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/main.js\" \"https://rampify-eight.vercel.app/assets/index-DjFxzVzA.js\" && wc -c \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/main.js\")",
+      "WebSearch",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS --compressed -o \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/editor.js\" \"https://rampify-eight.vercel.app/assets/EditorRoute-CW7WMdQY.js\" && wc -c \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/editor.js\"; echo \"=== headers ===\"; MSYS_NO_PATHCONV=1 curl -sS -o /dev/null -D - \"https://rampify-eight.vercel.app/assets/EditorRoute-CW7WMdQY.js\" | grep -iE \"cache-control|content-length|content-type\")",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS -o /dev/null -D - \"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126 Safari/537.36\" | grep -iE \"^HTTP|cache-control|content-\\(length|type\\)\")",
+      "Bash(TMP=\"C:/Users/ishgu/AppData/Local/Temp/rampify-perf\")",
+      "Bash(for w:*)",
+      "Bash(do MSYS_NO_PATHCONV=1 curl -sS --compressed -o \"$TMP/$w.js\" \"https://rampify-eight.vercel.app/assets/$w.js\")",
+      "Read(//d/claude-work/rampify/rampify/$TMP/**)",
+      "Bash(done)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS -o /dev/null -D - \"https://rampify-eight.vercel.app$p\")",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS --compressed -o \"$TMP/fonts.css\" \"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126 Safari/537.36\")",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS --compressed -o \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/fonts.css\" \"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126 Safari/537.36\" && wc -c \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/fonts.css\" && grep -c \"font-face\" \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/fonts.css\" && grep -oE \"font-display[^;]*;\" \"C:/Users/ishgu/AppData/Local/Temp/rampify-perf/fonts.css\" | sort -u)",
+      "Bash(MSYS_NO_PATHCONV=1 curl -sS --compressed -o /dev/null -w \"gis_client ttfb=%{time_starttransfer}s size=%{size_download}B http=%{http_code}\\\\n\" \"https://accounts.google.com/gsi/client\")",
+      "Bash(python:*)"
+    ],
+    "defaultMode": "auto"
   }
 }

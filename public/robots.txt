@@ -3,4 +3,4 @@ Allow: /
 Disallow: /editor
 Disallow: /upgrade/
 
-Sitemap: https://rampify-eight.vercel.app/sitemap.xml
+Sitemap: https://rampify.astralbuild.dev/sitemap.xml

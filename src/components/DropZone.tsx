@@ -32,17 +32,17 @@ export function DropZone() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savedFileName, setSavedFileName] = useState<string | null>(null);
+  // Read once, synchronously, at mount via a lazy initializer rather than an
+  // effect + setState — a plain localStorage read has no external-system
+  // subscription to set up, so react-hooks/set-state-in-effect flags a
+  // setState-in-effect for it.
+  const [savedFileName] = useState<string | null>(() => getSavedFileName());
   const inputRef = useRef<HTMLInputElement>(null);
   // Computed once, synchronously, at mount — capabilities don't change during
   // a session. Loading/previewing a video doesn't need ffmpeg.wasm (the
   // browser's native <video> decoder handles that), so this is a warning,
   // not a hard block — only export actually requires these.
   const [capabilities] = useState(() => checkExportCapabilities());
-
-  useEffect(() => {
-    setSavedFileName(getSavedFileName());
-  }, []);
 
   const loadDemoClip = useCallback(async () => {
     setError(null);
@@ -85,13 +85,21 @@ export function DropZone() {
     }
   }, [setProject]);
 
-  // Homepage's "Try a demo clip" CTA links to /editor?demo=1 — detected once
-  // on mount only. The query param is stripped immediately after so a
-  // refresh, back-navigation, or dropping a real file afterward doesn't
-  // re-trigger it.
-  useEffect(() => {
+  // Homepage's "Try a demo clip" CTA links to /editor?demo=1. Read once via a
+  // lazy useState initializer (survives React StrictMode's double
+  // render+effect pass in dev, unlike reading window.location.search inside
+  // the effect body itself) so the second effect invocation still knows a
+  // demo was requested even after the first invocation's cleanup already
+  // stripped the query param.
+  const [wantsDemo] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('demo') !== '1') return;
+    return params.get('demo') === '1';
+  });
+
+  useEffect(() => {
+    if (!wantsDemo) return;
+    // Stripped immediately so a refresh, back-navigation, or dropping a
+    // real file afterward doesn't re-trigger it.
     window.history.replaceState(null, '', window.location.pathname);
     // Deferred via setTimeout (a real macrotask boundary, not just a
     // Promise microtask) rather than calling loadDemoClip() directly: its
@@ -101,8 +109,7 @@ export function DropZone() {
     // not a "sync state to a prop" pattern the rule is meant to catch.
     const timer = setTimeout(() => { void loadDemoClip(); }, 0);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally mount-only
-  }, []);
+  }, [wantsDemo, loadDemoClip]);
 
   const handleFile = useCallback(
     async (file: File) => {

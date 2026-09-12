@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:ui:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/setup.ps1",
+    "test:ui": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/run.ps1",
+    "test:ui:headed": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/run.ps1 -Headed -SlowMo 600"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.6",

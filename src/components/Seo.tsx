@@ -14,7 +14,7 @@ interface SeoProps {
 // and the SITE_URL baked into scripts/prerender-seo.mjs's static output for
 // the prerendered routes. Exported so FeaturePageLayout.tsx doesn't keep its
 // own separate copy (it used to — see docs/validation/STATUS.md's H1 finding).
-export const SITE_URL = 'https://rampify-eight.vercel.app';
+export const SITE_URL = 'https://rampify.astralbuild.dev';
 
 export function Seo({ title, description, path, socialTitle, jsonLd }: SeoProps) {
   const canonicalUrl = `${SITE_URL}${path}`;

@@ -891,6 +891,167 @@ sessionStorage-tracked event to a later signup — currently nothing does that c
   this code landing: the still-open Dodo annual-billing-interval
   misconfiguration (see above).
 
+- **Domain migration + third-party SEO plugin audit (2026-09-11/12)**. The
+  real production domain is **`rampify.astralbuild.dev`** — every prior
+  entry above referencing `rampify-eight.vercel.app` was written when that
+  Vercel preview URL was believed to be canonical; **left as-is
+  historically** (those entries describe what was actually checked at the
+  time, correcting them retroactively would misrepresent the audit trail).
+  Every forward-looking reference was updated to the real domain:
+  `scripts/prerender-seo.mjs`, `src/components/Seo.tsx`, `index.html`
+  (canonical/OG/JSON-LD), `public/sitemap.xml`, `public/robots.txt`,
+  `public/og-image.svg`, `scripts/generate-og-image.html`, `README.md`,
+  `docs/validation/LAUNCH.md`, and the SEO test suite's assertions.
+  - **Not regenerated**: `public/og-image.png` is a pre-rasterized PNG baked
+    from `og-image.svg` via a real browser (`scripts/generate-og-image.html`
+    → screenshot/canvas export) — the SVG source now shows the correct
+    domain, but the PNG's pixels still show the old one until someone opens
+    that HTML file in a real browser and re-exports it. No browser available
+    in this environment to do that step. **Owner action required** before
+    social-card previews (Twitter/Facebook/LinkedIn) are accurate.
+  - **Ran a real technical-SEO audit** via the newly-installed third-party
+    `claude-seo` plugin's `seo-technical` subagent against the live
+    (still-`rampify-eight.vercel.app`-hosted at the time) deployment.
+    Confirmed, with evidence, everything this sprint's own manual SEO audit
+    had already found and fixed locally but not yet deployed (identical
+    canonical/title/etag across every route). New findings, verified and
+    acted on: (1) the local `prerender-seo.mjs` fix only covered 3 of the
+    13 sitemap URLs — **extended to all 13**, using each page's own
+    already-real `<Seo>`/`<FeaturePageLayout>` title/description/h1 props,
+    not invented copy; (2) missing `X-Frame-Options` — **added** to
+    `vercel.json` (`SAMEORIGIN`, zero interaction with COOP/COEP or app
+    functionality); (3) a claimed missing `font-display` control turned out
+    to be a **false positive** — `display=swap` was already in the Google
+    Fonts URL, verified directly, no change made; (4) a full CSP was
+    recommended but **not attempted** — too high-risk to get right without
+    live verification (could silently break Firebase/FedCM/ffmpeg.wasm/Dodo
+    redirects), flagged as a follow-up requiring real browser testing, not
+    guessed at.
+  - **While extending the sitemap-route metadata, found and fixed another
+    confirmed false marketing claim**: `FourKExportFeature.tsx` advertised
+    WebM (VP9) export and four resolution options (720p/1080p/1440p/2160p)
+    with a 60fps frame-rate override — none of which exist
+    (`ExportResolution` is `'1080p' | '4k'` only; grepped the whole export
+    pipeline for any WebM/VP9/frame-rate-override code — zero matches).
+    Fixed to describe only what's real: MP4/H.264, 1080p Free / 4K Pro,
+    frame rate always matches source.
+  - **A parallel `seo-schema` subagent audit failed mid-run** (session
+    rate-limit, not a real finding) — no schema findings were produced or
+    reported; nothing schema-related was changed based on it.
+  - Rebuild/retest required after the domain change — see fresh baseline
+    below this entry once run.
+
+## Full claude-seo audit (seo-content, seo-sitemap, seo-sxo, seo-geo) + Skyvern UI harness (2026-09-12)
+
+Ran the remaining scope of the third-party `claude-seo` plugin's full audit
+that the previous entry had deliberately left incomplete (only
+`seo-technical` + `seo-schema` had run; `seo-schema` had failed on a rate
+limit). This entry closes that gap: `seo-content`, `seo-sitemap`, `seo-sxo`,
+and `seo-geo` all ran against the live `rampify.astralbuild.dev` deployment.
+`seo-images` could not run — that agent type does not exist in the installed
+plugin build despite being listed in its own skill description; a manual
+spot check found nothing actionable (the site is almost entirely SVG icons
+and CSS, not photography). `seo-schema` was not re-attempted.
+
+- **Dominant finding across all four agents: the live deployment is stale.**
+  Sitemap, robots.txt, canonical, and og:url on `rampify.astralbuild.dev`
+  still serve `rampify-eight.vercel.app` — confirmed by `seo-sitemap` via
+  `git diff HEAD -- public/sitemap.xml public/robots.txt`, which showed the
+  repo already has the correct domain, uncommitted. This is the same
+  deployment-drift condition the previous STATUS.md entry described; it has
+  not been resolved because nothing from this sprint has been deployed yet.
+  **No further code fix exists for this — it needs a commit + deploy**,
+  which remains withheld pending explicit release approval per
+  `WORKING_AGREEMENT.md` §4.
+- **Fixed — fabricated social-proof logo bar.** `Landing.tsx`'s `LogoCloud`
+  component ("Trusted by creators publishing to" + YouTube/TikTok/Vimeo/
+  Twitch/Instagram/X wordmarks) implied adoption/partnerships that don't
+  exist on a zero-user, pre-launch product. Removed entirely (component and
+  render call). This is separate from the three fabricated testimonials
+  (Marcus Chen/Sofia Ramirez/James Okafor, tracked since finding H6a) —
+  `seo-content` re-confirmed those are still live and still tracked; they
+  were intentionally left untouched this session pending a product decision
+  on whether to remove or replace them, since removing customer-facing
+  "evidence" is a bigger call than deleting an unrelated logo bar.
+  - **Not fixed — parked contact-email domain.** `seo-content` found every
+    published contact address (`hello@`, `support@`, `legal@`, etc.) resolves
+    to `rampify.app`, which DNS shows is parked at a registrar, not this
+    deployment. Terms/Privacy promise refunds and account deletion "by
+    emailing hello@rampify.app" — a real, live legal/trust defect. This is
+    not repo-fixable; it needs a real monitored inbox before it can be
+    corrected honestly.
+  - **Not fixed — no author/expertise signal.** About page says only "built
+    by a solo developer," no name, bio, or profile link; JSON-LD has no
+    `Person`/`founder`/`sameAs`. Not fakeable — needs a real bio.
+- **Fixed — `/docs` was a dead shell.** Every one of the 22 "article" links
+  across all 6 documentation sections pointed back to `/docs` itself — a
+  page promising a full help center that doesn't exist yet. Rewrote to
+  honestly say written guides are still being built, point to
+  `/features/speed-ramp` (the one real, full worked example) as the current
+  best resource, and label each section "Guide coming soon" instead of
+  fabricating 22 article pages.
+- **Investigated and rejected — changelog "stripe_events" mention.**
+  `seo-content` flagged version 2.2.0's changelog entry (May 2026, predating
+  the Dodo migration) referencing a `stripe_events` collection as an
+  internal contradiction with the later Dodo migration. Verified this is
+  correct as a historical record — Stripe was the real payment processor at
+  that date — and left unchanged; editing a past changelog entry to match
+  later infrastructure would itself be a fabrication.
+- **Investigated and rejected — duplicate FAQPage schema.** `seo-geo` and
+  `seo-sxo` both flagged the same static FAQPage JSON-LD block (baked into
+  `index.html`, applied to every route) as duplicated/non-unique per page.
+  Per the `claude-seo` skill's own quality gate, Google retired FAQ rich
+  results for all sites in May 2026 and existing FAQPage markup should be
+  flagged Info-only, not fixed for SERP or claimed AI-citation benefit — no
+  engineering effort spent chasing it.
+- **Not attempted this session (recommended, larger scope):** extending
+  `prerender-seo.mjs` to emit full section body copy (not just h1+intro) for
+  `/`, `/pricing`, and `/features/speed-ramp` — both `seo-geo` and `seo-sxo`
+  independently found the prerendered HTML is a near-empty shell (70-153
+  words) versus the hydrated DOM (up to 469 words), meaning non-JS-rendering
+  AI crawlers (OAI-SearchBot, PerplexityBot, Claude-SearchBot) cannot see
+  the site's actual content, and the real $12/$96 pricing isn't in
+  crawlable body text anywhere. Also not attempted: restructuring
+  `/features/speed-ramp`'s hero to lead with the demo/upload widget instead
+  of prose (per `seo-sxo`, competitors ranking for "speed ramping video
+  editor" put the tool above the fold; Rampify buries "Reproduce this in the
+  editor" in section 3). Both are real, repo-fixable work, just larger than
+  a single-session scope — left for a follow-up task.
+
+**Extended the Skyvern + local-Ollama UI test harness** (`test/skyvern/` —
+built externally, not by this session; discovered already working with all
+11 checks passing, including a real Ollama-driven `page.act()` AI action
+against the `rampify-skyvern` model, a small vision-capable 2.1B-parameter
+local model based on `qwen3-vl:2b`). Added two new automated cases using the
+existing `test/fixtures/` files:
+- Uploading `not-a-video.mp4` (25 bytes of garbage with a `.mp4` extension)
+  surfaces `readVideoMetadata()`'s real "Failed to read video metadata" (or,
+  on the 8s timeout path, "No video track could be decoded from this file.")
+  error text in the UI, not a blank screen.
+- Uploading `corrupt-truncated.mp4` hits the same code path with the same
+  result.
+
+Both new cases initially failed on a wrong guessed error string (assumed the
+DropZone catch-all fallback text; the real code path throws a specific
+`Error` whose `.message` is shown verbatim) — fixed by reading
+`videoMetadata.ts` and matching the actual two possible strings. All 13
+checks now pass (`powershell test/skyvern/run.ps1 -SkipAI`).
+
+- **Found, not fixed — the real export pipeline cannot be exercised by this
+  harness at all.** `GUEST_EXPERIMENT.enabled` is `false` by default
+  (`planConfig.ts`), so a guest session hits the "Sign in to export" block
+  before `startExport()` ever runs — there is no way to automate a real,
+  full ffmpeg.wasm export (and therefore validate an actual output file
+  against `test/fixtures/validate-output.sh`) without either signing in
+  with a real Firebase-backed test account or temporarily flipping
+  `GUEST_EXPERIMENT.enabled` to `true` for a local test run. Neither was
+  done without a product decision: creating/using real auth credentials in
+  an automated harness is exactly the kind of thing to confirm first rather
+  than improvise. This is the actual reason the pre-launch checklist's
+  export-pipeline items (repeated exports, cancel/retry, double-click
+  dedup, real output validation) have never been automated — they all sit
+  behind this same sign-in gate.
+
 ## Next action
 
 **Fix `PRO_ANNUAL_PRODUCT`'s billing interval in the Dodo dashboard** (Month
@@ -900,6 +1061,13 @@ customer who chose annual billing. Re-verify with
 `node --env-file=.env.local scripts/verify-dodo-products.mjs` afterward,
 then work through `docs/validation/BILLING.md`'s test purchase checklist
 before considering the paid conversion path launch-ready.
+
+**Also newly open:** decide how to get the Skyvern harness past the guest
+export gate (sign in with a real test account vs. a temporary local-only
+`GUEST_EXPERIMENT.enabled = true` flip) so the actual export pipeline —
+the one thing "a passing build does not prove" per this file's own
+recurring caveat — can finally be exercised by an automated test instead
+of only by the manual checklist in `RESULTS.md`.
 
 After that, the earlier still-open next actions remain:
 

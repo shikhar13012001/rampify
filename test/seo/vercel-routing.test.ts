@@ -16,7 +16,15 @@ const vercelConfig = JSON.parse(
   readFileSync(join(__dirname, '..', '..', 'vercel.json'), 'utf-8'),
 ) as { rewrites: { source: string; destination: string }[]; trailingSlash?: boolean };
 
-const rewritePattern = new RegExp(`^${vercelConfig.rewrites[0].source}$`);
+// vercel.json intentionally splits routes across multiple rewrite entries —
+// a single alternation group cannot contain a literal "/" (Vercel's
+// path-to-regexp source parser rejects it), so "/upgrade/success" and
+// "/features/..." each need their own entry. A path is rewritten if ANY
+// entry matches, exactly like Vercel evaluates the array at request time.
+const rewritePatterns = vercelConfig.rewrites.map((r) => new RegExp(`^${r.source}$`));
+function matchesAnyRewrite(path: string): boolean {
+  return rewritePatterns.some((pattern) => pattern.test(path));
+}
 
 describe('vercel.json rewrite — known SPA routes vs. unknown paths', () => {
   const knownRoutes = [
@@ -39,13 +47,13 @@ describe('vercel.json rewrite — known SPA routes vs. unknown paths', () => {
 
   it('matches every real client-side route declared in src/App.tsx', () => {
     for (const route of knownRoutes) {
-      expect(rewritePattern.test(route)).toBe(true);
+      expect(matchesAnyRewrite(route)).toBe(true);
     }
   });
 
   it('also matches a known route with a trailing slash', () => {
-    expect(rewritePattern.test('/pricing/')).toBe(true);
-    expect(rewritePattern.test('/features/speed-ramp/')).toBe(true);
+    expect(matchesAnyRewrite('/pricing/')).toBe(true);
+    expect(matchesAnyRewrite('/features/speed-ramp/')).toBe(true);
   });
 
   it('does NOT match an unknown/typo\'d path — this should fall through to a real 404', () => {
@@ -58,18 +66,18 @@ describe('vercel.json rewrite — known SPA routes vs. unknown paths', () => {
       '/.env',
     ];
     for (const path of unknownPaths) {
-      expect(rewritePattern.test(path)).toBe(false);
+      expect(matchesAnyRewrite(path)).toBe(false);
     }
   });
 
   it('does NOT match asset-ish paths — those are served as real static files, not rewritten', () => {
     for (const path of ['/favicon.svg', '/robots.txt', '/sitemap.xml', '/og-image.png', '/assets/index-abc123.js']) {
-      expect(rewritePattern.test(path)).toBe(false);
+      expect(matchesAnyRewrite(path)).toBe(false);
     }
   });
 
   it('root "/" is not in the rewrite list — it is served as a real static file (dist/index.html) automatically', () => {
-    expect(rewritePattern.test('/')).toBe(false);
+    expect(matchesAnyRewrite('/')).toBe(false);
   });
 
   it('trailingSlash is explicitly set to false — no ambiguous default', () => {

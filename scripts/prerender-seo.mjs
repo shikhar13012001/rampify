@@ -42,7 +42,7 @@ if (!existsSync(templatePath)) {
   process.exit(1);
 }
 
-const SITE_URL = 'https://rampify-eight.vercel.app';
+const SITE_URL = 'https://rampify.astralbuild.dev';
 
 // process.env.VERCEL_ENV is set by Vercel's build step to 'production',
 // 'preview', or 'development'; undefined for a local `npm run build`. Only a

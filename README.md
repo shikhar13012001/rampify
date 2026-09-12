@@ -14,7 +14,7 @@
 
 Rampify is a fully browser-based video speed ramping editor. Drop a clip, draw a bezier speed curve, optionally sync peaks to music beats, and export — all without leaving the tab. Video processing runs in a Web Worker via **ffmpeg.wasm**; AI slow motion uses **RIFE** (Real-time Intermediate Flow Estimation) via ONNX Runtime Web. Your footage never leaves your machine.
 
-**Live:** https://rampify-eight.vercel.app
+**Live:** https://rampify.astralbuild.dev
 
 ---
 

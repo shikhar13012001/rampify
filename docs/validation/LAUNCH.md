@@ -305,8 +305,8 @@ Example full campaign name: `community-editors-202609-curvedemo`
 ### Tracked landing URLs (real, existing routes)
 
 ```
-https://rampify-eight.vercel.app/?utm_source=<channel>&utm_medium=<medium>&utm_campaign=<campaign>
-https://rampify-eight.vercel.app/features/speed-ramp?utm_source=<channel>&utm_medium=<medium>&utm_campaign=<campaign>
+https://rampify.astralbuild.dev/?utm_source=<channel>&utm_medium=<medium>&utm_campaign=<campaign>
+https://rampify.astralbuild.dev/features/speed-ramp?utm_source=<channel>&utm_medium=<medium>&utm_campaign=<campaign>
 ```
 
 Prefer `/features/speed-ramp` for anything tied to §1b/§1c or §2's curve/

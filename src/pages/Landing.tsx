@@ -32,9 +32,6 @@ export function Landing() {
            see BeforeAfterDemo.tsx and docs/validation/HOMEPAGE.md ────────── */}
       <BeforeAfterDemo />
 
-      {/* ── Logo cloud ───────────────────────────────────────────────────── */}
-      <LogoCloud />
-
       {/* ── Feature grid (saturated cards) ──────────────────────────────── */}
       <FeatureGrid />
 
@@ -343,65 +340,6 @@ function CurveMockup() {
         </div>
       </div>
     </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Logo Cloud
-// ════════════════════════════════════════════════════════════════════════════
-
-function LogoCloud() {
-  const logos = ['YouTube', 'TikTok', 'Vimeo', 'Twitch', 'Instagram', 'X'];
-  return (
-    <section
-      style={{
-        padding: '32px 24px 64px',
-        borderTop: '1px solid var(--color-clay-line)',
-        borderBottom: '1px solid var(--color-clay-line)',
-      }}
-    >
-      <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
-        <p
-          style={{
-            margin: '0 0 24px',
-            fontSize: 12,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            color: 'var(--color-clay-ink-muted)',
-          }}
-        >
-          Trusted by creators publishing to
-        </p>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 48,
-            flexWrap: 'wrap',
-          }}
-        >
-          {logos.map((logo) => (
-            <span
-              key={logo}
-              className="clay-display"
-              style={{
-                fontSize: 20,
-                fontWeight: 600,
-                color: 'var(--color-clay-ink-muted)',
-                opacity: 0.6,
-                transition: 'opacity 0.2s, color 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--color-clay-ink)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = 'var(--color-clay-ink-muted)'; }}
-            >
-              {logo}
-            </span>
-          ))}
-        </div>
-      </div>
-    </section>
   );
 }
 

@@ -73,7 +73,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes) {
       const html = readDist(r.file);
       const canonical = extractTag(html, /<link rel="canonical" href="([^"]*)"/, 'canonical');
-      expect(canonical).toBe(`https://rampify-eight.vercel.app${r.path}`);
+      expect(canonical).toBe(`https://rampify.astralbuild.dev${r.path}`);
     }
   });
 
@@ -81,7 +81,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes) {
       const html = readDist(r.file);
       const ogUrl = extractTag(html, /<meta property="og:url" content="([^"]*)"/, 'og:url');
-      expect(ogUrl).toBe(`https://rampify-eight.vercel.app${r.path}`);
+      expect(ogUrl).toBe(`https://rampify.astralbuild.dev${r.path}`);
     }
   });
 
@@ -105,7 +105,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes.slice(1)) {
       const html = readDist(r.file);
       expect(html).toContain('"@type":"BreadcrumbList"');
-      expect(html).toContain(`"item":"https://rampify-eight.vercel.app${r.path}"`);
+      expect(html).toContain(`"item":"https://rampify.astralbuild.dev${r.path}"`);
     }
   });
 
@@ -155,7 +155,7 @@ describe('/features/speed-ramp — static HTML (direct navigation, before hydrat
 
   it('canonical points to itself, consistent with the h1/title also served', () => {
     const html = readDist('features/speed-ramp/index.html');
-    expect(html).toContain('<link rel="canonical" href="https://rampify-eight.vercel.app/features/speed-ramp" />');
+    expect(html).toContain('<link rel="canonical" href="https://rampify.astralbuild.dev/features/speed-ramp" />');
     expect(html).toContain('<title>Speed Ramp Video Editor');
     const h1Matches = [...html.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)];
     expect(h1Matches.length).toBe(1);
@@ -180,12 +180,88 @@ describe('production build — sitemap keeps private/account routes out', () => 
   it('sitemap.xml only lists the 3 prioritized routes plus other real, non-private routes', () => {
     const sitemap = readDist('sitemap.xml');
     const locs = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
-    expect(locs).toContain('https://rampify-eight.vercel.app/');
-    expect(locs).toContain('https://rampify-eight.vercel.app/pricing');
-    expect(locs).toContain('https://rampify-eight.vercel.app/features/speed-ramp');
+    expect(locs).toContain('https://rampify.astralbuild.dev/');
+    expect(locs).toContain('https://rampify.astralbuild.dev/pricing');
+    expect(locs).toContain('https://rampify.astralbuild.dev/features/speed-ramp');
     for (const loc of locs) {
       expect(loc).not.toMatch(/\/editor|\/upgrade/);
     }
+  });
+});
+
+// All 13 public/sitemap.xml routes (extended from the original 3 by this
+// task's technical-SEO audit, via the third-party claude-seo plugin's
+// seo-technical subagent against the live deployment — see
+// docs/validation/STATUS.md's "Domain migration + third-party SEO plugin
+// audit" entry) — every title/description/h1 is copied verbatim from that
+// page's own <Seo>/<FeaturePageLayout> props, not newly authored.
+const ALL_SITEMAP_ROUTES = [
+  { file: 'index.html', path: '/' },
+  { file: 'pricing/index.html', path: '/pricing' },
+  { file: 'features/speed-ramp/index.html', path: '/features/speed-ramp' },
+  { file: 'features/beat-sync/index.html', path: '/features/beat-sync' },
+  { file: 'features/ai-slow-motion/index.html', path: '/features/ai-slow-motion' },
+  { file: 'features/4k-export/index.html', path: '/features/4k-export' },
+  { file: 'features/privacy/index.html', path: '/features/privacy' },
+  { file: 'docs/index.html', path: '/docs' },
+  { file: 'changelog/index.html', path: '/changelog' },
+  { file: 'roadmap/index.html', path: '/roadmap' },
+  { file: 'about/index.html', path: '/about' },
+  { file: 'contact/index.html', path: '/contact' },
+  { file: 'privacy/index.html', path: '/privacy' },
+  { file: 'terms/index.html', path: '/terms' },
+];
+
+describe('all 13 sitemap.xml routes are prerendered with correct, unique metadata', () => {
+  it('every sitemap route has its own real static file with a self-matching canonical', () => {
+    for (const r of ALL_SITEMAP_ROUTES) {
+      expect(existsSync(join(distDir, r.file))).toBe(true);
+      const html = readDist(r.file);
+      expect(html).toContain(`<link rel="canonical" href="https://rampify.astralbuild.dev${r.path}" />`);
+    }
+  });
+
+  it('no two sitemap routes share the same <title>', () => {
+    const titles = new Set<string>();
+    for (const r of ALL_SITEMAP_ROUTES) {
+      const title = extractTag(readDist(r.file), /<title>(.*?)<\/title>/, 'title');
+      expect(titles.has(title)).toBe(false);
+      titles.add(title);
+    }
+  });
+});
+
+describe('vercel.json security headers', () => {
+  it('X-Frame-Options is set, without touching the existing COOP/COEP headers', () => {
+    const config = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf-8'));
+    const headers = config.headers[0].headers as { key: string; value: string }[];
+    const byKey = Object.fromEntries(headers.map((h) => [h.key, h.value]));
+    expect(byKey['X-Frame-Options']).toBe('SAMEORIGIN');
+    expect(byKey['Cross-Origin-Opener-Policy']).toBe('same-origin');
+    expect(byKey['Cross-Origin-Embedder-Policy']).toBe('credentialless');
+  });
+});
+
+describe('FourKExportFeature — false format/resolution/frame-rate claims removed', () => {
+  const fourKSrc = readFileSync(join(root, 'src', 'pages', 'features', 'FourKExport.tsx'), 'utf-8');
+
+  it('does not claim WebM/VP9 export — the pipeline only ever produces MP4/H.264', () => {
+    expect(fourKSrc.toLowerCase()).not.toContain('webm');
+    expect(fourKSrc.toLowerCase()).not.toContain('vp9');
+    const ffmpegBridgeSrc = readFileSync(join(root, 'src', 'lib', 'ffmpegBridge.ts'), 'utf-8');
+    expect(ffmpegBridgeSrc.toLowerCase()).not.toContain('webm');
+  });
+
+  it('does not claim resolution options that do not exist (720p/1440p) — only 1080p/4K are real', () => {
+    expect(fourKSrc).not.toContain('720p');
+    expect(fourKSrc).not.toContain('1440p');
+    const editorTypesSrc = readFileSync(join(root, 'src', 'types', 'editor.ts'), 'utf-8');
+    expect(editorTypesSrc).toContain("ExportResolution = '1080p' | '4k'");
+  });
+
+  it('does not claim a frame-rate override that does not exist', () => {
+    expect(fourKSrc.toLowerCase()).not.toContain('60fps');
+    expect(fourKSrc.toLowerCase()).not.toContain('override up to');
   });
 });
 

@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+.venv-skyvern/
+test/skyvern/artifacts/
+test/skyvern/*.local
+test/skyvern/__pycache__/
+/temp/
 
 # Editor directories and files
 .vscode/*

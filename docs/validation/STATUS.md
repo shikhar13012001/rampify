@@ -1323,3 +1323,41 @@ mismatch (both currently undecided — need a product call on whether/when to fi
     trace and which build (production vs. local dev, guest vs. signed-in)
     rather than guessing at a fix. Unresolved — flag for the next session if
     the owner doesn't get a reply in first.
+
+## Launch plan artifact republished with domain correction (2026-09-14, later same day)
+
+The "Rampcut Launch Plan" artifact (https://claude.ai/artifact/94xtbeUwWwRTx2uKsgSkbz)
+still said `rampcut.com` and framed the domain as something to buy — stale
+against the `rampcut.astralbuilds.dev` correction made earlier in this entry's
+session. Fixed and republished (version 2):
+
+- Header lede: "a domain purchase" → "pointing your existing domain at Vercel".
+- Owner checklist item count: "Fourteen items" / "0 / 14 done" corrected to
+  "Thirteen items" / "0 / 13 done" — the DATA object always totaled 13 (4
+  blocking + 4 billing + 5 growth); the prose and static fallback label had
+  never matched it. (The JS-computed label was always correct at runtime;
+  only the pre-render static text and prose were wrong.)
+- Blocking checklist item "Buy rampcut.com (or your chosen domain)" →
+  "Point rampcut.astralbuilds.dev at Vercel" — detail rewritten to state the
+  domain already exists (a subdomain of the owner's personal astralbuilds.dev)
+  and only needs a DNS record + Vercel domain attachment, not a purchase.
+- SEO-gaps-closed bullet: `rampify.astralbuild.dev` → `rampify.astralbuilds.dev`
+  (spelling fix to match the real domain) and the redirect target
+  `rampcut.com` → `rampcut.astralbuilds.dev`.
+- Launch-sequence step 1: "buy your own domain, point it at Vercel" →
+  "point `rampcut.astralbuilds.dev` at Vercel" (purchase framing removed).
+
+Local source: `scratchpad/artifacts/rampcut-launch-plan.html` (matches
+published version 2). This closes out the TODO left in the previous entry —
+the owner checklist can now be trusted at face value.
+
+**Still not done**: syncing commit `d89d3d9` (the domain-correction commit)
+to the owner's local machine — no new git bundle has been created/sent for
+it yet, unlike the earlier `53977b0` sync. Do this before telling the owner
+the domain fix is fully in their hands, since their local `main` is still
+behind on this specific commit.
+
+**Also still open**: the export failure report (`TypeError: Failed to
+construct 'URL': Invalid URL`) — still unresolved, still needs the owner's
+stack trace/environment detail per the previous entry. Not yet actually
+asked for in a reply to the owner; doing that now alongside this update.

@@ -2,15 +2,15 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/(pricing|changelog|roadmap|docs|about|privacy|terms|contact|editor)\\/?",
+      "source": "/(pricing|changelog|roadmap|docs|about|privacy|terms|contact|editor)",
       "destination": "/index.html"
     },
     {
-      "source": "/upgrade/success\\/?",
+      "source": "/upgrade/success",
       "destination": "/index.html"
     },
     {
-      "source": "/features/(speed-ramp|beat-sync|ai-slow-motion|privacy|4k-export)\\/?",
+      "source": "/features/(speed-ramp|beat-sync|ai-slow-motion|privacy|4k-export)",
       "destination": "/index.html"
     }
   ],

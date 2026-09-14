@@ -40,6 +40,20 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      // Local-only: lets plain `npm run dev` (or the Skyvern harness) reach
+      // real /api/* handlers by pointing a separate `vercel dev` instance at
+      // this port — see test/skyvern/run_export_test.ps1. No-op otherwise:
+      // with nothing listening on 3001, requests just fail closed exactly
+      // like today's plain `npm run dev` (see exportLimits.ts's existing
+      // fetch-failure fallbacks). Routing /api through vercel dev directly
+      // (instead of this proxy) was tried first and made vite's own dev
+      // module graph hang under vercel dev's proxy layer — this way only
+      // the lightweight /api calls cross that boundary, not ffmpeg.wasm/
+      // onnxruntime-web/the rest of the app's module graph.
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
     },
   },
   preview: {

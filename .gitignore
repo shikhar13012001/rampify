@@ -38,3 +38,4 @@ api/keys/
 # See validation-data/README.md (tracked) for the expected file formats.
 validation-data/*
 !validation-data/README.md
+.jdk-emulator/

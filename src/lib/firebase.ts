@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,6 +27,18 @@ export function getFirebaseInitError(): Error | null {
 
 export const auth = app ? getAuth(app) : (null as unknown as ReturnType<typeof getAuth>);
 export const db   = app ? getFirestore(app) : (null as unknown as ReturnType<typeof getFirestore>);
+
+// Local-only test wiring: connects to the Firebase Auth + Firestore emulators
+// instead of the real project. Only ever true when the Skyvern UI harness
+// itself sets VITE_USE_FIREBASE_EMULATOR=true for its own vercel-dev child
+// process (see test/skyvern/run.ps1) — never a normal dev/preview/prod value.
+// Guarded by import.meta.env.DEV too so this is fully dead-code-eliminated
+// out of any production bundle, the same way analytics.ts's __rampifyJourney
+// dev hook is.
+if (import.meta.env.DEV && app && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8085);
+}
 
 /** Returns the current user's ID token, or null if not signed in. */
 export async function getCurrentUserIdToken(): Promise<string | null> {

@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from 'react';
 import {
   GoogleAuthProvider,
   signInWithCredential,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut as fbSignOut,
   onAuthStateChanged,
   getAdditionalUserInfo,
@@ -61,6 +63,41 @@ function initOneTap(onSuccess: (user: User) => void) {
 }
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+// ─── Emulator-only test sign-in (Skyvern UI harness) ───────────────────────
+//
+// Real sign-in is Google-only (One Tap/FedCM above) — there is no email/
+// password path for actual users. This helper exists solely so the local
+// Skyvern harness (test/skyvern/run_ui_tests.py) can reach a signed-in state
+// against the Firebase Auth Emulator without ever touching a real Google
+// account or credential. It talks to whatever `auth` currently points at,
+// which is only ever the emulator when firebase.ts's
+// VITE_USE_FIREBASE_EMULATOR gate is on (see that file) — this function does
+// nothing different from a normal signInWithEmailAndPassword call otherwise,
+// it's the emulator wiring that makes it safe, not this function itself.
+// Exposed as window.__rampifyTestSignIn only under that same gate, the same
+// dead-code-elimination pattern as analytics.ts's __rampifyJourney.
+export async function signInEmulatorTestUser(email: string, password: string): Promise<User> {
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    return cred.user;
+  } catch {
+    // First run against a fresh (or just-restarted) emulator: the user
+    // doesn't exist yet. The emulator has no real signup flow to drive, so
+    // create it directly rather than simulating a form nothing renders.
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    return cred.user;
+  }
+}
+
+if (
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true'
+) {
+  (window as unknown as { __rampifyTestSignIn?: typeof signInEmulatorTestUser }).__rampifyTestSignIn =
+    signInEmulatorTestUser;
+}
 
 export async function signOut(): Promise<void> {
   window.google?.accounts.id.cancel();

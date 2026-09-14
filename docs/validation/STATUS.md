@@ -1094,6 +1094,77 @@ Then sign in and upgrade to Pro in Dodo test mode to confirm
 `payment_succeeded` appears (server-side only, so this is the only way to
 see it at all).
 
+## Real signed-in export pipeline test + CRITICAL: unreviewed auto-commit/push/deploy discovered (2026-09-15)
+
+**Built a real, automated, signed-in export test** — closes the single
+biggest gap repeated throughout this file ("a passing build does not prove
+video export works"). `test/skyvern/run_export_test.ps1` /
+`run_export_test.py` (files pre-existed as stubs from the same external
+Skyvern-harness setup as `run.ps1`; this session completed them) now:
+starts the Firebase Auth + Firestore emulators (local-only, a portable
+Temurin JDK 21 was downloaded to `.jdk-emulator/` since firebase-tools
+requires Java 21+ and the system only had 17), signs in a fake test user via
+a new `signInEmulatorTestUser()` helper in `auth.tsx` (gated behind
+`window.__RAMPIFY_EMULATOR_TEST__`, set only by Playwright's
+`add_init_script()` — never reachable in a real session, never touches a
+real Google account), loads the demo clip, clicks Start export, and
+validates the downloaded file with `ffprobe`/`ffmpeg` (not just a byte-size
+check — a real decode). **Result: PASS** — a real 8.02s MP4 with video+audio
+streams, full clean decode. Run via `npm run test:ui:export`.
+
+Real, previously-undiscovered bugs found and fixed while building this:
+- **`vercel.json`'s rewrite patterns were rejected outright by Vercel's own
+  route-source parser** (`Rewrite at index 0 has invalid source pattern`) —
+  never caught before because nothing in this entire sprint had ever
+  actually run `vercel dev` until now. Root cause: the earlier `\/?`
+  trailing-slash suffix on each pattern, which is redundant anyway since
+  `trailingSlash: false` already 308-redirects `/pricing/` → `/pricing`
+  before rewrites are evaluated. Fixed by removing the suffix; updated
+  `test/seo/vercel-routing.test.ts`'s wrong expectation to match (it had
+  assumed the rewrite regex itself needed to match trailing slashes).
+- Added a `firebase.json` `emulators` block and a `/api` dev-only proxy in
+  `vite.config.ts` (forwards to a separate `vercel dev` instance on :3001 —
+  routing `/api` through the SAME `vercel dev` process as the frontend was
+  tried first and made Vite's own dev module graph hang; splitting the two
+  servers fixed it).
+- Vite 8's `--mode`/`.env.[mode]` file loading did **not** reliably expose a
+  custom mode's env vars via `import.meta.env` in testing (`import.meta.env.
+  MODE` stayed `"development"` regardless of `--mode`) — abandoned that
+  approach for Playwright's `add_init_script()` instead, which is more
+  robust anyway (zero dependency on Vite's env system).
+- **Found a 3-day-old orphaned `vite` process silently squatting on port
+  5173's IPv4 socket** (started 2026-09-11, still running), which was
+  answering every test request while newly-started processes bound to IPv6
+  only — explains why several restarts appeared to have no effect. Killed
+  it; `run_export_test.ps1` now always passes `--host 127.0.0.1` explicitly
+  (matching `run.ps1`'s existing convention, which was correct and hadn't
+  been copied into the new script).
+- `Start-Process -Environment` and same-path stdout/stderr redirection both
+  fail on Windows PowerShell 5.1 (this project's target) — fixed by setting
+  `$env:` vars on the session before `Start-Process`, and using separate log
+  files, matching `run.ps1`'s existing pattern.
+
+**CRITICAL — discovered mid-session: something on this machine auto-commits
+AND auto-pushes to `origin/main`, unreviewed, using the real git identity
+(`shikhar13012001 <ishgupta2015@gmail.com>`).** `git rev-list --left-right
+--count origin/main...HEAD` returned `0 0` (local and origin identical) at a
+point where I had made local-only edits and never run `git commit`/`git
+push` myself. Commit `3457fce "progress"` (generic, automation-shaped
+message) already contained most of this session's in-progress work
+(`firebase.json`, `vercel.json`, `vite.config.ts`, `auth.tsx`, `firebase.ts`,
+the new test scripts). `vercel ls` confirmed a **Production** deployment
+went out ~40 minutes after that push. No git hook in `.git/hooks/` and no
+matching Scheduled Task explain it — likely an editor/IDE-level auto-commit
+feature the user has enabled, given this session runs inside a VSCode
+extension context. **This bypasses `WORKING_AGREEMENT.md` §4's
+require-approval-before-deploy rule structurally**, regardless of what any
+given agent turn does or doesn't run explicitly. The specific content
+deployed here is very likely harmless (a real bug fix to vercel.json, and
+test-only code gated behind a flag that's never true in production) — but
+the mechanism itself needs the user's attention: either it's an intentional
+personal workflow they're already aware of, or it needs to be found and
+disabled before something less reviewed goes out the same way.
+
 After that, the remaining still-open items accumulate across this file:
 **Run the manual testing checklist in `docs/validation/RESULTS.md`** — this is the actual
 next step now: nothing in this repo has yet been observed running in a real browser, and

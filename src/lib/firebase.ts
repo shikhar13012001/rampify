@@ -29,13 +29,14 @@ export const auth = app ? getAuth(app) : (null as unknown as ReturnType<typeof g
 export const db   = app ? getFirestore(app) : (null as unknown as ReturnType<typeof getFirestore>);
 
 // Local-only test wiring: connects to the Firebase Auth + Firestore emulators
-// instead of the real project. Only ever true when the Skyvern UI harness
-// itself sets VITE_USE_FIREBASE_EMULATOR=true for its own vercel-dev child
-// process (see test/skyvern/run.ps1) — never a normal dev/preview/prod value.
-// Guarded by import.meta.env.DEV too so this is fully dead-code-eliminated
-// out of any production bundle, the same way analytics.ts's __rampifyJourney
-// dev hook is.
-if (import.meta.env.DEV && app && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+// instead of the real project. window.__RAMPIFY_EMULATOR_TEST__ is set via
+// Playwright's page.add_init_script() ONLY by
+// test/skyvern/run_export_test.py, before this module (or any app code) runs
+// — never true in a normal dev/preview/prod browser session. Also guarded by
+// import.meta.env.DEV so this branch is unreachable in any production build
+// regardless (window.__RAMPIFY_EMULATOR_TEST__ can only ever be undefined
+// there), the same way analytics.ts's __rampifyJourney dev hook is guarded.
+if (import.meta.env.DEV && app && typeof window !== 'undefined' && window.__RAMPIFY_EMULATOR_TEST__ === true) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8085);
 }

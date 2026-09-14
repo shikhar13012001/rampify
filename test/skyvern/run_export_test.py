@@ -106,6 +106,13 @@ async def main() -> int:
     page.set_default_timeout(30_000)
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
 
+    # Sets window.__RAMPIFY_EMULATOR_TEST__ = true before ANY page script runs
+    # (Playwright's standard mechanism for this — see firebase.ts/auth.tsx for
+    # the gate this flips). Deliberately not a Vite define/.env value: that
+    # was tried first and Vite 8's dev-server define resolution did not
+    # reliably reflect the launching process's env in testing.
+    await page.add_init_script("window.__RAMPIFY_EMULATOR_TEST__ = true;")
+
     try:
         await page.set_viewport_size({"width": 1440, "height": 900})
         await page.goto(base_url, wait_until="domcontentloaded")
@@ -121,7 +128,9 @@ async def main() -> int:
 
         print("Loading the demo clip...")
         await page.goto(f"{base_url}/editor?demo=1", wait_until="domcontentloaded")
-        await page.get_by_text("rampify-demo-clip.mp4", exact=False).wait_for(state="visible", timeout=20_000)
+        await page.get_by_text("rampify-demo-clip.mp4", exact=False).first.wait_for(
+            state="visible", timeout=20_000
+        )
 
         print("Opening the export modal and starting a real export...")
         await page.get_by_title("Export video (Ctrl+E)").click()

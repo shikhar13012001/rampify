@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:ui:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/setup.ps1",
     "test:ui": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/run.ps1",
-    "test:ui:headed": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/run.ps1 -Headed -SlowMo 600"
+    "test:ui:headed": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/run.ps1 -Headed -SlowMo 600",
+    "test:ui:export": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/run_export_test.ps1",
+    "test:ui:export:headed": "powershell -NoProfile -ExecutionPolicy Bypass -File test/skyvern/run_export_test.ps1 -Headed"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.6",

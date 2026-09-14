@@ -72,8 +72,9 @@ function initOneTap(onSuccess: (user: User) => void) {
 // against the Firebase Auth Emulator without ever touching a real Google
 // account or credential. It talks to whatever `auth` currently points at,
 // which is only ever the emulator when firebase.ts's
-// VITE_USE_FIREBASE_EMULATOR gate is on (see that file) — this function does
-// nothing different from a normal signInWithEmailAndPassword call otherwise,
+// window.__RAMPIFY_EMULATOR_TEST__ gate is on (see that file) — this
+// function does nothing different from a normal signInWithEmailAndPassword
+// call otherwise,
 // it's the emulator wiring that makes it safe, not this function itself.
 // Exposed as window.__rampifyTestSignIn only under that same gate, the same
 // dead-code-elimination pattern as analytics.ts's __rampifyJourney.
@@ -90,11 +91,7 @@ export async function signInEmulatorTestUser(email: string, password: string): P
   }
 }
 
-if (
-  import.meta.env.DEV &&
-  typeof window !== 'undefined' &&
-  import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true'
-) {
+if (import.meta.env.DEV && typeof window !== 'undefined' && window.__RAMPIFY_EMULATOR_TEST__ === true) {
   (window as unknown as { __rampifyTestSignIn?: typeof signInEmulatorTestUser }).__rampifyTestSignIn =
     signInEmulatorTestUser;
 }

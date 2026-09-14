@@ -17,10 +17,18 @@ const vercelConfig = JSON.parse(
 ) as { rewrites: { source: string; destination: string }[]; trailingSlash?: boolean };
 
 // vercel.json intentionally splits routes across multiple rewrite entries —
-// a single alternation group cannot contain a literal "/" (Vercel's
-// path-to-regexp source parser rejects it), so "/upgrade/success" and
-// "/features/..." each need their own entry. A path is rewritten if ANY
-// entry matches, exactly like Vercel evaluates the array at request time.
+// "/upgrade/success" and "/features/..." each need their own entry since
+// they sit at a different path depth than the single-segment routes. A path
+// is rewritten if ANY entry matches, exactly like Vercel evaluates the array
+// at request time.
+//
+// The patterns deliberately do NOT match a trailing slash themselves (an
+// earlier version appended `\/?` to each — Vercel's own route-source parser
+// rejects that suffix outright, confirmed by actually running `vercel dev`
+// locally, not just guessed at). Trailing-slash handling is a SEPARATE layer:
+// vercel.json's top-level `trailingSlash: false` makes Vercel 308-redirect
+// "/pricing/" -> "/pricing" before rewrites are evaluated at all, so the
+// rewrite regex never needs to see a trailing slash in the first place.
 const rewritePatterns = vercelConfig.rewrites.map((r) => new RegExp(`^${r.source}$`));
 function matchesAnyRewrite(path: string): boolean {
   return rewritePatterns.some((pattern) => pattern.test(path));
@@ -51,9 +59,9 @@ describe('vercel.json rewrite — known SPA routes vs. unknown paths', () => {
     }
   });
 
-  it('also matches a known route with a trailing slash', () => {
-    expect(matchesAnyRewrite('/pricing/')).toBe(true);
-    expect(matchesAnyRewrite('/features/speed-ramp/')).toBe(true);
+  it('does not itself match a trailing slash — that is trailingSlash:false\'s job, not the rewrite regex\'s', () => {
+    expect(matchesAnyRewrite('/pricing/')).toBe(false);
+    expect(matchesAnyRewrite('/features/speed-ramp/')).toBe(false);
   });
 
   it('does NOT match an unknown/typo\'d path — this should fall through to a real 404', () => {

@@ -36,8 +36,8 @@ export function About() {
   return (
     <div className="clay-page">
       <Seo
-        title="About — Rampify: Local-First Video Speed Editor"
-        description="Rampify is a local-first, browser-based video speed ramping editor. No uploads, no cloud rendering. Built on ffmpeg.wasm, RIFE AI, and WebAssembly."
+        title="About — Rampcut: Local-First Video Speed Editor"
+        description="Rampcut is a local-first, browser-based video speed ramping editor. No uploads, no cloud rendering. Built on ffmpeg.wasm, RIFE AI, and WebAssembly."
         path="/about"
       />
       <ClayNav ctaLabel="Start free" />
@@ -65,7 +65,7 @@ export function About() {
             without the friction.
           </h1>
           <p className="clay-body" style={{ margin: '24px 0 0', fontSize: 17, lineHeight: 1.6, maxWidth: 560 }}>
-            Rampify started as a frustration: every speed-ramp tool either needed a download, slapped a watermark on your work, or charged $30/month for features you'd use twice. We built the opposite — a browser-native editor that respects your footage, your time, and your wallet.
+            Rampcut started as a frustration: every speed-ramp tool either needed a download, slapped a watermark on your work, or charged $30/month for features you'd use twice. We built the opposite — a browser-native editor that respects your footage, your time, and your wallet.
           </p>
         </div>
       </section>
@@ -171,15 +171,15 @@ export function About() {
             One person, one mission
           </h2>
           <p className="clay-body" style={{ margin: '0 auto', fontSize: 16, lineHeight: 1.7, maxWidth: 560 }}>
-            Rampify is built by a solo developer who got tired of paying for features locked behind enterprise tiers. No VC money, no growth team, no dark patterns — just a tool that does one thing well and charges honestly for it.
+            Rampcut is built by a solo developer who got tired of paying for features locked behind enterprise tiers. No VC money, no growth team, no dark patterns — just a tool that does one thing well and charges honestly for it.
           </p>
           <p className="clay-body" style={{ margin: '24px auto 0', fontSize: 14, color: 'var(--color-clay-ink-muted)' }}>
             Questions? Email{' '}
             <a
-              href="mailto:hello@rampify.app"
+              href="mailto:hello@rampcut.com"
               style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}
             >
-              hello@rampify.app
+              hello@rampcut.com
             </a>
           </p>
         </div>

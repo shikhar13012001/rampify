@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const DISMISS_KEY = 'rampify_keyboard_hints_hidden';
+const DISMISS_KEY = 'rampcut_keyboard_hints_hidden';
 
 const SHORTCUTS = [
   { key: 'Space', description: 'Play / pause' },

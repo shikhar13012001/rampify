@@ -82,8 +82,8 @@ export function Roadmap() {
   return (
     <div className="clay-page">
       <Seo
-        title="Roadmap — What's Next for Rampify Speed Editor"
-        description="Rampify public roadmap: timeline ruler, multi-clip project support, keyboard shortcut editor, LUTs, caption track, and more. Vote on what we build next."
+        title="Roadmap — What's Next for Rampcut Speed Editor"
+        description="Rampcut public roadmap: timeline ruler, multi-clip project support, keyboard shortcut editor, LUTs, caption track, and more. Vote on what we build next."
         path="/roadmap"
       />
       <ClayNav ctaLabel="Start free" />
@@ -106,7 +106,7 @@ export function Roadmap() {
             className="clay-display"
             style={{ margin: 0, fontSize: 'clamp(40px, 5vw, 56px)' }}
           >
-            Where Rampify is going
+            Where Rampcut is going
           </h1>
           <p className="clay-body" style={{ margin: '16px 0 0', fontSize: 16, maxWidth: 560 }}>
             A living look at what we're building next. Vote on features, file issues, or just keep an eye on the trajectory.

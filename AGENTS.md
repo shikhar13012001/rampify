@@ -1,4 +1,4 @@
-# Rampify — Codex Guide
+# Rampcut — Codex Guide
 
 ## Stack
 

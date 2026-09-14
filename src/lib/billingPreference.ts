@@ -12,9 +12,9 @@
  * purely about the client-side UI remembering what was picked.
  */
 
-export type BillingPeriod = 'monthly' | 'annual';
+export type BillingPeriod = 'monthly' | 'annual' | 'founder';
 
-const STORAGE_KEY = 'rampify:billing-period';
+const STORAGE_KEY = 'rampcut:billing-period';
 const DEFAULT_PERIOD: BillingPeriod = 'monthly';
 
 function safeSessionStorage(): Storage | null {
@@ -28,7 +28,7 @@ function safeSessionStorage(): Storage | null {
 export function getPreferredBillingPeriod(): BillingPeriod {
   try {
     const stored = safeSessionStorage()?.getItem(STORAGE_KEY);
-    return stored === 'monthly' || stored === 'annual' ? stored : DEFAULT_PERIOD;
+    return stored === 'monthly' || stored === 'annual' || stored === 'founder' ? stored : DEFAULT_PERIOD;
   } catch {
     return DEFAULT_PERIOD;
   }

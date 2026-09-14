@@ -321,13 +321,13 @@ describe('Search Console — CTR from summed clicks/impressions, not averaged pe
 
   it('splits branded vs non-branded queries by the brand term, case-insensitively', () => {
     const rows = [
-      normalizeGscRow({ Query: 'synthetic Rampify speed ramp', Clicks: '5', Impressions: '50' }, 'Query'),
+      normalizeGscRow({ Query: 'synthetic Rampcut speed ramp', Clicks: '5', Impressions: '50' }, 'Query'),
       normalizeGscRow({ Query: 'synthetic slow motion editor online', Clicks: '3', Impressions: '80' }, 'Query'),
     ];
     const { branded, nonBranded } = splitBranded(rows);
     expect(branded).toHaveLength(1);
     expect(nonBranded).toHaveLength(1);
-    expect(branded[0].key).toContain('Rampify');
+    expect(branded[0].key).toContain('Rampcut');
   });
 
   it('keeps per-row position for display but summarizeGscRows never produces one aggregate "position" figure', () => {

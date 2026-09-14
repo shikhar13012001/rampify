@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 import { readFileSync } from 'fs';
 
@@ -14,7 +15,61 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Offline PWA. Deliberately minimal scope:
+    //  - precache: the app shell (index.html + js/css chunks + svg). Small.
+    //  - runtime CacheFirst: the heavy pieces the editor fetches on demand
+    //    (ffmpeg-core wasm chunk under /assets, onnxruntime-web's wasm from
+    //    jsdelivr, the demo clip). Marketing visitors never download them;
+    //    anyone who has exported once can export again with no network.
+    //  - navigation fallback ONLY for /editor: marketing routes stay plain
+    //    network requests so the per-route prerendered HTML is what a real
+    //    request (or a crawler) sees. Offline, /editor still opens.
+    //  - /api and /_vercel are never touched by the worker.
+    // The RIFE model (21 MB) is cached by opticalFlowWorker.ts in IndexedDB
+    // already, so it is excluded here on purpose — no double caching.
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: null, // registered by src/lib/pwa.ts so the app can show install/update UI
+      manifest: false,      // hand-written: public/manifest.webmanifest
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        globIgnores: ['**/models/**', '**/demo/**', '**/*.wasm', 'assets/*Worker*.js'],
+        // ffmpeg-core.js is ~1 MB of glue; keep it out of precache and let
+        // runtime caching pick it up together with its wasm.
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        navigateFallback: '/index.html',
+        navigateFallbackAllowlist: [/^\/editor(\/|$|\?)/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/_vercel\//, /^\/__\//],
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin &&
+              (url.pathname.endsWith('.wasm') || /\/assets\/.*Worker.*\.js$/.test(url.pathname) || url.pathname.startsWith('/demo/')),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'rampcut-engine-v1',
+              expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.hostname === 'cdn.jsdelivr.net' && url.pathname.includes('onnxruntime-web'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'rampcut-onnxruntime-v1',
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

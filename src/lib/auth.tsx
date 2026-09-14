@@ -72,12 +72,12 @@ function initOneTap(onSuccess: (user: User) => void) {
 // against the Firebase Auth Emulator without ever touching a real Google
 // account or credential. It talks to whatever `auth` currently points at,
 // which is only ever the emulator when firebase.ts's
-// window.__RAMPIFY_EMULATOR_TEST__ gate is on (see that file) — this
+// window.__RAMPCUT_EMULATOR_TEST__ gate is on (see that file) — this
 // function does nothing different from a normal signInWithEmailAndPassword
-// call otherwise,
-// it's the emulator wiring that makes it safe, not this function itself.
-// Exposed as window.__rampifyTestSignIn only under that same gate, the same
-// dead-code-elimination pattern as analytics.ts's __rampifyJourney.
+// call otherwise; it's the emulator wiring that makes it safe, not this
+// function itself.
+// Exposed as window.__rampcutTestSignIn only under that same gate, the same
+// dead-code-elimination pattern as analytics.ts's __rampcutJourney.
 export async function signInEmulatorTestUser(email: string, password: string): Promise<User> {
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password);
@@ -91,8 +91,8 @@ export async function signInEmulatorTestUser(email: string, password: string): P
   }
 }
 
-if (import.meta.env.DEV && typeof window !== 'undefined' && window.__RAMPIFY_EMULATOR_TEST__ === true) {
-  (window as unknown as { __rampifyTestSignIn?: typeof signInEmulatorTestUser }).__rampifyTestSignIn =
+if (import.meta.env.DEV && typeof window !== 'undefined' && window.__RAMPCUT_EMULATOR_TEST__ === true) {
+  (window as unknown as { __rampcutTestSignIn?: typeof signInEmulatorTestUser }).__rampcutTestSignIn =
     signInEmulatorTestUser;
 }
 

@@ -47,6 +47,8 @@ describe('production build — prerendered marketing routes', () => {
     { file: 'index.html', path: '/', h1: 'Make a clip worth watching twice — no upload, ever.' },
     { file: 'pricing/index.html', path: '/pricing', h1: 'Start free. Upgrade when you ship.' },
     { file: 'features/speed-ramp/index.html', path: '/features/speed-ramp', h1: 'Speed Ramp Videos with Precision Curves' },
+    { file: 'curves/index.html', path: '/curves', h1: 'The Curve Library' },
+    { file: 'curves/hero-moment/index.html', path: '/curves/hero-moment', h1: 'Hero Moment speed curve' },
   ];
 
   it('each prioritized route has its own real static HTML file in dist/', () => {
@@ -73,7 +75,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes) {
       const html = readDist(r.file);
       const canonical = extractTag(html, /<link rel="canonical" href="([^"]*)"/, 'canonical');
-      expect(canonical).toBe(`https://rampify.astralbuild.dev${r.path}`);
+      expect(canonical).toBe(`https://rampcut.com${r.path}`);
     }
   });
 
@@ -81,7 +83,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes) {
       const html = readDist(r.file);
       const ogUrl = extractTag(html, /<meta property="og:url" content="([^"]*)"/, 'og:url');
-      expect(ogUrl).toBe(`https://rampify.astralbuild.dev${r.path}`);
+      expect(ogUrl).toBe(`https://rampcut.com${r.path}`);
     }
   });
 
@@ -105,7 +107,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes.slice(1)) {
       const html = readDist(r.file);
       expect(html).toContain('"@type":"BreadcrumbList"');
-      expect(html).toContain(`"item":"https://rampify.astralbuild.dev${r.path}"`);
+      expect(html).toContain(`"item":"https://rampcut.com${r.path}"`);
     }
   });
 
@@ -116,7 +118,7 @@ describe('production build — prerendered marketing routes', () => {
         .flatMap((m) => [...m[1].matchAll(/href="([^"]+)"/g)].map((h) => h[1]));
       expect(hrefs.length).toBeGreaterThan(0);
       // Every link must be a real route this app actually serves, not invented.
-      const knownRoutes = ['/', '/pricing', '/features/speed-ramp', '/docs'];
+      const knownRoutes = ['/', '/pricing', '/features/speed-ramp', '/curves', '/docs'];
       for (const href of hrefs) {
         expect(knownRoutes).toContain(href);
       }
@@ -155,7 +157,7 @@ describe('/features/speed-ramp — static HTML (direct navigation, before hydrat
 
   it('canonical points to itself, consistent with the h1/title also served', () => {
     const html = readDist('features/speed-ramp/index.html');
-    expect(html).toContain('<link rel="canonical" href="https://rampify.astralbuild.dev/features/speed-ramp" />');
+    expect(html).toContain('<link rel="canonical" href="https://rampcut.com/features/speed-ramp" />');
     expect(html).toContain('<title>Speed Ramp Video Editor');
     const h1Matches = [...html.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)];
     expect(h1Matches.length).toBe(1);
@@ -180,9 +182,9 @@ describe('production build — sitemap keeps private/account routes out', () => 
   it('sitemap.xml only lists the 3 prioritized routes plus other real, non-private routes', () => {
     const sitemap = readDist('sitemap.xml');
     const locs = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
-    expect(locs).toContain('https://rampify.astralbuild.dev/');
-    expect(locs).toContain('https://rampify.astralbuild.dev/pricing');
-    expect(locs).toContain('https://rampify.astralbuild.dev/features/speed-ramp');
+    expect(locs).toContain('https://rampcut.com/');
+    expect(locs).toContain('https://rampcut.com/pricing');
+    expect(locs).toContain('https://rampcut.com/features/speed-ramp');
     for (const loc of locs) {
       expect(loc).not.toMatch(/\/editor|\/upgrade/);
     }
@@ -217,7 +219,7 @@ describe('all 13 sitemap.xml routes are prerendered with correct, unique metadat
     for (const r of ALL_SITEMAP_ROUTES) {
       expect(existsSync(join(distDir, r.file))).toBe(true);
       const html = readDist(r.file);
-      expect(html).toContain(`<link rel="canonical" href="https://rampify.astralbuild.dev${r.path}" />`);
+      expect(html).toContain(`<link rel="canonical" href="https://rampcut.com${r.path}" />`);
     }
   });
 
@@ -250,6 +252,12 @@ describe('FourKExportFeature — false format/resolution/frame-rate claims remov
     expect(fourKSrc.toLowerCase()).not.toContain('vp9');
     const ffmpegBridgeSrc = readFileSync(join(root, 'src', 'lib', 'ffmpegBridge.ts'), 'utf-8');
     expect(ffmpegBridgeSrc.toLowerCase()).not.toContain('webm');
+    // Same false claim previously lived in index.html's global FAQPage
+    // JSON-LD too — that block is copied into every prerendered route by
+    // prerender-seo.mjs, so a stale claim here reaches every crawler-facing
+    // page, not just this one component.
+    const indexHtmlSrc = readFileSync(join(root, 'index.html'), 'utf-8');
+    expect(indexHtmlSrc.toLowerCase()).not.toContain('vp9');
   });
 
   it('does not claim resolution options that do not exist (720p/1440p) — only 1080p/4K are real', () => {

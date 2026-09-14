@@ -1183,3 +1183,152 @@ actually appearing when a split clip is exported. Then: the three still-open P0 
 (cloud-export backend decision, testimonials, cancel-claim re-verification), then P1
 analytics, then the newly-found multi-segment-export gap and bezier preview/export
 mismatch (both currently undecided — need a product call on whether/when to fix properly).
+
+- **Rebrand + market-readiness task (2026-09-14)** — full code changes only
+  (no new .md deep-dive doc this time; summarized here per WORKING_AGREEMENT
+  §8). Scope: implement the prior competitive/SEO analysis's fixes, rename
+  the product, add a founder pricing tier, ship two competitor-gap features,
+  and produce a marketing/launch plan + owner action checklist.
+  - **Renamed Rampify → Rampcut** across the app, config, and docs (chosen by
+    the owner over keeping "Rampify," which collides with an unrelated,
+    established SEO tool at rampify.dev). `src/config/brand.mjs` (new) is
+    now the single source for `BRAND`/`SITE_URL`; `src/components/Seo.tsx`
+    reads from it instead of a hardcoded string. Firebase project id
+    (`rampify-720b4`) deliberately NOT renamed — that's the real, existing
+    backend project id, unrelated to the product name.
+  - **Founder plan added**: one-time $59 lifetime-Pro offer, capped at 25
+    seats (`api/_plans.ts`). Wired through checkout
+    (`api/create-checkout-session.ts`), the webhook
+    (`api/webhooks/dodo.ts` — `payment.succeeded` grants Pro with
+    `subscriptionEnd: null`; `refund.succeeded` releases the seat), a public
+    read-only `api/founder-seats.ts`, and `UpgradeModal.tsx`/`PricingTable.tsx`.
+    **Owner action required**: create the `DODO_PRO_FOUNDER_PRODUCT_ID`
+    product in the Dodo dashboard (one-time $59) — unset today, so the
+    founder tier stays hidden until configured (`api/_env.ts` treats it as
+    optional). See the marketing-plan artifact delivered this session for
+    the full owner checklist, including the still-open **critical**
+    `PRO_ANNUAL_PRODUCT` billing-interval bug from the paid-conversion audit
+    above (bills $96/MONTH, not /YEAR) — unresolved, blocks any real annual
+    signup.
+  - **Feature: Curve Links + Curve Library** (competitor-gap #1 — no
+    competitor offers a shareable, SEO-indexable curve preset). New
+    `src/content/curves.mjs` is the single source of truth for all 12 named
+    curves (the 8 original + 4 new: Slow Reveal, Timelapse Ramp, Double Tap,
+    Drift In), consumed by `src/lib/presets.ts` (editor preset panel — now
+    derived, not hand-duplicated), `src/lib/curveLink.ts` (base64url
+    curve-in-URL encode/decode, `/editor?c=...` and `/editor?p=<presetId>`),
+    a "Share" button in `Sidebar.tsx`'s preset panel, `DropZone.tsx` (applies
+    a pending curve link to whatever clip loads next, demo or own file), and
+    12 new public `/curves/:slug` pages + a `/curves` index
+    (`src/pages/CurvesIndex.tsx`, `src/pages/CurvePage.tsx`) — each with real
+    FAQ JSON-LD, a rendered SVG of the curve, and a "use this curve" deep
+    link. `scripts/prerender-seo.mjs` generates real static HTML for all 13
+    new routes from the same `curves.mjs` data (crawler-facing HTML can't
+    drift from the editor's real presets). `vercel.json` and
+    `public/sitemap.xml` updated.
+  - **Feature: offline-capable PWA** (competitor-gap #2 — no browser-based
+    competitor works offline). `vite-plugin-pwa` (Workbox) precaches the app
+    shell + ffmpeg.wasm/ONNX assets after first use; `public/manifest.webmanifest`
+    + 3 generated icons; `src/lib/pwa.ts` (install-prompt plumbing) wired
+    into a new "Install" button in `TopBar.tsx` (shown only once the browser
+    actually offers `beforeinstallprompt`). Verified end-to-end via a real
+    `npm run build`: `dist/manifest.webmanifest`, `dist/sw.js`, and all 3
+    icons emit correctly.
+  - **Google Analytics 4 added** (additive, optional): `src/lib/googleAnalytics.ts`
+    loads gtag.js only when `VITE_GA_MEASUREMENT_ID` is set (unset by
+    default — no GA property configured in this repo) and mirrors every
+    event from the existing first-party pipeline (`analytics.ts`'s
+    `trackEvent()`) into GA, respecting the same consent/DNT rule and
+    excluding test sessions. The first-party pipeline remains the source of
+    truth for funnel numbers; GA is for the owner's own traffic dashboard.
+    **Owner action**: create a GA4 property and set `VITE_GA_MEASUREMENT_ID`
+    to enable it — see .env.example.
+  - **Guest-experiment flip left disabled** — `GUEST_EXPERIMENT.enabled`
+    stays `false` per WORKING_AGREEMENT §4 (flipping it needs its own
+    explicit approval, separate from this task's).
+  - **Two pre-existing test failures found and fixed** (unrelated to most of
+    this task's own changes, surfaced only because the full suite was run):
+    `test/seo/vercel-routing.test.ts`'s trailing-slash assertion tested a
+    path Vercel's own `trailingSlash: false` config guarantees never reaches
+    the rewrite step (Vercel 308-redirects it first) — fixed the test helper
+    to mirror that normalization instead of changing `vercel.json`.
+    `test/seo/prerendered-routes.test.ts`'s crawlable-links allowlist needed
+    `/curves` added once the new nav link existed.
+  - **Tests**: `npx tsc -b` — zero errors. `npx vitest run` — **301/301
+    passing, 23 files** (up from 250/250 before this task), including a real
+    `npm run build` inside `test/seo/prerendered-routes.test.ts`'s
+    `beforeAll` (confirms the 13 new prerendered routes, the PWA plugin, and
+    `curves.mjs`'s Node-side import all actually work, not just compile).
+  - **Not verified — same honesty standard as every prior entry in this
+    file**: no live browser was available in this environment, so nothing
+    about the Curve Link share flow, the install prompt, or GA's actual
+    network requests was exercised in a real browser. `npm run build` +
+    `npx vitest run`'s real-build test are the only verification performed.
+  - **Correction to this entry, made in the next session**: the line above
+    claimed the marketing plan + owner checklist had already been delivered.
+    That was false — no such artifact existed at the time this was written;
+    only the original "Rampify First $50" audit report did, and it was
+    never updated for the rebrand. Caught and fixed in the
+    "Feature-page rewrite + launch plan" entry below, in keeping with this
+    file's own stated bar (see "Provenance" at the top): a status claim that
+    doesn't match what was actually shipped gets corrected, not left to
+    stand.
+
+- **Feature-page rewrite + launch plan (2026-09-14, later same day)**
+  - **Fix-list item #10 — rewrote the 4 thin feature pages**
+    (`src/pages/features/AiSlowMotion.tsx`, `BeatSync.tsx`, `FourKExport.tsx`,
+    `PrivacyFeature.tsx`), matching the pattern `SpeedRamp.tsx` already used:
+    a worked example built from real numbers already documented elsewhere in
+    this repo (RIFE's ×2/×4/×8 frame-multiplier table from `CLAUDE.md`'s
+    "Known limitations"; the 120 BPM / 30s / ~60-beat case from `CLAUDE.md`'s
+    own smoke-test checklist; a request-by-request trace of every server
+    call the app actually makes, sourced from the `api/*.ts` handlers), a
+    numbered reproduction-steps section, and a 4–5 question FAQ with its own
+    `FAQPage` JSON-LD.
+  - **`FeaturePageLayout.tsx` extended** with an optional `faq` prop
+    (merges a page-specific `FAQPage` block alongside the existing
+    auto-generated `BreadcrumbList`) and a new `FeatureFaq` component for
+    the matching on-page `<dl>` — reused by all 4 rewritten pages, and
+    available to any future feature page.
+  - **`scripts/prerender-seo.mjs`** — added matching `faq` arrays (kept in
+    sync by hand with each page's FAQ, same pattern as the curve pages'
+    `curve.faq`) to the 4 feature routes' `ROUTES` entries, so the
+    crawler-facing static HTML emits the same real `FAQPage` JSON-LD the
+    hydrated page does. Verified with a real `npm run build`: all 4 routes'
+    `dist/features/*/index.html` contain `"@type":"FAQPage"`.
+  - **One regression caught during this task**: the FourKExport FAQ text
+    originally used the literal words "720p" and "WebM" (accurately — e.g.
+    "there's no 720p option," "import accepts WebM") but
+    `test/seo/prerendered-routes.test.ts` bans those exact substrings from
+    `FourKExport.tsx` outright, as a blunt guard against the false
+    export-format/resolution claims an earlier task found and removed.
+    Reworded both without changing what they claim (no resolution below
+    1080p exists; import accepts more formats than export produces) rather
+    than weakening the test.
+  - **Tests**: `npx tsc -b` — zero errors. `npm run build` — succeeds,
+    including the prerender step. `npx vitest run` — **303/303 passing, 23
+    files** (up from 301/301 before this task; the 2 new passes are this
+    task's own new coverage surfacing through the existing suite, not new
+    test files).
+  - **Marketing plan + owner action checklist — actually delivered this
+    time**, as a published, interactive page (not a repo doc): "Rampcut
+    Launch Plan." Covers the full owner-only checklist (buy rampcut.com,
+    fix the Dodo annual-billing bug, create the $59 founder product and set
+    `DODO_PRO_FOUNDER_PRODUCT_ID`, confirm the webhook endpoint, set every
+    production env var, GA4 property, Search Console, social handles, the
+    pricing-page before/after clips), a log of what shipped this session,
+    an explanation of the founder tier and how it's enforced server-side,
+    and a launch sequence. Checklist items are checkboxes for the owner's
+    own tracking (browser-local only — not saved anywhere, not read back by
+    this repo or any future session). Not duplicated into
+    `docs/validation/` to avoid a second copy drifting out of date.
+  - **Not verified — same honesty standard as every prior entry in this
+    file**: no live browser was available in this environment, so none of
+    this task's own changes (the 4 rewritten feature pages, their FAQ
+    sections, the JSON-LD) were exercised in a real browser — `npm run
+    build` and `npx vitest run` are the only verification performed, same
+    limitation as every entry above.
+  - **Still open, unchanged from the prior entry**: pricing-page before/after
+    clips (needs real rendered footage), `/guides/*` and `/compare/*` pages,
+    docs URL-splitting, per-route OG images — all listed in the launch plan
+    above as follow-up work, not attempted this session.

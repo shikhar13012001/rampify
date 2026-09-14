@@ -327,7 +327,7 @@ export function parseCsv(text) {
 
 // ─── Search Console ─────────────────────────────────────────────────────────
 
-const DEFAULT_BRAND_TERMS = ['rampify'];
+const DEFAULT_BRAND_TERMS = ['rampcut'];
 
 function toNumber(value) {
   if (typeof value === 'number') return value;
@@ -368,7 +368,7 @@ export function summarizeGscRows(rows) {
 }
 
 /** Splits normalized rows into branded/non-branded by substring match
- *  against `brandTerms` (default: ['rampify'], case-insensitive). Only
+ *  against `brandTerms` (default: ['rampcut'], case-insensitive). Only
  *  meaningful for QUERY rows, not page rows. */
 export function splitBranded(rows, brandTerms = DEFAULT_BRAND_TERMS) {
   const terms = brandTerms.map((t) => t.toLowerCase());

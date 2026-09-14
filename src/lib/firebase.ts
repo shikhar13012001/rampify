@@ -28,15 +28,27 @@ export function getFirebaseInitError(): Error | null {
 export const auth = app ? getAuth(app) : (null as unknown as ReturnType<typeof getAuth>);
 export const db   = app ? getFirestore(app) : (null as unknown as ReturnType<typeof getFirestore>);
 
-// Local-only test wiring: connects to the Firebase Auth + Firestore emulators
-// instead of the real project. window.__RAMPIFY_EMULATOR_TEST__ is set via
-// Playwright's page.add_init_script() ONLY by
-// test/skyvern/run_export_test.py, before this module (or any app code) runs
-// — never true in a normal dev/preview/prod browser session. Also guarded by
-// import.meta.env.DEV so this branch is unreachable in any production build
-// regardless (window.__RAMPIFY_EMULATOR_TEST__ can only ever be undefined
-// there), the same way analytics.ts's __rampifyJourney dev hook is guarded.
-if (import.meta.env.DEV && app && typeof window !== 'undefined' && window.__RAMPIFY_EMULATOR_TEST__ === true) {
+// window.__RAMPCUT_EMULATOR_TEST__ is set via Playwright's
+// page.add_init_script() ONLY by test/skyvern/run_export_test.py, before
+// this module (or any app code) runs — never true in a normal
+// dev/preview/prod browser session. An earlier version of this gate used a
+// VITE_USE_FIREBASE_EMULATOR env var passed to the vercel-dev child process
+// instead (see test/skyvern/run_export_test.ps1); that was dropped in favor
+// of the window flag because Vite 8's dev-server define resolution did not
+// reliably reflect the launching process's env in testing (see
+// run_export_test.py's own comment on the add_init_script call).
+declare global {
+  interface Window {
+    __RAMPCUT_EMULATOR_TEST__?: boolean;
+  }
+}
+
+// Local-only test wiring: connects to the Firebase Auth + Firestore
+// emulators instead of the real project. Guarded by import.meta.env.DEV too
+// so this branch is unreachable in any production build regardless (the
+// flag can only ever be undefined there), the same way analytics.ts's
+// __rampcutJourney dev hook is guarded.
+if (import.meta.env.DEV && app && typeof window !== 'undefined' && window.__RAMPCUT_EMULATOR_TEST__ === true) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8085);
 }

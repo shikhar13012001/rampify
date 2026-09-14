@@ -7,6 +7,8 @@ import { subscribeModelStatus, waitForWorkerReady } from '@/lib/slowMotionPipeli
 import type { ModelStatus } from '@/lib/slowMotionPipeline';
 import { planTierFor } from '@/lib/exportLimits';
 import { canUseBlurIntensity, canUseOpticalFlow, type PlanTier } from '@/lib/planConfig';
+import { buildCurveLinkUrl } from '@/lib/curveLink';
+import { trackEvent } from '@/lib/analytics';
 import type { BlurIntensity, OpticalFlowQuality, Segment } from '@/types/editor';
 
 function fmtDuration(s: number): string {
@@ -63,11 +65,28 @@ export function Sidebar() {
   const [lockAudio, setLockAudio] = useState(true);
   const [muteDuringRamp, setMuteDuringRamp] = useState(false);
   const [fileInfoOpen, setFileInfoOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   if (!project) return null;
 
   const { file, segments } = project;
   const selected = segments.find((segment) => segment.id === selectedId) ?? segments[0] ?? null;
+
+  const handleCopyCurveLink = async (segment: Segment) => {
+    const url = buildCurveLinkUrl(segment.curve);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      trackEvent({ name: 'curve_link_copied', props: { pointCount: segment.curve.points.length } });
+      setTimeout(() => setLinkCopied(false), 1800);
+    } catch {
+      // Clipboard write blocked (permissions, insecure context) — no
+      // fallback UI for this non-critical action; the button just stays
+      // "Share" and the user can select-and-copy from the address bar
+      // themselves if they build the link a different way.
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -139,7 +158,32 @@ export function Sidebar() {
       {/* Presets */}
       {selected && (
         <SectionCard>
-          <SectionLabel>Curve presets</SectionLabel>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <SectionLabel>Curve presets</SectionLabel>
+            <button
+              type="button"
+              onClick={() => handleCopyCurveLink(selected)}
+              title="Copy a shareable link — anyone who opens it and drops a clip gets this exact curve"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.02em',
+                padding: '3px 7px',
+                borderRadius: 6,
+                cursor: 'pointer',
+                border: `1px solid ${linkCopied ? 'rgba(139, 111, 255, 0.4)' : 'var(--color-border)'}`,
+                background: linkCopied ? 'rgba(139, 111, 255, 0.14)' : 'rgba(255,255,255,0.02)',
+                color: linkCopied ? '#C4B8FF' : 'var(--color-text-subtle)',
+                transition: 'border-color 0.12s, background 0.12s, color 0.12s',
+              }}
+            >
+              <LinkIcon />
+              {linkCopied ? 'Copied' : 'Share'}
+            </button>
+          </div>
           <div style={{ paddingTop: 2 }}>
             <PresetPanel
               currentCurve={selected.curve}
@@ -944,6 +988,26 @@ function UndoIcon({ active }: { active: boolean }) {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={active ? '#b8a4ed' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="1 4 1 10 7 10" />
       <path d="M3.51 15a9 9 0 1 0 .49-4.5" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   );
 }

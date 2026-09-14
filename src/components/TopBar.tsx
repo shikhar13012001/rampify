@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useEditorStore } from '@/store/editorStore';
 import { UserButton, SignInButton } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
+import { usePwaInstall } from '@/lib/pwa';
 
 interface TopBarProps {
   onExportClick?: () => void;
@@ -29,6 +30,8 @@ export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarP
     : isAuthLoading
       ? (isExporting ? 'Exporting…' : 'Export')
       : isExporting ? 'Exporting…' : `Export (${remaining} left)`;
+
+  const { canInstall, install, standalone } = usePwaInstall();
 
   return (
     <header
@@ -82,7 +85,7 @@ export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarP
         >
           <Logo size={22} />
           <span className="editor-wordmark" style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.035em', color: '#0a0a0a' }}>
-            rampify
+            rampcut
           </span>
         </Link>
       </div>
@@ -136,6 +139,28 @@ export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarP
           >
             Pro
           </span>
+        )}
+
+        {/* Install app — only shown once the browser has actually offered
+            the install prompt (canInstall) and we're not already running
+            standalone. Hidden, not disabled, otherwise — most browsers
+            never fire beforeinstallprompt (Safari, Firefox), and this
+            avoids a button that does nothing there. */}
+        {canInstall && !standalone && (
+          <button
+            type="button"
+            onClick={() => { void install(); }}
+            title="Install Rampcut — works offline after your first export"
+            aria-label="Install Rampcut"
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 34, height: 34, borderRadius: 9,
+              border: '1px solid var(--color-border)', background: 'transparent',
+              color: 'var(--color-text-muted)', cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <InstallIcon />
+          </button>
         )}
 
         {/* Auth UI */}
@@ -209,6 +234,16 @@ export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarP
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
+
+function InstallIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v12" />
+      <polyline points="7 10 12 15 17 10" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  );
+}
 
 function VideoFileIcon() {
   return (

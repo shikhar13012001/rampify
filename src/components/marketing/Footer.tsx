@@ -65,14 +65,14 @@ export function Footer() {
               className="clay-display"
               style={{ fontSize: 18, fontWeight: 600 }}
             >
-              rampify
+              rampcut
             </span>
           </div>
           <p className="clay-body" style={{ margin: 0, fontSize: 13, maxWidth: 280 }}>
             Browser-native speed ramping. Drop a clip, draw your curve, export — no installs, no watermarks.
           </p>
           <p style={{ margin: '20px 0 0', fontSize: 12, color: 'var(--color-clay-ink-muted)' }}>
-            © 2026 Rampify. All rights reserved.
+            © 2026 Rampcut. All rights reserved.
           </p>
         </div>
 

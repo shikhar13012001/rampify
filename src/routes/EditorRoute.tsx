@@ -176,8 +176,8 @@ export default function EditorRoute() {
     const onExport = () => {
       if (project) setExportOpen(true);
     };
-    window.addEventListener('rampify:export', onExport);
-    return () => window.removeEventListener('rampify:export', onExport);
+    window.addEventListener('rampcut:export', onExport);
+    return () => window.removeEventListener('rampcut:export', onExport);
   }, [project]);
 
   const selectedSegment =

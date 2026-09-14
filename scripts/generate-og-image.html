@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Rampify OG Image Generator</title>
+<title>Rampcut OG Image Generator</title>
 <style>
   body { margin: 0; padding: 40px; background: #1a1a1a; color: #fff; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 24px; }
   h1 { font-size: 20px; font-weight: 600; margin: 0; }
@@ -15,12 +15,12 @@
 </style>
 </head>
 <body>
-  <h1>Rampify OG Image Generator</h1>
+  <h1>Rampcut OG Image Generator</h1>
   <p>This renders the 1200×630 social share image. Click download and save the file as <code>og-image.png</code> in the <code>public/</code> directory.</p>
   <canvas id="canvas" width="1200" height="630"></canvas>
   <button onclick="downloadPng()">Download og-image.png</button>
   <div class="hint">
-    Save the downloaded file to <code>public/og-image.png</code> in the Rampify project root.<br>
+    Save the downloaded file to <code>public/og-image.png</code> in the Rampcut project root.<br>
     The meta tags in <code>index.html</code> and <code>src/components/Seo.tsx</code> already reference this file.
   </div>
 
@@ -83,7 +83,7 @@ function draw() {
   // Wordmark
   ctx.fillStyle = '#0a0a0a';
   ctx.font = '600 28px Inter, -apple-system, sans-serif';
-  ctx.fillText('rampify', 136, 103);
+  ctx.fillText('rampcut', 136, 103);
 
   // Eyebrow
   ctx.fillStyle = '#ff4d8b';
@@ -130,14 +130,14 @@ function draw() {
   ctx.fillStyle = '#fffaf0';
   ctx.font = '600 17px Inter, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Free to start — rampify.app', 270, 571);
+  ctx.fillText('Free to start — rampcut.app', 270, 571);
   ctx.textAlign = 'left';
 
   // URL bottom right
   ctx.fillStyle = '#8a8a8a';
   ctx.font = '500 15px Inter, sans-serif';
   ctx.textAlign = 'right';
-  ctx.fillText('rampify.astralbuild.dev', 1120, 571);
+  ctx.fillText('rampcut.com', 1120, 571);
   ctx.textAlign = 'left';
 }
 

@@ -1,5 +1,5 @@
 FROM qwen3-vl:2b
 
-# Rampify's marketing homepage produces a roughly 15K-token Skyvern prompt.
+# Rampcut's marketing homepage produces a roughly 15K-token Skyvern prompt.
 # Ollama otherwise starts this model with a 4K context, which is too small.
 PARAMETER num_ctx 18432

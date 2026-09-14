@@ -87,7 +87,8 @@ describe('exportLimits — quota by tier', () => {
     expect(allowance.reason).toMatch(/limit/i);
   });
 
-  it('guest: hard-blocked while the experiment is disabled (shipping default)', async () => {
+  it('guest: hard-blocked while the experiment is disabled', async () => {
+    GUEST_EXPERIMENT.enabled = false;
     useEditorStore.setState({ user: null, isPro: false });
     expect(getRemainingExports()).toBe(0);
     const allowance = await checkExportAllowed();
@@ -125,6 +126,7 @@ describe('exportLimits — quota by tier', () => {
   });
 
   it('guest: recordExport is a no-op while the experiment is disabled (no phantom count)', async () => {
+    GUEST_EXPERIMENT.enabled = false;
     useEditorStore.setState({ user: null, isPro: false });
     await recordExport('guest-export-1');
     // Flip the experiment on AFTER recording — if the earlier call had (wrongly)

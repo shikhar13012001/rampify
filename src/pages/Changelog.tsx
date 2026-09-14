@@ -10,7 +10,7 @@ const ENTRIES = [
     tagColor: 'var(--color-clay-teal-bright)',
     title: 'Switched billing to Dodo Payments',
     changes: [
-      'Rampify now bills through Dodo Payments, our Merchant of Record — this adds UPI as a payment method for customers in India, alongside cards, Apple Pay, and Google Pay.',
+      'Rampcut now bills through Dodo Payments, our Merchant of Record — this adds UPI as a payment method for customers in India, alongside cards, Apple Pay, and Google Pay.',
       'Dodo handles global tax compliance (VAT/GST) on our behalf, so pricing stays simple no matter where you\'re billed from.',
       'Added a "Manage subscription" option in the account menu, backed by the Dodo customer portal.',
     ],
@@ -68,7 +68,7 @@ const ENTRIES = [
     date: 'April 30, 2026',
     tag: 'Major',
     tagColor: 'var(--color-clay-ink)',
-    title: 'Rampify 2.0 — the curve-first rewrite',
+    title: 'Rampcut 2.0 — the curve-first rewrite',
     changes: [
       'Complete rewrite with curve-based speed editing — no more keyframe stacks.',
       'Added motion blur with balanced, quality, and ultra presets.',
@@ -82,8 +82,8 @@ export function Changelog() {
   return (
     <div className="clay-page">
       <Seo
-        title="Changelog — Rampify Update History & New Features"
-        description="Rampify release notes: AI frame interpolation, beat sync, motion blur, 4K export, and editor improvements. See what's new in the browser-based speed ramp editor."
+        title="Changelog — Rampcut Update History & New Features"
+        description="Rampcut release notes: AI frame interpolation, beat sync, motion blur, 4K export, and editor improvements. See what's new in the browser-based speed ramp editor."
         path="/changelog"
       />
       <ClayNav />
@@ -109,7 +109,7 @@ export function Changelog() {
             What's new
           </h1>
           <p className="clay-body" style={{ margin: '16px 0 0', fontSize: 16 }}>
-            Every update to Rampify, newest first.
+            Every update to Rampcut, newest first.
           </p>
         </div>
       </section>

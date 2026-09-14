@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useEditorStore } from '@/store/editorStore';
 import { getPreferredBillingPeriod, setPreferredBillingPeriod, type BillingPeriod } from '@/lib/billingPreference';
-import { FREE_EXPORT_RESOLUTION, SIGNED_IN_FREE_LIMIT } from '@/lib/planConfig';
+import { FOUNDER_PRICE_USD, FREE_EXPORT_RESOLUTION, PRO_ANNUAL_USD, PRO_MONTHLY_USD, SIGNED_IN_FREE_LIMIT } from '@/lib/planConfig';
+import { fetchFounderSeats, OPTIMISTIC_FOUNDER_SEATS, type FounderSeats } from '@/lib/founderSeats';
 
 /**
  * Simplified around Free and Pro (this task) — was previously 4 competing
@@ -24,19 +25,30 @@ function openUpgrade(billingPeriod: BillingPeriod) {
 }
 
 export function PricingTable() {
+  // Founder seats: optimistic until the server answers; the card disappears
+  // when the offer is unconfigured or sold out (see api/founder-seats.ts).
+  const [founderSeats, setFounderSeats] = useState<FounderSeats>(OPTIMISTIC_FOUNDER_SEATS);
+  useEffect(() => {
+    let cancelled = false;
+    fetchFounderSeats().then((seats) => { if (!cancelled) setFounderSeats(seats); });
+    return () => { cancelled = true; };
+  }, []);
+  const showFounder = founderSeats.available;
+
   return (
     <>
       <div
         className="clay-pricing-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: showFounder ? '1fr 1fr 1fr' : '1fr 1fr',
           gap: 16,
           alignItems: 'stretch',
         }}
       >
         <FreeCard />
         <ProCard />
+        {showFounder && <FounderCard seats={founderSeats} />}
       </div>
       <StudioFootnote />
       <ComparisonTable />
@@ -105,8 +117,8 @@ function ProCard() {
     setPreferredBillingPeriod(period);
   };
 
-  const monthlyPrice = 12;
-  const annualTotal = 96; // $8/mo x 12 — see UpgradeModal.tsx for the same numbers
+  const monthlyPrice = PRO_MONTHLY_USD;
+  const annualTotal = PRO_ANNUAL_USD; // $8/mo x 12 — see UpgradeModal.tsx for the same numbers
   const annualSaving = Math.round((1 - annualTotal / (monthlyPrice * 12)) * 100); // 33
 
   return (
@@ -218,6 +230,73 @@ function ProCard() {
   );
 }
 
+/**
+ * One-time Founder seat. Deliberately framed as a *purchase*, not a plan: a
+ * visitor who arrived from a Reddit thread ten minutes ago will pay $59 once
+ * for a tool they've just watched work far more readily than they'll start a
+ * subscription. Capped so the offer stays credible; the count is real
+ * (api/founder-seats.ts), never a fake countdown.
+ */
+function FounderCard({ seats }: { seats: FounderSeats }) {
+  return (
+    <div
+      className="clay-lift"
+      style={{
+        borderRadius: 24,
+        border: '1px solid var(--color-clay-line)',
+        background: 'var(--color-clay-canvas)',
+        padding: '28px 24px',
+        position: 'relative',
+        boxShadow: '0 2px 8px rgba(10, 10, 10, 0.04)',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute', top: 16, right: 16, padding: '4px 10px', borderRadius: 999,
+          background: 'var(--color-clay-peach)', fontSize: 9, fontWeight: 600,
+          letterSpacing: '0.06em', textTransform: 'uppercase', color: '#0a0a0a',
+        }}
+      >
+        {seats.remaining} of {seats.total} left
+      </div>
+      <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--color-clay-ink)' }}>
+        Founder
+      </h3>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 14 }}>
+        <span className="clay-display" style={{ fontSize: 36, fontWeight: 500, color: 'var(--color-clay-ink)' }}>${seats.priceUsd || FOUNDER_PRICE_USD}</span>
+        <span style={{ fontSize: 12, color: 'var(--color-clay-ink-muted)' }}>once, Pro forever</span>
+      </div>
+      <p style={{ margin: '12px 0 20px', fontSize: 13, lineHeight: 1.5, color: 'var(--color-clay-ink-soft)' }}>
+        Everything in Pro, every future Pro feature, no renewal. For the first {seats.total} people who back a local-first editor.
+      </p>
+      <button
+        type="button"
+        onClick={() => openUpgrade('founder')}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%',
+          padding: '12px 20px', borderRadius: 12, border: '1px solid var(--color-clay-ink)', cursor: 'pointer',
+          fontSize: 14, fontWeight: 600, transition: 'transform 0.15s',
+          background: 'transparent', color: 'var(--color-clay-ink)',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; }}
+      >
+        Claim a founder seat
+      </button>
+      <FeatureList
+        features={[
+          'All Pro features, lifetime',
+          'Future Pro features included',
+          'One payment — never renews',
+          '14-day refund window',
+          'Your name in the changelog (optional)',
+        ]}
+        color="var(--color-clay-ink)"
+      />
+    </div>
+  );
+}
+
 function FeatureList({ features, color }: { features: string[]; color: string }) {
   return (
     <ul style={{ listStyle: 'none', margin: '20px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -242,7 +321,7 @@ function StudioFootnote() {
       }}
     >
       Building for a team or high-volume production? A Studio plan is in development —{' '}
-      <a href="mailto:hello@rampify.app" style={{ color: 'inherit', textDecoration: 'underline' }}>
+      <a href="mailto:hello@rampcut.com" style={{ color: 'inherit', textDecoration: 'underline' }}>
         contact us
       </a>{' '}
       for early access. Not launched yet — no pricing, features, or timeline are final.

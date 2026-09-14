@@ -12,7 +12,14 @@ interface FeaturePageLayoutProps {
   h1: string;              // main heading
   intro: string;           // paragraph below H1
   children: ReactNode;     // body content (H2 sections, etc.)
-  ctaLabel?: string;       // defaults to "Try Rampify free"
+  ctaLabel?: string;       // defaults to "Try Rampcut free"
+  /** Optional page-specific FAQ, rendered both as an on-page section (via
+   *  <FeatureFaq>, called separately by the page) and as its own FAQPage
+   *  JSON-LD block here — merged alongside the auto-generated BreadcrumbList
+   *  so every feature page can carry real, page-specific FAQ structured
+   *  data instead of the single global block index.html used to duplicate
+   *  onto every route (see docs/validation/STATUS.md's FAQPage dedup fix). */
+  faq?: { q: string; a: string }[];
 }
 
 export function FeaturePageLayout({
@@ -23,7 +30,8 @@ export function FeaturePageLayout({
   h1,
   intro,
   children,
-  ctaLabel = 'Try Rampify free',
+  ctaLabel = 'Try Rampcut free',
+  faq,
 }: FeaturePageLayoutProps) {
   // BreadcrumbList schema: Home → Features → {this page}
   const breadcrumbLd = {
@@ -36,13 +44,25 @@ export function FeaturePageLayout({
     ],
   };
 
+  const faqLd = faq?.length
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: faq.map(({ q, a }) => ({
+          '@type': 'Question',
+          name: q,
+          acceptedAnswer: { '@type': 'Answer', text: a },
+        })),
+      }
+    : null;
+
   return (
     <div className="clay-page">
       <Seo
         title={title}
         description={description}
         path={path}
-        jsonLd={[breadcrumbLd]}
+        jsonLd={faqLd ? [breadcrumbLd, faqLd] : [breadcrumbLd]}
       />
       <ClayNav ctaLabel="Open editor" />
 
@@ -109,6 +129,26 @@ export function FeaturePageLayout({
 
       <Footer />
     </div>
+  );
+}
+
+// Renders the same Q&A pairs passed as `faq` to <FeaturePageLayout> (which
+// handles the FAQPage JSON-LD) as a visible on-page <dl> — <dt>/<dd> rather
+// than nested <div>s so scripts/prerender-seo.mjs's static-HTML version can
+// use the identical markup shape without tripping its non-greedy </div>
+// swap-in regex (see curveDetailBody() in that file for the prior art).
+export function FeatureFaq({ items }: { items: { q: string; a: string }[] }) {
+  return (
+    <FeatureSection heading="Frequently asked questions">
+      <dl style={{ margin: 0 }}>
+        {items.map(({ q, a }) => (
+          <div key={q} style={{ marginBottom: 18 }}>
+            <dt style={{ fontWeight: 600, color: 'var(--color-clay-ink)', marginBottom: 4 }}>{q}</dt>
+            <dd style={{ margin: 0, color: 'var(--color-clay-ink-soft)', lineHeight: 1.6 }}>{a}</dd>
+          </div>
+        ))}
+      </dl>
+    </FeatureSection>
   );
 }
 

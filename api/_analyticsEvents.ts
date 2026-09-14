@@ -12,6 +12,7 @@
 import { z } from 'zod';
 
 export const ANALYTICS_EVENT_NAMES = [
+  'page_view',
   'landing_view',
   'editor_opened',
   'clip_loaded',
@@ -25,6 +26,9 @@ export const ANALYTICS_EVENT_NAMES = [
   'upgrade_viewed',
   'checkout_started',
   'payment_succeeded',
+  'curve_link_copied',
+  'curve_link_opened',
+  'pwa_installed',
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENT_NAMES)[number];

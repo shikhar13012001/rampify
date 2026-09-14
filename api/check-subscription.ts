@@ -66,5 +66,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  return res.status(200).json({ isPro, exportsThisMonth, exportsRemaining });
+  // plan: 'monthly' | 'annual' | 'founder' | null — informational for the
+  // account menu ("Founder — lifetime" needs no "Manage subscription" link).
+  const plan = typeof userData.plan === 'string' ? userData.plan : null;
+  return res.status(200).json({ isPro, exportsThisMonth, exportsRemaining, plan });
 }

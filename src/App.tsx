@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { Landing } from '@/pages/Landing';
 import { Pricing } from '@/pages/Pricing';
@@ -19,8 +19,11 @@ import { BeatSyncFeature } from '@/pages/features/BeatSync';
 import { AiSlowMotionFeature } from '@/pages/features/AiSlowMotion';
 import { PrivacyFeature } from '@/pages/features/PrivacyFeature';
 import { FourKExportFeature } from '@/pages/features/FourKExport';
+import { CurvesIndex } from '@/pages/CurvesIndex';
+import { CurvePage } from '@/pages/CurvePage';
 import { useEditorStore } from '@/store/editorStore';
 import { onAuthChange } from '@/lib/auth';
+import { trackEvent } from '@/lib/analytics';
 import { auth, getFirebaseInitError } from '@/lib/firebase';
 import type { AuthUser } from '@/store/editorStore';
 
@@ -79,14 +82,14 @@ function App() {
             // Non-200: API misconfigured or upstream error. Default to free so
             // the user isn't granted Pro by accident; warn once in dev.
             if (import.meta.env.DEV) {
-              console.warn('[Rampify] check-subscription returned', res.status);
+              console.warn('[Rampcut] check-subscription returned', res.status);
             }
             setIsPro(false);
           }
         } catch (err) {
           if (auth.currentUser?.uid === uid) {
             if (import.meta.env.DEV) {
-              console.warn('[Rampify] check-subscription failed (API may not be running):', err);
+              console.warn('[Rampcut] check-subscription failed (API may not be running):', err);
             }
             setIsPro(false);
           }
@@ -121,6 +124,22 @@ function App() {
   const upgradeModalOpen     = useEditorStore(s => s.upgradeModalOpen);
   const setUpgradeModalOpen  = useEditorStore(s => s.setUpgradeModalOpen);
 
+  // page_view — one event per route the visitor lands on or navigates to.
+  // First-party, so it works even where Vercel Analytics' script is blocked.
+  // Only the pathname (a bounded, known route — never a query string, which
+  // could carry a curve-link payload or a token) plus the referrer's host.
+  const location = useLocation();
+  useEffect(() => {
+    let referrerHost: string | null = null;
+    try {
+      referrerHost = document.referrer ? new URL(document.referrer).hostname : null;
+    } catch { /* malformed referrer — ignore */ }
+    trackEvent({
+      name: 'page_view',
+      props: { path: location.pathname.slice(0, 120), referrerHost },
+    });
+  }, [location.pathname]);
+
   return (
     <>
       <Routes>
@@ -138,6 +157,8 @@ function App() {
         <Route path="/features/ai-slow-motion" element={<AiSlowMotionFeature />} />
         <Route path="/features/privacy" element={<PrivacyFeature />} />
         <Route path="/features/4k-export" element={<FourKExportFeature />} />
+        <Route path="/curves" element={<CurvesIndex />} />
+        <Route path="/curves/:slug" element={<CurvePage />} />
         <Route
           path="/editor"
           element={

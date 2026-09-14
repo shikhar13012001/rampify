@@ -19,7 +19,7 @@ export function Landing() {
   return (
     <div className="clay-page">
       <Seo
-        title="Speed Ramp Videos Online — No Installs, No Uploads | Rampify"
+        title="Speed Ramp Videos Online — No Installs, No Uploads | Rampcut"
         description="Draw speed curves, AI slow motion, beat sync, and 4K export — all in the browser. Your footage never leaves your machine. Free to start, no installs required."
         path="/"
       />
@@ -264,7 +264,7 @@ function CurveMockup() {
           ))}
         </div>
         <span style={{ fontSize: 11, color: 'var(--color-clay-ink-muted)', fontFamily: 'monospace', marginLeft: 6 }}>
-          speed-curve.rampify
+          speed-curve.rampcut
         </span>
       </div>
 
@@ -564,7 +564,7 @@ function ProductMockupSection() {
               ))}
             </div>
             <span style={{ fontSize: 11, color: '#8a8a8a', fontFamily: 'monospace', marginLeft: 8 }}>
-              rampify — editor
+              rampcut — editor
             </span>
           </div>
 
@@ -889,7 +889,7 @@ const TESTIMONIALS = [
     color: 'var(--color-clay-pink)',
   },
   {
-    quote: "I edit every TikTok in Rampify now. Beat sync alone saves me 20 minutes per video. The fact that it runs in browser is wild.",
+    quote: "I edit every TikTok in Rampcut now. Beat sync alone saves me 20 minutes per video. The fact that it runs in browser is wild.",
     name: 'Sofia Ramirez',
     role: 'Content creator, 2.1M TikTok',
     color: 'var(--color-clay-teal)',
@@ -1008,7 +1008,7 @@ function TestimonialsSection() {
 const FAQS = [
   {
     q: 'Do I need to install anything?',
-    a: 'No. Rampify runs entirely in your browser using WebAssembly. ffmpeg.wasm handles video encoding in a Web Worker, and AI interpolation runs via ONNX Runtime Web. No downloads, no plugins, no native apps.',
+    a: 'No. Rampcut runs entirely in your browser using WebAssembly. ffmpeg.wasm handles video encoding in a Web Worker, and AI interpolation runs via ONNX Runtime Web. No downloads, no plugins, no native apps.',
   },
   {
     q: 'Does my video get uploaded to a server?',
@@ -1028,7 +1028,7 @@ const FAQS = [
   },
   {
     q: 'Is there a team plan?',
-    a: 'Studio is coming soon — it will include 5 seats, a shared preset library, batch processing API, and 8K export. Email hello@rampify.app to join the waitlist and get notified when it launches.',
+    a: 'Studio is coming soon — it will include 5 seats, a shared preset library, batch processing API, and 8K export. Email hello@rampcut.com to join the waitlist and get notified when it launches.',
   },
 ];
 

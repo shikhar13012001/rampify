@@ -1,6 +1,6 @@
 import type { BlurSettings, OpticalFlowSettings, Segment } from '@/types/editor';
 
-const KEY = 'rampify_project_v1';
+const KEY = 'rampcut_project_v1';
 
 export interface SavedProjectState {
   fileName: string;

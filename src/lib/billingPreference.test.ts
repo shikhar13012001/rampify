@@ -47,7 +47,7 @@ describe('billingPreference', () => {
 
   it('ignores a corrupted/unexpected stored value and falls back to monthly', async () => {
     (globalThis as unknown as { sessionStorage: Storage }).sessionStorage = new MemoryStorage();
-    globalThis.sessionStorage.setItem('rampify:billing-period', 'quarterly');
+    globalThis.sessionStorage.setItem('rampcut:billing-period', 'quarterly');
     const { getPreferredBillingPeriod } = await import('./billingPreference');
     expect(getPreferredBillingPeriod()).toBe('monthly');
   });

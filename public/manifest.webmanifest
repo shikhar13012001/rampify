@@ -1,0 +1,24 @@
+{
+  "name": "Rampcut — speed ramp editor",
+  "short_name": "Rampcut",
+  "description": "Draw a speed curve, export in 4K. Runs in the browser, works offline, never uploads your footage.",
+  "id": "/editor",
+  "start_url": "/editor?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a1a1a",
+  "theme_color": "#0a1a1a",
+  "categories": ["photo", "video", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "file_handlers": [
+    {
+      "action": "/editor",
+      "accept": { "video/mp4": [".mp4"], "video/quicktime": [".mov"], "video/webm": [".webm"] }
+    }
+  ]
+}

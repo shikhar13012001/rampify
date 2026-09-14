@@ -32,7 +32,7 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
-TEST_EMAIL = "skyvern-test@rampify.local"
+TEST_EMAIL = "skyvern-test@rampcut.local"
 TEST_PASSWORD = "Sk9v3rn-Test-Only!"
 
 
@@ -44,7 +44,7 @@ def configure_local_skyvern() -> None:
         "ENV": "local",
         "ENABLE_OLLAMA": "true",
         "LLM_KEY": "OLLAMA",
-        "OLLAMA_MODEL": "rampify-skyvern:latest",
+        "OLLAMA_MODEL": "rampcut-skyvern:latest",
         "OLLAMA_SERVER_URL": "http://127.0.0.1:11434",
         "OLLAMA_SUPPORTS_VISION": "true",
         "SKYVERN_TELEMETRY": "false",
@@ -92,7 +92,7 @@ def probe_export(path: Path) -> None:
 
 async def main() -> int:
     configure_local_skyvern()
-    base_url = os.environ.get("RAMPIFY_BASE_URL", "http://127.0.0.1:3000")
+    base_url = os.environ.get("RAMPCUT_BASE_URL", "http://127.0.0.1:3000")
     headed = "--headed" in sys.argv
 
     with urlopen("http://127.0.0.1:11434/api/tags", timeout=5) as response:
@@ -106,12 +106,12 @@ async def main() -> int:
     page.set_default_timeout(30_000)
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
 
-    # Sets window.__RAMPIFY_EMULATOR_TEST__ = true before ANY page script runs
+    # Sets window.__RAMPCUT_EMULATOR_TEST__ = true before ANY page script runs
     # (Playwright's standard mechanism for this — see firebase.ts/auth.tsx for
     # the gate this flips). Deliberately not a Vite define/.env value: that
     # was tried first and Vite 8's dev-server define resolution did not
     # reliably reflect the launching process's env in testing.
-    await page.add_init_script("window.__RAMPIFY_EMULATOR_TEST__ = true;")
+    await page.add_init_script("window.__RAMPCUT_EMULATOR_TEST__ = true;")
 
     try:
         await page.set_viewport_size({"width": 1440, "height": 900})
@@ -119,7 +119,7 @@ async def main() -> int:
 
         print("Signing in via the Firebase Auth Emulator (fake test user, no real Google account)...")
         await page.evaluate(
-            "([email, password]) => window.__rampifyTestSignIn(email, password)",
+            "([email, password]) => window.__rampcutTestSignIn(email, password)",
             [TEST_EMAIL, TEST_PASSWORD],
         )
         # onAuthStateChanged is async; give the store a moment to pick up the
@@ -128,7 +128,12 @@ async def main() -> int:
 
         print("Loading the demo clip...")
         await page.goto(f"{base_url}/editor?demo=1", wait_until="domcontentloaded")
-        await page.get_by_text("rampify-demo-clip.mp4", exact=False).first.wait_for(
+        # .first: the filename is rendered in both the sidebar file-info row
+        # and TopBar's center file-name label at once, so a strict-mode
+        # get_by_text() without .first throws on more-than-one-match rather
+        # than just picking one. Filename itself matches DropZone.tsx's
+        # loadDemoClip(), which names the File object 'rampcut-demo-clip.mp4'.
+        await page.get_by_text("rampcut-demo-clip.mp4", exact=False).first.wait_for(
             state="visible", timeout=20_000
         )
 

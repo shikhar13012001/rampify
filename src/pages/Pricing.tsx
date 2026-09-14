@@ -7,8 +7,8 @@ export function Pricing() {
   return (
     <div className="clay-page">
       <Seo
-        title="Pricing — Free & Pro Video Speed Editor | Rampify"
-        description="Free: 3 exports/month, speed curves, motion blur. Pro: $12/month or $96/year for AI slow motion, beat sync, 4K export, unlimited exports."
+        title="Pricing — Free & Pro Video Speed Editor | Rampcut"
+        description="Free: 3 exports/month, speed curves, motion blur. Pro: $12/month or $96/year — or a one-time $59 founder seat — for AI slow motion, beat sync, 4K export, unlimited exports."
         path="/pricing"
       />
       <ClayNav ctaLabel="Start free" />
@@ -112,7 +112,11 @@ const BILLING_FAQS = [
     a: 'Both give you the same Pro features. Annual is billed once per year at $96 (effectively $8/month) — a 33% saving over the $12/month monthly plan. You can switch between them at any time from the account menu.',
   },
   {
+    q: 'What is a founder seat?',
+    a: 'A one-time $59 payment that unlocks Pro permanently — every current Pro feature and every Pro feature we ship later, with no renewal. It is limited to the first 25 buyers, the count on the pricing page is the real number of seats left, and it has the same 14-day refund window as a first Pro payment. Once the seats are gone, the offer is gone.',
+  },
+  {
     q: 'Is there an educational discount?',
-    a: 'Yes — 50% off Pro for verified students and educators. Contact us at hello@rampify.app with your .edu email or proof of enrollment.',
+    a: 'Yes — 50% off Pro for verified students and educators. Contact us at hello@rampcut.com with your .edu email or proof of enrollment.',
   },
 ];

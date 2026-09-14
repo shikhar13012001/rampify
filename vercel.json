@@ -1,5 +1,19 @@
 {
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "rampify.astralbuild.dev" }],
+      "destination": "https://rampcut.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "rampify-eight.vercel.app" }],
+      "destination": "https://rampcut.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/(pricing|changelog|roadmap|docs|about|privacy|terms|contact|editor)",
@@ -11,6 +25,14 @@
     },
     {
       "source": "/features/(speed-ramp|beat-sync|ai-slow-motion|privacy|4k-export)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/curves",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/curves/(hero-moment|bullet-time|jump-cut|montage|whip-pan|impact-drop|heartbeat|slow-reveal|timelapse-ramp|double-tap|drift-in|flat)",
       "destination": "/index.html"
     }
   ],

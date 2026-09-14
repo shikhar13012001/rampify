@@ -105,7 +105,7 @@ export function isAcceptedVideoFile(file: File): boolean {
 
 export function getRejectedFileMessage(file: File): string {
   if (file.type.startsWith('audio/') || AUDIO_EXT.test(file.name)) {
-    return `"${file.name}" is an audio file, not a video. Rampify only accepts MP4, MOV, or WebM video files.`;
+    return `"${file.name}" is an audio file, not a video. Rampcut only accepts MP4, MOV, or WebM video files.`;
   }
   return 'Only MP4, MOV, and WebM video files are supported.';
 }

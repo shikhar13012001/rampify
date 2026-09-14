@@ -20,11 +20,11 @@ export function SpeedRampFeature() {
   return (
     <FeaturePageLayout
       path="/features/speed-ramp"
-      title="Speed Ramp Video Editor — Draw Speed Curves in the Browser | Rampify"
+      title="Speed Ramp Video Editor — Draw Speed Curves in the Browser | Rampcut"
       description="Speed ramp any video in your browser. Draw bezier speed curves, split segments, apply presets, and export with motion blur. No installs, no uploads — local-first editing."
       eyebrow="Speed ramping"
       h1="Speed Ramp Videos with Precision Curves"
-      intro="Draw the exact speed curve you want — bezier, linear, or step — and Rampify renders it locally with ffmpeg.wasm. No installs, no uploads, no watermarks."
+      intro="Draw the exact speed curve you want — bezier, linear, or step — and Rampcut renders it locally with ffmpeg.wasm. No installs, no uploads, no watermarks."
     >
       <FeatureSection heading="What is speed ramping?">
         <p style={{ margin: '0 0 12px' }}>
@@ -33,7 +33,7 @@ export function SpeedRampFeature() {
           settling back to normal. Done well, it turns ordinary footage into cinematic sequences.
         </p>
         <p style={{ margin: 0 }}>
-          Rampify replaces the timeline-and-keyframe workflow of desktop NLEs with a direct
+          Rampcut replaces the timeline-and-keyframe workflow of desktop NLEs with a direct
           curve editor. You draw the speed you want; the renderer figures out the frames.
         </p>
       </FeatureSection>
@@ -173,7 +173,7 @@ export function SpeedRampFeature() {
 
       <FeatureSection heading="Motion blur on transitions">
         <p style={{ margin: 0 }}>
-          Abrupt speed changes produce jarring frame duplication. Rampify's motion blur path
+          Abrupt speed changes produce jarring frame duplication. Rampcut's motion blur path
           renders each transition frame through an off-screen canvas with directional blur,
           so ramps feel cinematic instead of stuttery. Toggle it on in the sidebar; three
           intensity presets (subtle, balanced, heavy) cover most use cases.

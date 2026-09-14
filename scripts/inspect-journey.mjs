@@ -12,7 +12,7 @@
  *   node scripts/inspect-journey.mjs --session <sessionId> --uid <uid>
  *
  * Get a sessionId from the browser console during/after a manual test run:
- * open devtools and run `window.__rampifyJourney()` (dev-only helper,
+ * open devtools and run `window.__rampcutJourney()` (dev-only helper,
  * src/lib/analytics.ts) — it prints the sessionId along with a client-side-
  * only view of the same events. This script is the authoritative version:
  * it reads the same Firestore collection the server writes to, so it also

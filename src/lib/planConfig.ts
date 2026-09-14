@@ -22,6 +22,17 @@ import type { BlurIntensity, BlurSettings, ExportResolution, OpticalFlowSettings
 
 export type PlanTier = 'guest' | 'free' | 'pro';
 
+// ─── Published prices (USD) ─────────────────────────────────────────────────
+// Mirrored server-side in api/_plans.ts (the api/ tree can't import src/).
+// scripts/verify-dodo-products.mjs checks the live Dodo products against
+// these exact numbers; test/billing/founder-plan.test.ts checks the mirror.
+export const PRO_MONTHLY_USD = 12;
+export const PRO_ANNUAL_USD = 96; // = $8/month
+/** One-time, lifetime Pro. Exists to give a cold visitor a way to pay that
+ *  isn't "start a subscription for a tool you found ten minutes ago". */
+export const FOUNDER_PRICE_USD = 59;
+export const FOUNDER_SEATS = 25;
+
 /** The single motion-blur intensity advertised as free ("Balanced"). */
 export const FREE_BLUR_INTENSITY: BlurIntensity = 'balanced';
 
@@ -53,7 +64,10 @@ export interface GuestExportExperiment {
 }
 
 export const GUEST_EXPERIMENT: GuestExportExperiment = {
-  enabled: false,
+  // Enabled 2026-09-14 for the first exposure experiment: a visitor from a
+  // Reddit thread or a shared curve link gets ONE real export before any
+  // sign-in wall, so the wall arrives after value, not before it.
+  enabled: true,
   resolution: FREE_EXPORT_RESOLUTION,
   allowance: 1,
 };

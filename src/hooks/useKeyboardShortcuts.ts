@@ -29,7 +29,7 @@ export function useKeyboardShortcuts() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
         e.preventDefault();
         if (!isExporting) {
-          window.dispatchEvent(new CustomEvent('rampify:export'));
+          window.dispatchEvent(new CustomEvent('rampcut:export'));
         }
         return;
       }

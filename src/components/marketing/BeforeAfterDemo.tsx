@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
  * for the full requirement and reasoning.
  *
  * This task's instructions are explicit: the demonstration must be made
- * from an ACTUAL Rampify export, and if the rights/authenticity of a real
+ * from an ACTUAL Rampcut export, and if the rights/authenticity of a real
  * asset aren't established, the integration must be prepared and the
  * required asset clearly listed — NOT a fabricated finished demonstration.
  * No such asset exists in this repo or this environment (no camera footage,

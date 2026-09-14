@@ -38,10 +38,10 @@ try {
   ollama pull $Model
   if ($LASTEXITCODE -ne 0) { throw "Could not pull Ollama model '$Model'." }
 
-  ollama create rampify-skyvern --file $modelfilePath
-  if ($LASTEXITCODE -ne 0) { throw 'Could not create the high-context Rampify model alias.' }
+  ollama create rampcut-skyvern --file $modelfilePath
+  if ($LASTEXITCODE -ne 0) { throw 'Could not create the high-context Rampcut model alias.' }
 } finally {
   Pop-Location
 }
 
-Write-Host "Skyvern UI test environment is ready with rampify-skyvern (based on $Model)."
+Write-Host "Skyvern UI test environment is ready with rampcut-skyvern (based on $Model)."

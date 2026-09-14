@@ -14,7 +14,8 @@ interface SeoProps {
 // and the SITE_URL baked into scripts/prerender-seo.mjs's static output for
 // the prerendered routes. Exported so FeaturePageLayout.tsx doesn't keep its
 // own separate copy (it used to — see docs/validation/STATUS.md's H1 finding).
-export const SITE_URL = 'https://rampify.astralbuild.dev';
+import { SITE_URL, BRAND } from '@/config/brand.mjs';
+export { SITE_URL };
 
 export function Seo({ title, description, path, socialTitle, jsonLd }: SeoProps) {
   const canonicalUrl = `${SITE_URL}${path}`;
@@ -29,7 +30,7 @@ export function Seo({ title, description, path, socialTitle, jsonLd }: SeoProps)
       {/* Open Graph */}
       <meta property="og:type" content="website" />
       <meta property="og:url" content={canonicalUrl} />
-      <meta property="og:site_name" content="Rampify" />
+      <meta property="og:site_name" content={BRAND} />
       <meta property="og:title" content={ogTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={`${SITE_URL}/og-image.png`} />

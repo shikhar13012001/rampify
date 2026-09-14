@@ -125,7 +125,7 @@ try {
 
   $runnerArgs = @($runnerPath)
   if ($Headed) { $runnerArgs += '--headed' }
-  $env:RAMPIFY_BASE_URL = $baseUrl
+  $env:RAMPCUT_BASE_URL = $baseUrl
 
   & $pythonPath @runnerArgs
   $testExitCode = $LASTEXITCODE

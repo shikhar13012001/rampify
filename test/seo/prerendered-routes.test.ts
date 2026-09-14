@@ -252,6 +252,12 @@ describe('FourKExportFeature — false format/resolution/frame-rate claims remov
     expect(fourKSrc.toLowerCase()).not.toContain('vp9');
     const ffmpegBridgeSrc = readFileSync(join(root, 'src', 'lib', 'ffmpegBridge.ts'), 'utf-8');
     expect(ffmpegBridgeSrc.toLowerCase()).not.toContain('webm');
+    // Same false claim previously lived in index.html's global FAQPage
+    // JSON-LD too — that block is copied into every prerendered route by
+    // prerender-seo.mjs, so a stale claim here reaches every crawler-facing
+    // page, not just this one component.
+    const indexHtmlSrc = readFileSync(join(root, 'index.html'), 'utf-8');
+    expect(indexHtmlSrc.toLowerCase()).not.toContain('vp9');
   });
 
   it('does not claim resolution options that do not exist (720p/1440p) — only 1080p/4K are real', () => {

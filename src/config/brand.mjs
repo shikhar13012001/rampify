@@ -7,9 +7,10 @@
  * and every title, canonical, OG tag, JSON-LD block, sitemap entry and
  * mailto: link follows.
  *
- * Renamed from "Rampify" on 2026-09-14: rampify.dev (an unrelated SEO
- * product) owned the brand SERP before this product had a single indexed
- * page. See docs/validation/RENAME.md.
+ * Renamed from "Rampify" to "Rampcut" on 2026-09-14: rampify.dev (an
+ * unrelated, established SEO product) owned the brand SERP before this
+ * product had a single indexed page — see docs/validation/STATUS.md's
+ * "Rebrand + market-readiness task" entry for the decision record.
  */
 export const BRAND = 'Rampcut';
 export const BRAND_LOWER = 'rampcut';

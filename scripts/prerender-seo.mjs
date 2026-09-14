@@ -209,6 +209,28 @@ const ROUTES = [
       { name: 'Features', item: `${SITE_URL}/#features` },
       { name: 'Beat Sync', item: `${SITE_URL}/features/beat-sync` },
     ],
+    // Kept in sync by hand with the FAQ array in src/pages/features/BeatSync.tsx
+    // (same pattern src/content/curves.mjs uses for curve pages, just not
+    // extracted to a shared module since this content is page-specific prose,
+    // not structured data another consumer also needs).
+    faq: [
+      {
+        q: 'How accurate is the beat timing?',
+        a: "With the worker's default hop size of 512 samples at 44.1kHz, timing resolution is about ±11.6ms. Passing hopSize: 220 to detectBeats tightens that to roughly ±5ms, at the cost of more compute.",
+      },
+      {
+        q: 'What counts as a "detected beat"?',
+        a: 'A local peak in spectral flux that clears an adaptive threshold (1.5× the local mean) and sits at least 300ms after the previous detected peak. That’s an onset detector, not a music-theory beat tracker.',
+      },
+      {
+        q: 'Will it work on a waltz or a polyrhythmic track?',
+        a: 'It will detect transients either way, but for 3/4, 5/4, or polyrhythmic content those transients may not align with the actual musical pulse. Rampcut reports a confidence score and flags anything under 0.8 as irregular.',
+      },
+      {
+        q: 'Does my audio file get uploaded anywhere?',
+        a: 'No. The file is decoded locally via the Web Audio API and the STFT analysis runs in a dedicated Web Worker on your machine.',
+      },
+    ],
   },
   {
     path: '/features/ai-slow-motion',
@@ -224,6 +246,25 @@ const ROUTES = [
       { name: 'Features', item: `${SITE_URL}/#features` },
       { name: 'AI Slow Motion', item: `${SITE_URL}/features/ai-slow-motion` },
     ],
+    // Kept in sync by hand with the FAQ array in src/pages/features/AiSlowMotion.tsx.
+    faq: [
+      {
+        q: 'Does RIFE run on my GPU or my CPU?',
+        a: "Rampcut tries the WebGL execution provider first (GPU). If WebGL isn't available or the GPU is too weak (common on integrated graphics), ONNX Runtime Web falls back to WASM/CPU, which is 4–8× slower.",
+      },
+      {
+        q: 'How long does Ultra quality actually take?',
+        a: 'On a 5-second slow-motion segment, Ultra (×8 frames) can exceed 3 minutes on a CPU fallback. Rampcut shows a time estimate before you click Export.',
+      },
+      {
+        q: 'Why does the model take a moment to load the first time?',
+        a: 'The RIFE model weights are about 6MB, downloaded once and cached in IndexedDB, so every session after the first skips the network round-trip.',
+      },
+      {
+        q: 'Is AI slow motion available on the free plan?',
+        a: 'No — optical flow interpolation is Pro-only. Free exports use held-frame slow motion instead.',
+      },
+    ],
   },
   {
     path: '/features/4k-export',
@@ -236,6 +277,29 @@ const ROUTES = [
       { name: 'Home', item: SITE_URL },
       { name: 'Features', item: `${SITE_URL}/#features` },
       { name: '4K Export', item: `${SITE_URL}/features/4k-export` },
+    ],
+    // Kept in sync by hand with the FAQ array in src/pages/features/FourKExport.tsx.
+    faq: [
+      {
+        q: 'What resolutions can Rampcut export to?',
+        a: "1080p on the Free plan. Pro adds 4K (3840×2160). There's no lower-tier or custom-resolution option.",
+      },
+      {
+        q: 'Can I export 4K with AI slow motion together?',
+        a: "Not yet on any plan. The in-browser encoding pipeline can't reliably combine 4K resolution with optical-flow-interpolated frames in the same export.",
+      },
+      {
+        q: 'Why is browser-based 4K export slower than desktop software?',
+        a: 'ffmpeg.wasm is a WebAssembly build of real FFmpeg running in a Web Worker with SharedArrayBuffer for threading. A 10-second 4K clip with AI slow motion can take 3–6 minutes depending on your CPU and GPU.',
+      },
+      {
+        q: 'What audio and video codecs does export use?',
+        a: 'MP4 container, H.264 video, AAC audio — the one export format Rampcut currently supports.',
+      },
+      {
+        q: 'How many exports do I get on the free plan?',
+        a: '3 exports per month at up to 1080p, after signing in. Pro ($12/month or $96/year) removes the monthly cap and raises the ceiling to 4K.',
+      },
     ],
   },
   {
@@ -251,6 +315,25 @@ const ROUTES = [
       { name: 'Home', item: SITE_URL },
       { name: 'Features', item: `${SITE_URL}/#features` },
       { name: 'Privacy', item: `${SITE_URL}/features/privacy` },
+    ],
+    // Kept in sync by hand with the FAQ array in src/pages/features/PrivacyFeature.tsx.
+    faq: [
+      {
+        q: 'So my video really never touches a server?',
+        a: 'Correct — the video file is decoded, processed, and re-encoded entirely in your browser via ffmpeg.wasm running in a Web Worker. None of the app’s network calls carry video bytes.',
+      },
+      {
+        q: 'What does Rampcut store about me, and where?',
+        a: 'Firestore holds your account record (subscription tier, a billing customer id if you’ve subscribed, and export timestamps). Your speed curves and editor settings live in your browser’s localStorage, not on our servers.',
+      },
+      {
+        q: 'Why do you need COOP and COEP headers?',
+        a: 'They enable SharedArrayBuffer, which ffmpeg.wasm needs for threaded encoding, and as a side effect isolate the page from cross-origin scripts that could otherwise read data out of it.',
+      },
+      {
+        q: 'Do you use tracking cookies or ad pixels?',
+        a: 'No ad pixels. Rampcut uses first-party pageview analytics by default, and Google Analytics only if you’ve explicitly opted in.',
+      },
     ],
   },
   {
@@ -381,6 +464,7 @@ const ROUTES = [
       { name: 'Curve Library', item: `${SITE_URL}/curves` },
       { name: curve.name, item: `${SITE_URL}/curves/${curve.slug}` },
     ],
+    faq: curve.faq,
     body: curveDetailBody(curve),
   })),
 ];
@@ -430,6 +514,36 @@ function renderRoute(route) {
     `<meta name="twitter:description" content="${escapeHtml(route.description)}" />`,
     'twitter:description',
   );
+
+  // The template's global FAQPage JSON-LD belongs to the homepage only —
+  // every other prerendered route used to inherit the identical block
+  // verbatim (soft duplicate-structured-data, flagged and left unfixed by
+  // the earlier SEO task; see docs/validation/SEO.md). Strip it here for
+  // every non-home route; route.faq (curve pages) replaces it with a real,
+  // page-specific FAQPage below instead of just deleting it.
+  if (route.path !== '/') {
+    html = html.replace(
+      /\s*<!-- Structured data: FAQPage -->\s*<script type="application\/ld\+json">[\s\S]*?"@type":\s*"FAQPage"[\s\S]*?<\/script>/,
+      '',
+    );
+  }
+
+  // Page-specific FAQPage — curve detail pages carry real FAQ content
+  // (route.faq, sourced from src/content/curves.mjs) worth its own rich
+  // result, distinct from the generic homepage FAQ this route just lost.
+  if (route.faq && route.faq.length > 0) {
+    const faqLd = {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: route.faq.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    };
+    const faqScript = `    <script type="application/ld+json">\n    ${JSON.stringify(faqLd)}\n    </script>\n  </head>`;
+    html = replaceOrThrow(html, /<\/head>/, faqScript, 'FAQPage JSON-LD insertion point');
+  }
 
   // Page-specific BreadcrumbList — same shape FeaturePageLayout.tsx's
   // hydrated version already injects via react-helmet-async, so the raw
@@ -496,3 +610,46 @@ const robotsTxt = isProdBuild
   : 'User-agent: *\nDisallow: /\n\n# Non-production build (VERCEL_ENV != production) — never index a preview deployment.\n';
 writeFileSync(robotsTxtPath, robotsTxt, 'utf-8');
 console.log(`[prerender-seo] wrote robots.txt (${isProdBuild ? 'production — public/robots.txt' : 'non-production — Disallow: /'})`);
+
+// sitemap.xml, generated from the same ROUTES array every prerendered page
+// comes from — the old public/sitemap.xml was hand-maintained and its
+// lastmod was stuck at one date regardless of when a page actually changed
+// (market-audit report's SEO gap #12). This is a real fix, with a real
+// limit disclosed rather than hidden: lastmod is the BUILD date for every
+// URL, not each page's true last-changed date — this repo has no per-route
+// content-hash or git-blame wiring to derive that cheaply, and a single
+// build-time date is still strictly more honest than a hardcoded one from
+// three months ago. Overwrites the dist/ copy Vite already made of
+// public/sitemap.xml (public/ is copied verbatim before this script runs).
+const PRIORITY = {
+  '/': { changefreq: 'weekly', priority: '1.0' },
+  '/pricing': { changefreq: 'monthly', priority: '0.9' },
+  '/features/speed-ramp': { changefreq: 'monthly', priority: '0.9' },
+  '/features/beat-sync': { changefreq: 'monthly', priority: '0.9' },
+  '/features/ai-slow-motion': { changefreq: 'monthly', priority: '0.9' },
+  '/features/4k-export': { changefreq: 'monthly', priority: '0.9' },
+  '/features/privacy': { changefreq: 'monthly', priority: '0.8' },
+  '/curves': { changefreq: 'monthly', priority: '0.8' },
+  '/docs': { changefreq: 'weekly', priority: '0.8' },
+  '/changelog': { changefreq: 'weekly', priority: '0.7' },
+  '/roadmap': { changefreq: 'monthly', priority: '0.6' },
+  '/about': { changefreq: 'monthly', priority: '0.6' },
+  '/contact': { changefreq: 'monthly', priority: '0.5' },
+  '/privacy': { changefreq: 'yearly', priority: '0.3' },
+  '/terms': { changefreq: 'yearly', priority: '0.3' },
+};
+const CURVE_DEFAULT = { changefreq: 'monthly', priority: '0.7' };
+
+if (isProdBuild) {
+  const buildDate = new Date().toISOString().slice(0, 10);
+  const urls = ROUTES.map((route) => {
+    const meta = PRIORITY[route.path]
+      ?? (route.path.startsWith('/curves/') ? (route.path === '/curves/flat' ? { changefreq: 'monthly', priority: '0.5' } : CURVE_DEFAULT) : { changefreq: 'monthly', priority: '0.6' });
+    return `  <url>\n    <loc>${SITE_URL}${route.path}</loc>\n    <changefreq>${meta.changefreq}</changefreq>\n    <priority>${meta.priority}</priority>\n    <lastmod>${buildDate}</lastmod>\n  </url>`;
+  });
+  const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+  writeFileSync(join(distDir, 'sitemap.xml'), sitemapXml, 'utf-8');
+  console.log(`[prerender-seo] wrote sitemap.xml — ${ROUTES.length} URLs, lastmod ${buildDate} (production build)`);
+} else {
+  console.log('[prerender-seo] non-production build — left the copied public/sitemap.xml as-is (a preview deployment should not publish a fresh, crawlable sitemap)');
+}

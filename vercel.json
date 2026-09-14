@@ -1,5 +1,19 @@
 {
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "rampify.astralbuild.dev" }],
+      "destination": "https://rampcut.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "rampify-eight.vercel.app" }],
+      "destination": "https://rampcut.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/(pricing|changelog|roadmap|docs|about|privacy|terms|contact|editor)",

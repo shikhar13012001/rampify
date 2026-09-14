@@ -1,4 +1,4 @@
-"""Local Rampify UI smoke tests powered by Skyvern and Ollama.
+"""Local Rampcut UI smoke tests powered by Skyvern and Ollama.
 
 The default suite is intentionally non-destructive: it never signs in, starts a
 checkout, submits a payment, calls a production API, or performs an export.
@@ -41,7 +41,7 @@ def configure_local_skyvern() -> None:
         "ENV": "local",
         "ENABLE_OLLAMA": "true",
         "LLM_KEY": "OLLAMA",
-        "OLLAMA_MODEL": "rampify-skyvern:latest",
+        "OLLAMA_MODEL": "rampcut-skyvern:latest",
         "OLLAMA_SERVER_URL": "http://127.0.0.1:11434",
         "OLLAMA_SUPPORTS_VISION": "true",
         "SKYVERN_TELEMETRY": "false",
@@ -87,14 +87,14 @@ async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("RAMPIFY_BASE_URL", "http://127.0.0.1:5173"),
+        default=os.environ.get("RAMPCUT_BASE_URL", "http://127.0.0.1:5173"),
     )
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--skip-ai", action="store_true")
     parser.add_argument(
         "--slow-mo",
         type=int,
-        default=int(os.environ.get("RAMPIFY_UI_SLOWMO", "0")),
+        default=int(os.environ.get("RAMPCUT_UI_SLOWMO", "0")),
         help="Milliseconds to pause after each UI action, so a --headed run stays watchable.",
     )
     args = parser.parse_args()
@@ -199,7 +199,7 @@ async def main() -> int:
         await page.keyboard.press("Enter")
         await page.wait_for_url("**/editor")
         await page.wait_for_timeout(3_000)
-        assert await page.get_by_text("rampify-demo-clip.mp4", exact=False).count() >= 1, (
+        assert await page.get_by_text("rampcut-demo-clip.mp4", exact=False).count() >= 1, (
             "the demo CTA reached /editor but the bundled demo did not load; "
             "the mount-only timer is cancelled by React StrictMode after the "
             "effect removes ?demo=1"
@@ -255,7 +255,7 @@ async def main() -> int:
         await page.get_by_role("link", name="Reproduce this in the editor").first.click()
         await page.wait_for_url("**/editor")
         await page.wait_for_timeout(5_000)
-        assert await page.get_by_text("rampify-demo-clip.mp4", exact=False).count() >= 1, (
+        assert await page.get_by_text("rampcut-demo-clip.mp4", exact=False).count() >= 1, (
             "'Reproduce this in the editor' reached /editor but the bundled demo did not load"
         )
         assert "demo=" not in page.url

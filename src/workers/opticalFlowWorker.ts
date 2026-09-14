@@ -27,7 +27,7 @@ ort.env.wasm.numThreads = 1; // single-threaded avoids any COOP/COEP issues
 
 // ─── IndexedDB model cache ────────────────────────────────────────────────────
 
-const DB_NAME    = 'rampify-models';
+const DB_NAME    = 'rampcut-models';
 const DB_VERSION = 1;
 const STORE_NAME = 'models';
 const MODEL_KEY  = 'rife-v4-lite-onnx';

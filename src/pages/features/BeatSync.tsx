@@ -4,7 +4,7 @@ export function BeatSyncFeature() {
   return (
     <FeaturePageLayout
       path="/features/beat-sync"
-      title="Beat Sync — Auto-Sync Video Cuts to Music | Rampify"
+      title="Beat Sync — Auto-Sync Video Cuts to Music | Rampcut"
       description="Beat sync detects BPM and onset times with STFT spectral flux analysis, then snaps speed-curve keypoints to the beat. No manual tapping required."
       eyebrow="Beat sync"
       h1="Sync Video Cuts to the Beat Automatically"
@@ -12,7 +12,7 @@ export function BeatSyncFeature() {
     >
       <FeatureSection heading="How beat detection works">
         <p style={{ margin: 0 }}>
-          Rampify runs a short-time Fourier transform (STFT) in a Web Worker: a Hann-windowed
+          Rampcut runs a short-time Fourier transform (STFT) in a Web Worker: a Hann-windowed
           spectrogram is computed from the decoded audio, spectral flux is derived as the
           half-wave-rectified difference between adjacent frames, and an adaptive threshold
           (local mean × 1.5) picks onset peaks with a 300ms minimum gap. The result is a list
@@ -33,7 +33,7 @@ export function BeatSyncFeature() {
         <p style={{ margin: 0 }}>
           The spectral-flux detector finds transients, not musical beats in the strict sense.
           For 3/4, 5/4, or polyrhythmic content, detected "beats" may align with strong accents
-          rather than the musical pulse. Rampify reports a confidence score; anything below 0.8
+          rather than the musical pulse. Rampcut reports a confidence score; anything below 0.8
           is flagged as irregular so you know to verify before applying.
         </p>
       </FeatureSection>

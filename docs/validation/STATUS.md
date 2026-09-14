@@ -1112,3 +1112,91 @@ actually appearing when a split clip is exported. Then: the three still-open P0 
 (cloud-export backend decision, testimonials, cancel-claim re-verification), then P1
 analytics, then the newly-found multi-segment-export gap and bezier preview/export
 mismatch (both currently undecided — need a product call on whether/when to fix properly).
+
+- **Rebrand + market-readiness task (2026-09-14)** — full code changes only
+  (no new .md deep-dive doc this time; summarized here per WORKING_AGREEMENT
+  §8). Scope: implement the prior competitive/SEO analysis's fixes, rename
+  the product, add a founder pricing tier, ship two competitor-gap features,
+  and produce a marketing/launch plan + owner action checklist.
+  - **Renamed Rampify → Rampcut** across the app, config, and docs (chosen by
+    the owner over keeping "Rampify," which collides with an unrelated,
+    established SEO tool at rampify.dev). `src/config/brand.mjs` (new) is
+    now the single source for `BRAND`/`SITE_URL`; `src/components/Seo.tsx`
+    reads from it instead of a hardcoded string. Firebase project id
+    (`rampify-720b4`) deliberately NOT renamed — that's the real, existing
+    backend project id, unrelated to the product name.
+  - **Founder plan added**: one-time $59 lifetime-Pro offer, capped at 25
+    seats (`api/_plans.ts`). Wired through checkout
+    (`api/create-checkout-session.ts`), the webhook
+    (`api/webhooks/dodo.ts` — `payment.succeeded` grants Pro with
+    `subscriptionEnd: null`; `refund.succeeded` releases the seat), a public
+    read-only `api/founder-seats.ts`, and `UpgradeModal.tsx`/`PricingTable.tsx`.
+    **Owner action required**: create the `DODO_PRO_FOUNDER_PRODUCT_ID`
+    product in the Dodo dashboard (one-time $59) — unset today, so the
+    founder tier stays hidden until configured (`api/_env.ts` treats it as
+    optional). See the marketing-plan artifact delivered this session for
+    the full owner checklist, including the still-open **critical**
+    `PRO_ANNUAL_PRODUCT` billing-interval bug from the paid-conversion audit
+    above (bills $96/MONTH, not /YEAR) — unresolved, blocks any real annual
+    signup.
+  - **Feature: Curve Links + Curve Library** (competitor-gap #1 — no
+    competitor offers a shareable, SEO-indexable curve preset). New
+    `src/content/curves.mjs` is the single source of truth for all 12 named
+    curves (the 8 original + 4 new: Slow Reveal, Timelapse Ramp, Double Tap,
+    Drift In), consumed by `src/lib/presets.ts` (editor preset panel — now
+    derived, not hand-duplicated), `src/lib/curveLink.ts` (base64url
+    curve-in-URL encode/decode, `/editor?c=...` and `/editor?p=<presetId>`),
+    a "Share" button in `Sidebar.tsx`'s preset panel, `DropZone.tsx` (applies
+    a pending curve link to whatever clip loads next, demo or own file), and
+    12 new public `/curves/:slug` pages + a `/curves` index
+    (`src/pages/CurvesIndex.tsx`, `src/pages/CurvePage.tsx`) — each with real
+    FAQ JSON-LD, a rendered SVG of the curve, and a "use this curve" deep
+    link. `scripts/prerender-seo.mjs` generates real static HTML for all 13
+    new routes from the same `curves.mjs` data (crawler-facing HTML can't
+    drift from the editor's real presets). `vercel.json` and
+    `public/sitemap.xml` updated.
+  - **Feature: offline-capable PWA** (competitor-gap #2 — no browser-based
+    competitor works offline). `vite-plugin-pwa` (Workbox) precaches the app
+    shell + ffmpeg.wasm/ONNX assets after first use; `public/manifest.webmanifest`
+    + 3 generated icons; `src/lib/pwa.ts` (install-prompt plumbing) wired
+    into a new "Install" button in `TopBar.tsx` (shown only once the browser
+    actually offers `beforeinstallprompt`). Verified end-to-end via a real
+    `npm run build`: `dist/manifest.webmanifest`, `dist/sw.js`, and all 3
+    icons emit correctly.
+  - **Google Analytics 4 added** (additive, optional): `src/lib/googleAnalytics.ts`
+    loads gtag.js only when `VITE_GA_MEASUREMENT_ID` is set (unset by
+    default — no GA property configured in this repo) and mirrors every
+    event from the existing first-party pipeline (`analytics.ts`'s
+    `trackEvent()`) into GA, respecting the same consent/DNT rule and
+    excluding test sessions. The first-party pipeline remains the source of
+    truth for funnel numbers; GA is for the owner's own traffic dashboard.
+    **Owner action**: create a GA4 property and set `VITE_GA_MEASUREMENT_ID`
+    to enable it — see .env.example.
+  - **Guest-experiment flip left disabled** — `GUEST_EXPERIMENT.enabled`
+    stays `false` per WORKING_AGREEMENT §4 (flipping it needs its own
+    explicit approval, separate from this task's).
+  - **Two pre-existing test failures found and fixed** (unrelated to most of
+    this task's own changes, surfaced only because the full suite was run):
+    `test/seo/vercel-routing.test.ts`'s trailing-slash assertion tested a
+    path Vercel's own `trailingSlash: false` config guarantees never reaches
+    the rewrite step (Vercel 308-redirects it first) — fixed the test helper
+    to mirror that normalization instead of changing `vercel.json`.
+    `test/seo/prerendered-routes.test.ts`'s crawlable-links allowlist needed
+    `/curves` added once the new nav link existed.
+  - **Tests**: `npx tsc -b` — zero errors. `npx vitest run` — **301/301
+    passing, 23 files** (up from 250/250 before this task), including a real
+    `npm run build` inside `test/seo/prerendered-routes.test.ts`'s
+    `beforeAll` (confirms the 13 new prerendered routes, the PWA plugin, and
+    `curves.mjs`'s Node-side import all actually work, not just compile).
+  - **Not verified — same honesty standard as every prior entry in this
+    file**: no live browser was available in this environment, so nothing
+    about the Curve Link share flow, the install prompt, or GA's actual
+    network requests was exercised in a real browser. `npm run build` +
+    `npx vitest run`'s real-build test are the only verification performed.
+  - **Marketing/launch plan + owner action checklist**: delivered this
+    session as a published report (not a repo doc) — covers what only the
+    account owner can do (buy rampcut.com, fix the Dodo annual-billing bug,
+    create the founder product, set production env vars, Search Console,
+    social handles) plus a 2-week launch sequence. Not duplicated into
+    `docs/validation/` to avoid a second copy drifting out of date; link
+    given directly to the owner.

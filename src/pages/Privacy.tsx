@@ -48,16 +48,16 @@ const SECTIONS = [
   {
     title: 'Data retention',
     body: [
-      'Account data is retained until you request deletion. Email hello@rampify.app to delete your account.',
+      'Account data is retained until you request deletion. Email hello@rampcut.com to delete your account.',
       'Export logs are retained indefinitely as an anonymous count — they contain no file content or metadata.',
-      'Dodo Payments customer records are retained per Dodo Payments\' own retention policy, independent of Rampify.',
+      'Dodo Payments customer records are retained per Dodo Payments\' own retention policy, independent of Rampcut.',
     ],
   },
   {
     title: 'Your rights',
     body: [
       'You can export your account data (email, subscription status, export count) at any time by request.',
-      'You can delete your account and all associated data by emailing hello@rampify.app.',
+      'You can delete your account and all associated data by emailing hello@rampcut.com.',
       'You can cancel your subscription at any time from the editor — no retention emails, no friction.',
       'EU residents have GDPR rights including access, rectification, and erasure. Email us to exercise them.',
     ],
@@ -74,8 +74,8 @@ export function Privacy() {
   return (
     <div className="clay-page">
       <Seo
-        title="Privacy Policy — Local-First Video Editing | Rampify"
-        description="Rampify privacy policy: your video footage never leaves your device. We collect only your email and subscription status. No ads, no cross-site tracking, no data sales."
+        title="Privacy Policy — Local-First Video Editing | Rampcut"
+        description="Rampcut privacy policy: your video footage never leaves your device. We collect only your email and subscription status. No ads, no cross-site tracking, no data sales."
         path="/privacy"
       />
       <ClayNav ctaLabel="Open editor" />
@@ -144,10 +144,10 @@ export function Privacy() {
           <p className="clay-body" style={{ margin: '40px 0 0', fontSize: 13, color: 'var(--color-clay-ink-muted)' }}>
             Questions about your data? Email{' '}
             <a
-              href="mailto:privacy@rampify.app"
+              href="mailto:privacy@rampcut.com"
               style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}
             >
-              privacy@rampify.app
+              privacy@rampcut.com
             </a>
             .
           </p>

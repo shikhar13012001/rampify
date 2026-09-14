@@ -75,8 +75,8 @@ function initOneTap(onSuccess: (user: User) => void) {
 // VITE_USE_FIREBASE_EMULATOR gate is on (see that file) — this function does
 // nothing different from a normal signInWithEmailAndPassword call otherwise,
 // it's the emulator wiring that makes it safe, not this function itself.
-// Exposed as window.__rampifyTestSignIn only under that same gate, the same
-// dead-code-elimination pattern as analytics.ts's __rampifyJourney.
+// Exposed as window.__rampcutTestSignIn only under that same gate, the same
+// dead-code-elimination pattern as analytics.ts's __rampcutJourney.
 export async function signInEmulatorTestUser(email: string, password: string): Promise<User> {
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password);
@@ -95,7 +95,7 @@ if (
   typeof window !== 'undefined' &&
   import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true'
 ) {
-  (window as unknown as { __rampifyTestSignIn?: typeof signInEmulatorTestUser }).__rampifyTestSignIn =
+  (window as unknown as { __rampcutTestSignIn?: typeof signInEmulatorTestUser }).__rampcutTestSignIn =
     signInEmulatorTestUser;
 }
 

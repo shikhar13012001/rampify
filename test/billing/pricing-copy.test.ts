@@ -87,9 +87,11 @@ describe('cancellation copy matches the real 2-step flow, not a fabricated one c
   });
 });
 
-describe('no price changed during this audit', () => {
-  it('Free is still $0, Pro is still $12/month and $96/year — this task explicitly must not change prices', () => {
-    expect(pricingTableSrc).toContain('const monthlyPrice = 12');
-    expect(pricingTableSrc).toContain('const annualTotal = 96');
+describe('subscription prices are sourced from planConfig.ts, and are unchanged', () => {
+  it('Free is still $0, Pro is still $12/month and $96/year', () => {
+    expect(pricingTableSrc).toContain('const monthlyPrice = PRO_MONTHLY_USD');
+    expect(pricingTableSrc).toContain('const annualTotal = PRO_ANNUAL_USD');
+    expect(planConfigSrc).toContain('PRO_MONTHLY_USD = 12');
+    expect(planConfigSrc).toContain('PRO_ANNUAL_USD = 96');
   });
 });

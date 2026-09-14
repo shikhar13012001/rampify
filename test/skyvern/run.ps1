@@ -52,7 +52,7 @@ try {
       Start-Sleep -Milliseconds 500
     }
     if (-not (Test-AppReady)) {
-      throw "Rampify did not become ready at $BaseUrl. See $stderrPath."
+      throw "Rampcut did not become ready at $BaseUrl. See $stderrPath."
     }
   }
 

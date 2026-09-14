@@ -43,7 +43,7 @@ const SECTIONS: DocSection[] = [
   },
   {
     title: 'Technical reference',
-    description: 'How Rampify works under the hood.',
+    description: 'How Rampcut works under the hood.',
     color: 'var(--color-clay-ink)',
   },
 ];
@@ -52,8 +52,8 @@ export function Docs() {
   return (
     <div className="clay-page">
       <Seo
-        title="Docs — Rampify Video Speed Editor Help & Tutorials"
-        description="Rampify documentation: speed curve editor, AI slow motion, beat sync, motion blur, 4K export, and privacy. Learn how to ramp video speed in the browser."
+        title="Docs — Rampcut Video Speed Editor Help & Tutorials"
+        description="Rampcut documentation: speed curve editor, AI slow motion, beat sync, motion blur, 4K export, and privacy. Learn how to ramp video speed in the browser."
         path="/docs"
       />
       <ClayNav ctaLabel="Open editor" />
@@ -76,7 +76,7 @@ export function Docs() {
             className="clay-display"
             style={{ margin: 0, fontSize: 'clamp(40px, 5vw, 56px)' }}
           >
-            Learn Rampify
+            Learn Rampcut
           </h1>
           <p className="clay-body" style={{ margin: '16px 0 0', fontSize: 16, maxWidth: 560 }}>
             Written guides for each area below are still being built. The one that exists today is a

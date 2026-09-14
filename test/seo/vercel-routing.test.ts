@@ -23,7 +23,17 @@ const vercelConfig = JSON.parse(
 // entry matches, exactly like Vercel evaluates the array at request time.
 const rewritePatterns = vercelConfig.rewrites.map((r) => new RegExp(`^${r.source}$`));
 function matchesAnyRewrite(path: string): boolean {
-  return rewritePatterns.some((pattern) => pattern.test(path));
+  // vercel.json sets trailingSlash: false, which makes Vercel 308-redirect
+  // "/x/" → "/x" BEFORE rewrites are ever evaluated (documented Vercel
+  // behavior) — so a real deployment's rewrite step never actually sees a
+  // trailing-slash path. Mirror that normalization here so this test
+  // reflects the real end-to-end outcome for a trailing-slash request, not
+  // just the raw regex tested against a path Vercel would never hand it.
+  const normalized =
+    vercelConfig.trailingSlash === false && path.length > 1 && path.endsWith('/')
+      ? path.slice(0, -1)
+      : path;
+  return rewritePatterns.some((pattern) => pattern.test(normalized));
 }
 
 describe('vercel.json rewrite — known SPA routes vs. unknown paths', () => {
@@ -43,6 +53,8 @@ describe('vercel.json rewrite — known SPA routes vs. unknown paths', () => {
     '/features/ai-slow-motion',
     '/features/privacy',
     '/features/4k-export',
+    '/curves',
+    '/curves/hero-moment',
   ];
 
   it('matches every real client-side route declared in src/App.tsx', () => {

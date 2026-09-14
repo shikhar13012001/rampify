@@ -443,7 +443,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
 // production builds — `import.meta.env.DEV` is statically false there, so
 // Vite dead-code-eliminates this whole block.
 if (import.meta.env.DEV && typeof window !== 'undefined') {
-  (window as unknown as { __rampifyStore?: typeof useEditorStore }).__rampifyStore = useEditorStore;
+  (window as unknown as { __rampcutStore?: typeof useEditorStore }).__rampcutStore = useEditorStore;
 }
 
 function normalizePoints(points: SpeedCurve['points']): SpeedCurve['points'] {

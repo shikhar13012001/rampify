@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { getCurrentUserIdToken } from '@/lib/firebase';
 import { useEditorStore } from '@/store/editorStore';
 import { trackEvent } from '@/lib/analytics';
-import { getPreferredBillingPeriod, setPreferredBillingPeriod } from '@/lib/billingPreference';
+import { getPreferredBillingPeriod, setPreferredBillingPeriod, type BillingPeriod } from '@/lib/billingPreference';
+import { FOUNDER_PRICE_USD, PRO_ANNUAL_USD, PRO_MONTHLY_USD } from '@/lib/planConfig';
+import { fetchFounderSeats, OPTIMISTIC_FOUNDER_SEATS, type FounderSeats } from '@/lib/founderSeats';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -10,7 +12,7 @@ interface UpgradeModalProps {
   reason?: string;
 }
 
-type BillingCycle = 'monthly' | 'annual';
+type BillingCycle = BillingPeriod;
 type CheckoutState = 'idle' | 'loading' | 'error' | 'already-pro';
 
 const FEATURES = [
@@ -50,6 +52,22 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
   };
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('idle');
   const [checkoutError, setCheckoutError] = useState('');
+  // Founder seat count — optimistic until /api/founder-seats answers. When the
+  // server says the offer is unconfigured or sold out, the founder toggle is
+  // removed and a stored 'founder' preference falls back to annual.
+  const [founderSeats, setFounderSeats] = useState<FounderSeats>(OPTIMISTIC_FOUNDER_SEATS);
+  useEffect(() => {
+    let cancelled = false;
+    fetchFounderSeats().then((seats) => {
+      if (cancelled) return;
+      setFounderSeats(seats);
+      if (!seats.available) {
+        setBillingState((current) => (current === 'founder' ? 'annual' : current));
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const founderAvailable = founderSeats.available;
   const user = useEditorStore(s => s.user);
   const isPro = useEditorStore(s => s.isPro);
   // AbortController for the in-flight checkout fetch so we can cancel it if
@@ -78,12 +96,13 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
 
   if (!isOpen) return null;
 
-  const monthlyPrice = 12;
-  const annualTotal  = 96; // $8/mo × 12
+  const monthlyPrice = PRO_MONTHLY_USD;
+  const annualTotal  = PRO_ANNUAL_USD; // $8/mo × 12
   const annualSaving = Math.round((1 - annualTotal / (monthlyPrice * 12)) * 100); // 33
 
-  const displayPrice  = billing === 'monthly' ? `$${monthlyPrice}/month` : `$${annualTotal}/year`;
+  const displayPrice  = billing === 'monthly' ? `$${monthlyPrice}/month` : billing === 'annual' ? `$${annualTotal}/year` : `$${FOUNDER_PRICE_USD} once`;
   const perMonthPrice = billing === 'annual'  ? `$${(annualTotal / 12).toFixed(0)}/mo` : null;
+  const cycles: BillingCycle[] = founderAvailable ? ['monthly', 'annual', 'founder'] : ['monthly', 'annual'];
 
   const handleUpgrade = async () => {
     setCheckoutState('loading');
@@ -111,6 +130,15 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
       const isJson = res.headers.get('content-type')?.includes('application/json');
       const data = isJson ? (await res.json()) as { url?: string; error?: string } : {};
 
+      // 409 with code founder_sold_out — someone took the last seat between
+      // page load and click. Drop to annual and say so; no redirect.
+      if (res.status === 409 && (data as { code?: string }).code === 'founder_sold_out') {
+        setFounderSeats((s) => ({ ...s, available: false, remaining: 0 }));
+        setBilling('annual');
+        setCheckoutError('Founder seats just sold out — annual Pro is selected instead.');
+        setCheckoutState('error');
+        return;
+      }
       // 409 Already Pro — the server guards against duplicate purchases.
       if (res.status === 409) {
         setCheckoutState('already-pro');
@@ -259,7 +287,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.02em' }}>Rampify Pro</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.02em' }}>Rampcut Pro</div>
                 <div style={{ fontSize: 11, color: '#8a8a8a', marginTop: 1 }}>Everything to edit like a pro</div>
               </div>
             </div>
@@ -317,7 +345,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                 background: '#fffaf0',
               }}
             >
-              {(['monthly', 'annual'] as const).map((cycle) => {
+              {cycles.map((cycle) => {
                 const active = billing === cycle;
                 return (
                   <button
@@ -333,10 +361,15 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                       transition: 'background 0.15s, color 0.15s',
                     }}
                   >
-                    <span style={{ textTransform: 'capitalize' }}>{cycle}</span>
+                    <span style={{ textTransform: 'capitalize' }}>{cycle === 'founder' ? 'Lifetime' : cycle}</span>
                     {cycle === 'annual' && (
                       <span style={{ fontSize: 9, color: '#e8b94a', fontWeight: 600, letterSpacing: '0.04em' }}>
                         SAVE {annualSaving}%
+                      </span>
+                    )}
+                    {cycle === 'founder' && (
+                      <span style={{ fontSize: 9, color: '#e8b94a', fontWeight: 600, letterSpacing: '0.04em' }}>
+                        {founderSeats.remaining} OF {founderSeats.total} LEFT
                       </span>
                     )}
                   </button>
@@ -347,12 +380,17 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
             {/* Price display */}
             <div style={{ marginBottom: 24, textAlign: 'center' }}>
               <div style={{ fontSize: 36, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                {billing === 'monthly' ? `$${monthlyPrice}` : `$${annualTotal}`}
+                {billing === 'monthly' ? `$${monthlyPrice}` : billing === 'annual' ? `$${annualTotal}` : `$${FOUNDER_PRICE_USD}`}
               </div>
               <div style={{ fontSize: 13, color: '#8a8a8a', marginTop: 4 }}>
-                {billing === 'monthly' ? 'per month' : 'per year'}
+                {billing === 'monthly' ? 'per month' : billing === 'annual' ? 'per year' : 'one payment, Pro forever'}
                 {perMonthPrice && <span style={{ color: '#2d8d8d', marginLeft: 6, fontWeight: 600 }}>({perMonthPrice} billed annually)</span>}
               </div>
+              {billing === 'founder' && (
+                <div style={{ fontSize: 11, color: '#4a4a4a', marginTop: 8, lineHeight: 1.5 }}>
+                  Founder seat: every Pro feature, every future Pro feature, no renewal. Limited to the first {founderSeats.total} people.
+                </div>
+              )}
             </div>
 
             {checkoutState === 'error' && (
@@ -401,7 +439,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
                 </>
               ) : (
                 <>
-                  Start Pro
+                  {billing === 'founder' ? 'Claim a founder seat' : 'Start Pro'}
                   <span style={{ opacity: 0.7, fontSize: 13, fontWeight: 500 }}>
                     — {displayPrice}
                   </span>
@@ -410,7 +448,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
             </button>
 
             <p style={{ margin: '12px 0 0', fontSize: 11, color: '#8a8a8a', textAlign: 'center', lineHeight: 1.5 }}>
-              Cancel anytime. No questions asked.
+              {billing === 'founder' ? '14-day refund if it isn\'t for you. No renewal, ever.' : 'Cancel anytime. No questions asked.'}
             </p>
 
             {!user && (

@@ -1,4 +1,4 @@
-# Rampify
+# Rampcut
 
 > Browser-native video speed ramping. Draw a curve, export in 4K — no installs, no uploads.
 
@@ -12,9 +12,9 @@
 
 ## Overview
 
-Rampify is a fully browser-based video speed ramping editor. Drop a clip, draw a bezier speed curve, optionally sync peaks to music beats, and export — all without leaving the tab. Video processing runs in a Web Worker via **ffmpeg.wasm**; AI slow motion uses **RIFE** (Real-time Intermediate Flow Estimation) via ONNX Runtime Web. Your footage never leaves your machine.
+Rampcut is a fully browser-based video speed ramping editor. Drop a clip, draw a bezier speed curve, optionally sync peaks to music beats, and export — all without leaving the tab. Video processing runs in a Web Worker via **ffmpeg.wasm**; AI slow motion uses **RIFE** (Real-time Intermediate Flow Estimation) via ONNX Runtime Web. Your footage never leaves your machine.
 
-**Live:** https://rampify.astralbuild.dev
+**Live:** https://rampcut.com
 
 ---
 
@@ -65,7 +65,7 @@ Rampify is a fully browser-based video speed ramping editor. Drop a clip, draw a
 ## Project Structure
 
 ```
-rampify/
+rampcut/
 ├── api/                          # Vercel serverless functions
 │   ├── _env.ts                   # Zod-validated server env (Dodo + Firebase)
 │   ├── _adminInit.ts             # Firebase Admin + Dodo Payments singletons
@@ -154,8 +154,8 @@ rampify/
 ### Installation
 
 ```bash
-git clone https://github.com/your-org/rampify.git
-cd rampify
+git clone https://github.com/your-org/rampcut.git
+cd rampcut
 npm install
 ```
 
@@ -245,7 +245,7 @@ All heavy processing is isolated in dedicated workers to keep the main thread fr
 | Worker | Responsibility |
 |--------|---------------|
 | `ffmpegWorker.ts` | Video encoding via ffmpeg.wasm. Handles standard, blur, and optical-flow frame paths. |
-| `opticalFlowWorker.ts` | RIFE ONNX inference. Downloads and caches model weights in IndexedDB (`rampify-onnx-cache`). Streams `ImageBitmap` frames to caller via `onFrame` callback. |
+| `opticalFlowWorker.ts` | RIFE ONNX inference. Downloads and caches model weights in IndexedDB (`rampcut-onnx-cache`). Streams `ImageBitmap` frames to caller via `onFrame` callback. |
 | `beatDetectionWorker.ts` | STFT spectral-flux beat detection. Input: raw mono PCM `Float32Array` + `sampleRate`. Output: onset timestamps in seconds. |
 
 ### SharedArrayBuffer
@@ -453,4 +453,4 @@ Copy the signing secret into the `DODO_PAYMENTS_WEBHOOK_KEY` env var and redeplo
 
 ## License
 
-MIT © Rampify
+MIT © Rampcut

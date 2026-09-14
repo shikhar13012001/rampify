@@ -33,7 +33,7 @@ export const db   = app ? getFirestore(app) : (null as unknown as ReturnType<typ
 // itself sets VITE_USE_FIREBASE_EMULATOR=true for its own vercel-dev child
 // process (see test/skyvern/run.ps1) — never a normal dev/preview/prod value.
 // Guarded by import.meta.env.DEV too so this is fully dead-code-eliminated
-// out of any production bundle, the same way analytics.ts's __rampifyJourney
+// out of any production bundle, the same way analytics.ts's __rampcutJourney
 // dev hook is.
 if (import.meta.env.DEV && app && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });

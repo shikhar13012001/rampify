@@ -12,7 +12,7 @@ interface FeaturePageLayoutProps {
   h1: string;              // main heading
   intro: string;           // paragraph below H1
   children: ReactNode;     // body content (H2 sections, etc.)
-  ctaLabel?: string;       // defaults to "Try Rampify free"
+  ctaLabel?: string;       // defaults to "Try Rampcut free"
 }
 
 export function FeaturePageLayout({
@@ -23,7 +23,7 @@ export function FeaturePageLayout({
   h1,
   intro,
   children,
-  ctaLabel = 'Try Rampify free',
+  ctaLabel = 'Try Rampcut free',
 }: FeaturePageLayoutProps) {
   // BreadcrumbList schema: Home → Features → {this page}
   const breadcrumbLd = {

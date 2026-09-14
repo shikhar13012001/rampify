@@ -8,6 +8,7 @@ import {
   resolveAllowedOrigin,
 } from './_adminInit.js';
 import { getServerEnv } from './_env.js';
+import { FOUNDER_META_DOC, FOUNDER_SEATS, isBillingPeriod, type BillingPeriod } from './_plans.js';
 
 function isStillValid(end: unknown): boolean {
   if (end == null) return true;
@@ -37,20 +38,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Strict billingPeriod validation — no silent default for unknown values.
   const requested = (req.body ?? {}) as { billingPeriod?: unknown };
   const bp = requested.billingPeriod;
-  if (bp !== 'monthly' && bp !== 'annual') {
-    return res.status(400).json({ error: 'Invalid billingPeriod (must be "monthly" or "annual")' });
+  if (!isBillingPeriod(bp)) {
+    return res.status(400).json({ error: 'Invalid billingPeriod (must be "monthly", "annual" or "founder")' });
   }
-  const billingPeriod: 'monthly' | 'annual' = bp;
+  const billingPeriod: BillingPeriod = bp;
 
   const env = getServerEnv();
   const productId =
-    billingPeriod === 'annual'
-      ? env.DODO_PRO_ANNUAL_PRODUCT_ID
-      : env.DODO_PRO_MONTHLY_PRODUCT_ID;
+    billingPeriod === 'founder'
+      ? env.DODO_PRO_FOUNDER_PRODUCT_ID
+      : billingPeriod === 'annual'
+        ? env.DODO_PRO_ANNUAL_PRODUCT_ID
+        : env.DODO_PRO_MONTHLY_PRODUCT_ID;
 
   if (!productId) {
+    if (billingPeriod === 'founder') {
+      return res.status(503).json({ error: 'Founder plan is not available right now' });
+    }
     console.error('[create-checkout-session] missing product ID for', billingPeriod);
     return res.status(500).json({ error: 'Checkout session creation failed' });
+  }
+
+  // Founder seats are capped — refuse a checkout once the cap is reached so a
+  // late buyer never pays for a seat the marketing copy said was gone. The
+  // count is maintained by api/webhooks/dodo.ts; see api/_plans.ts.
+  if (billingPeriod === 'founder') {
+    try {
+      const metaSnap = await adminDb().doc(FOUNDER_META_DOC).get();
+      const sold = Number(metaSnap.data()?.sold ?? 0);
+      if (sold >= FOUNDER_SEATS) {
+        return res.status(409).json({ error: 'Founder seats are sold out', code: 'founder_sold_out' });
+      }
+    } catch (err) {
+      console.error('[create-checkout-session] founder seat lookup failed:', err);
+      return res.status(500).json({ error: 'Checkout session creation failed' });
+    }
   }
 
   // Pro-status guard: refuse to create a duplicate subscription.
@@ -77,9 +99,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const dodo = dodoClient();
-    // NOTE: product_id must be configured as a recurring/subscription product
-    // in the Dodo dashboard (Products → Pricing → Recurring) — the checkout
-    // session itself doesn't declare "subscription mode" the way Stripe's did.
+    // NOTE: the monthly/annual product_ids must be configured as recurring
+    // products in the Dodo dashboard (Products → Pricing → Recurring) and the
+    // founder product as a ONE-TIME product — the checkout session itself
+    // doesn't declare "subscription mode" the way Stripe's did.
     //
     // metadata.userId is the load-bearing field here: it's echoed back
     // verbatim on every webhook event tied to this checkout (payment.succeeded,

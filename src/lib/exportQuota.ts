@@ -13,8 +13,8 @@
  *     are completely separate (api/record-export.ts).
  */
 
-export const GUEST_COUNT_KEY = 'rampify:guest-export-count';
-export const GUEST_LAST_EXPORT_ID_KEY = 'rampify:guest-last-export-id';
+export const GUEST_COUNT_KEY = 'rampcut:guest-export-count';
+export const GUEST_LAST_EXPORT_ID_KEY = 'rampcut:guest-last-export-id';
 
 export interface StorageLike {
   getItem(key: string): string | null;

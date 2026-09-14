@@ -4,11 +4,11 @@ export function FourKExportFeature() {
   return (
     <FeaturePageLayout
       path="/features/4k-export"
-      title="4K Video Export in the Browser — No Installs | Rampify"
+      title="4K Video Export in the Browser — No Installs | Rampcut"
       description="Export speed-ramped video at up to 4K resolution via ffmpeg.wasm. MP4 (H.264). Local-first — no uploads, no cloud rendering."
       eyebrow="4K export"
       h1="Export 4K Video from Your Browser"
-      intro="Rampify encodes your edited timeline to MP4 at up to 3840×2160 using ffmpeg.wasm in a Web Worker. The file is written directly to your disk — no upload, no cloud queue, no waiting in line."
+      intro="Rampcut encodes your edited timeline to MP4 at up to 3840×2160 using ffmpeg.wasm in a Web Worker. The file is written directly to your disk — no upload, no cloud queue, no waiting in line."
     >
       <FeatureSection heading="Formats and resolutions">
         <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
@@ -21,7 +21,7 @@ export function FourKExportFeature() {
       <FeatureSection heading="How ffmpeg.wasm works">
         <p style={{ margin: 0 }}>
           ffmpeg.wasm is a WebAssembly port of FFmpeg, the same encoder that powers most
-          desktop video tools. Rampify runs it in a dedicated Worker with SharedArrayBuffer
+          desktop video tools. Rampcut runs it in a dedicated Worker with SharedArrayBuffer
           (enabled via COOP/COEP headers) for threaded encoding. The standard speed-ramp
           path uses the <code>setpts</code> filter for video and <code>atempo</code> for
           audio; the AI slow-motion path feeds a JPEG frame sequence to ffmpeg's
@@ -39,7 +39,7 @@ export function FourKExportFeature() {
       <FeatureSection heading="Honest expectations">
         <p style={{ margin: 0 }}>
           Browser encoding is slower than native FFmpeg. A 10-second 4K clip with AI slow
-          motion can take 3–6 minutes depending on your CPU and GPU. Rampify shows a
+          motion can take 3–6 minutes depending on your CPU and GPU. Rampcut shows a
           real-time progress bar and a time estimate based on your machine's measured
           throughput. You can cancel anytime; partial files are never written.
         </p>

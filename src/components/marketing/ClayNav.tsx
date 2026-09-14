@@ -43,7 +43,7 @@ export function ClayNav({ ctaLabel = 'Open editor' }: ClayNavProps) {
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           <Logo size={24} />
           <span className="clay-display" style={{ fontSize: 17, fontWeight: 600 }}>
-            rampify
+            rampcut
           </span>
         </Link>
 

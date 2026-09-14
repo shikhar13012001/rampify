@@ -4,7 +4,7 @@ export function AiSlowMotionFeature() {
   return (
     <FeaturePageLayout
       path="/features/ai-slow-motion"
-      title="AI Slow Motion — RIFE Frame Interpolation in Browser | Rampify"
+      title="AI Slow Motion — RIFE Frame Interpolation in Browser | Rampcut"
       description="AI slow motion via RIFE neural network runs in your browser with ONNX Runtime Web. GPU-accelerated when available, CPU fallback otherwise. No uploads, no cloud GPU."
       eyebrow="AI slow motion"
       h1="AI Slow Motion with RIFE, In Your Browser"

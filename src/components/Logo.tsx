@@ -1,4 +1,4 @@
-// Shared Rampify brand mark — used in marketing nav, footer, and editor TopBar.
+// Shared Rampcut brand mark — used in marketing nav, footer, and editor TopBar.
 // Single canonical version: dark ink tile, a cream speed-ramp curve (the same
 // ease-in S-curve shape as the product's own curve editor), pink peak dot.
 
@@ -44,7 +44,7 @@ export function LogoWordmark({ size = 24, className }: LogoProps) {
           color: '#0a0a0a',
         }}
       >
-        rampify
+        rampcut
       </span>
     </span>
   );

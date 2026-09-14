@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
-  <!-- Rampify OG image — 1200×630, Clay design system -->
+  <!-- Rampcut OG image — 1200×630, Clay design system -->
   <!-- Background: warm cream canvas -->
   <rect width="1200" height="630" fill="#fffaf0"/>
 
@@ -20,7 +20,7 @@
   </g>
 
   <!-- Wordmark -->
-  <text x="136" y="103" font-family="Inter, -apple-system, sans-serif" font-size="28" font-weight="600" fill="#0a0a0a" letter-spacing="-0.8">rampify</text>
+  <text x="136" y="103" font-family="Inter, -apple-system, sans-serif" font-size="28" font-weight="600" fill="#0a0a0a" letter-spacing="-0.8">rampcut</text>
 
   <!-- Eyebrow -->
   <text x="80" y="220" font-family="Inter, sans-serif" font-size="16" font-weight="600" fill="#ff4d8b" letter-spacing="2.4">SPEED RAMP VIDEO EDITOR</text>
@@ -53,8 +53,8 @@
 
   <!-- Bottom CTA bar -->
   <rect x="80" y="540" width="380" height="50" rx="12" fill="#0a0a0a"/>
-  <text x="270" y="571" text-anchor="middle" font-family="Inter, sans-serif" font-size="17" font-weight="600" fill="#fffaf0">Free to start — rampify.app</text>
+  <text x="270" y="571" text-anchor="middle" font-family="Inter, sans-serif" font-size="17" font-weight="600" fill="#fffaf0">Free to start — rampcut.app</text>
 
   <!-- URL bottom right -->
-  <text x="1120" y="571" text-anchor="end" font-family="Inter, sans-serif" font-size="15" font-weight="500" fill="#8a8a8a">rampify.astralbuild.dev</text>
+  <text x="1120" y="571" text-anchor="end" font-family="Inter, sans-serif" font-size="15" font-weight="500" fill="#8a8a8a">rampcut.com</text>
 </svg>

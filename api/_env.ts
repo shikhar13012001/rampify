@@ -14,6 +14,10 @@ const ServerEnvSchema = z.object({
   }),
   DODO_PRO_MONTHLY_PRODUCT_ID: z.string().min(1, 'DODO_PRO_MONTHLY_PRODUCT_ID is required'),
   DODO_PRO_ANNUAL_PRODUCT_ID: z.string().min(1, 'DODO_PRO_ANNUAL_PRODUCT_ID is required'),
+  // Optional: the one-time "Founder Pro" product (see api/_plans.ts). When
+  // unset, /api/founder-seats reports configured:false and the founder
+  // option is hidden client-side; a direct checkout attempt returns 503.
+  DODO_PRO_FOUNDER_PRODUCT_ID: z.string().optional(),
   // Optional — checked as a raw string ('1' enables it), same convention as
   // the removed STRIPE_WEBHOOK_DEV_BYPASS.
   DODO_WEBHOOK_DEV_BYPASS: z.string().optional(),

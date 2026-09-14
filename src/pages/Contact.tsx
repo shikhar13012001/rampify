@@ -7,25 +7,25 @@ import { Seo } from '@/components/Seo';
 const CHANNELS = [
   {
     title: 'General inquiries',
-    email: 'hello@rampify.app',
+    email: 'hello@rampcut.com',
     description: 'Questions, feedback, partnership ideas, or just saying hi.',
     color: 'var(--color-clay-pink)',
   },
   {
     title: 'Support',
-    email: 'support@rampify.app',
+    email: 'support@rampcut.com',
     description: 'Bugs, billing issues, or trouble with an export. Pro subscribers get priority.',
     color: 'var(--color-clay-teal-bright)',
   },
   {
     title: 'Privacy & legal',
-    email: 'privacy@rampify.app',
+    email: 'privacy@rampcut.com',
     description: 'Data requests, GDPR questions, or terms-of-service clarifications.',
     color: 'var(--color-clay-lavender)',
   },
   {
     title: 'Education',
-    email: 'education@rampify.app',
+    email: 'education@rampcut.com',
     description: '50% off Pro for verified students and educators. Send your .edu email or proof of enrollment.',
     color: 'var(--color-clay-ochre)',
   },
@@ -40,17 +40,17 @@ export function Contact() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Open the user's mail client with a pre-filled message.
-    const subject = encodeURIComponent(`Rampify contact from ${name || 'a visitor'}`);
+    const subject = encodeURIComponent(`Rampcut contact from ${name || 'a visitor'}`);
     const body = encodeURIComponent(`${message}\n\n— ${name}\n${email}`);
-    window.location.href = `mailto:hello@rampify.app?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:hello@rampcut.com?subject=${subject}&body=${body}`;
     setSent(true);
   };
 
   return (
     <div className="clay-page">
       <Seo
-        title="Contact — Rampify Support & Inquiries"
-        description="Contact the Rampify team: general inquiries at hello@rampify.app, bug reports, partnership ideas, or feedback. We email you back, no ticketing system."
+        title="Contact — Rampcut Support & Inquiries"
+        description="Contact the Rampcut team: general inquiries at hello@rampcut.com, bug reports, partnership ideas, or feedback. We email you back, no ticketing system."
         path="/contact"
       />
       <ClayNav ctaLabel="Open editor" />
@@ -182,8 +182,8 @@ export function Contact() {
               </h3>
               <p className="clay-body" style={{ margin: '0 0 20px', fontSize: 13, lineHeight: 1.6 }}>
                 If nothing happened, email us directly at{' '}
-                <a href="mailto:hello@rampify.app" style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}>
-                  hello@rampify.app
+                <a href="mailto:hello@rampcut.com" style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}>
+                  hello@rampcut.com
                 </a>
                 .
               </p>

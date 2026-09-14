@@ -4,8 +4,17 @@ import { loadProjectState } from '@/lib/projectPersistence';
 import { readVideoMetadata, isAcceptedVideoFile, getRejectedFileMessage } from '@/lib/videoMetadata';
 import { checkExportCapabilities } from '@/lib/browserCapabilities';
 import { trackEvent } from '@/lib/analytics';
-import { heroMoment } from '@/lib/presets';
-import type { Segment } from '@/types/editor';
+import { heroMoment, PRESETS } from '@/lib/presets';
+import { readPendingCurveFromLocation } from '@/lib/curveLink';
+import type { Segment, SpeedCurve } from '@/types/editor';
+
+// Resolves a Curve Library preset id (from a `?p=` link) to its curve —
+// module-scope so it has no render dependency and stays stable across
+// re-renders. See src/lib/curveLink.ts for the two link shapes this reads.
+function resolvePresetCurveById(id: string): SpeedCurve | null {
+  const preset = PRESETS.find((p) => p.id === id);
+  return preset ? preset.curve : null;
+}
 
 // The homepage's "Try a demo clip" CTA (Landing.tsx) links to /editor?demo=1.
 // The clip itself is fully procedural (ffmpeg lavfi generators — see
@@ -20,7 +29,7 @@ const DEMO_PRESET = heroMoment;
 
 function getSavedFileName(): string | null {
   try {
-    const raw = localStorage.getItem('rampify_project_v1');
+    const raw = localStorage.getItem('rampcut_project_v1');
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { fileName?: string };
     return parsed.fileName ?? null;
@@ -44,6 +53,21 @@ export function DropZone() {
   // not a hard block — only export actually requires these.
   const [capabilities] = useState(() => checkExportCapabilities());
 
+  // Curve Links (/editor?c=...) and Curve Library deep links (/editor?p=...)
+  // — read once at mount via a lazy initializer, same reasoning as
+  // `wantsDemo` below. Applied to the first segment of whatever loads next,
+  // demo or own file, per src/lib/curveLink.ts's contract.
+  const [pendingCurve] = useState(() =>
+    readPendingCurveFromLocation(window.location, resolvePresetCurveById)
+  );
+
+  useEffect(() => {
+    if (!pendingCurve) return;
+    // Strip c/p from the URL immediately so a refresh or re-share doesn't
+    // carry a stale query string once the curve has been applied.
+    window.history.replaceState(null, '', window.location.pathname);
+  }, [pendingCurve]);
+
   const loadDemoClip = useCallback(async () => {
     setError(null);
     setIsLoading(true);
@@ -51,17 +75,20 @@ export function DropZone() {
       const res = await fetch(DEMO_CLIP_URL);
       if (!res.ok) throw new Error('Could not load the demo clip. Try again, or choose your own video.');
       const blob = await res.blob();
-      const file = new File([blob], 'rampify-demo-clip.mp4', { type: 'video/mp4' });
+      const file = new File([blob], 'rampcut-demo-clip.mp4', { type: 'video/mp4' });
       const videoFile = await readVideoMetadata(file);
 
       // Deliberately skips the saved-session restore path handleFile()
       // uses above — a demo run should always start from the same known
       // curve, never a leftover session for a file with this same name.
+      // A pending curve link/preset (?c=/?p=) takes priority over the
+      // built-in demo curve, so a shared link that also uses ?demo=1 still
+      // shows the sender's actual curve.
       const segment: Segment = {
         id: `seg_${Date.now()}`,
         startTime: 0,
         endTime: videoFile.duration,
-        curve: DEMO_PRESET,
+        curve: pendingCurve?.curve ?? DEMO_PRESET,
       };
       setProject({ file: videoFile, segments: [segment] });
       useEditorStore.getState().setIsDemoProject(true);
@@ -77,13 +104,16 @@ export function DropZone() {
           sizeMB: videoFile.size != null ? Math.round((videoFile.size / (1024 * 1024)) * 10) / 10 : null,
         },
       });
+      if (pendingCurve) {
+        trackEvent({ name: 'curve_link_opened', props: { source: pendingCurve.source, presetId: pendingCurve.presetId } });
+      }
     } catch (err) {
       setProject(null);
       setError(err instanceof Error ? err.message : 'Could not load the demo clip. Try again, or choose your own video.');
     } finally {
       setIsLoading(false);
     }
-  }, [setProject]);
+  }, [setProject, pendingCurve]);
 
   // Homepage's "Try a demo clip" CTA links to /editor?demo=1. Read once via a
   // lazy useState initializer (survives React StrictMode's double
@@ -159,6 +189,20 @@ export function DropZone() {
             sizeMB: videoFile.size != null ? Math.round((videoFile.size / (1024 * 1024)) * 10) / 10 : null,
           },
         });
+
+        // Apply a pending curve link/preset (?c=/?p=) to the first segment of
+        // whatever just loaded — the restored-session segments above included.
+        // Read the segment id back from the store rather than assuming one,
+        // since both branches above create it differently (restored segments
+        // keep their saved ids; a fresh project gets one from
+        // makeFullVideoSegment in editorStore.ts).
+        if (pendingCurve) {
+          const firstSegment = useEditorStore.getState().project?.segments[0];
+          if (firstSegment) {
+            useEditorStore.getState().updateSegmentCurve(firstSegment.id, pendingCurve.curve);
+            trackEvent({ name: 'curve_link_opened', props: { source: pendingCurve.source, presetId: pendingCurve.presetId } });
+          }
+        }
       } catch (err) {
         setProject(null);
         setError(
@@ -170,7 +214,7 @@ export function DropZone() {
         setIsLoading(false);
       }
     },
-    [setProject]
+    [setProject, pendingCurve]
   );
 
   const onDrop = useCallback(
@@ -347,7 +391,33 @@ export function DropZone() {
             </div>
           )}
 
-          {savedFileName && !error && (
+          {pendingCurve && !error && (
+            <div
+              style={{
+                marginTop: 18,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 12,
+                color: '#b8a4ed',
+                background: 'rgba(139,111,255,0.08)',
+                border: '1px solid rgba(139,111,255,0.25)',
+                borderRadius: 9,
+                padding: '8px 13px',
+                boxShadow: 'none',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              <span>
+                A shared curve is ready — drop a clip (or try the demo) to apply it
+              </span>
+            </div>
+          )}
+
+          {savedFileName && !error && !pendingCurve && (
             <div
               style={{
                 marginTop: 18,

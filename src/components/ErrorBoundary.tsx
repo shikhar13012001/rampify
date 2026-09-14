@@ -15,7 +15,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[Rampify] Uncaught error:', error, info.componentStack);
+    console.error('[Rampcut] Uncaught error:', error, info.componentStack);
   }
 
   render() {

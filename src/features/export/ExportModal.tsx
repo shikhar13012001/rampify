@@ -554,6 +554,11 @@ export function ExportModal({ onClose }: ExportModalProps) {
               Sign in to export — free accounts get {SIGNED_IN_FREE_LIMIT} exports/month.
             </Banner>
           )}
+          {phase === 'idle' && tier === 'guest' && GUEST_EXPERIMENT.enabled && remaining > 0 && !blockedReason && (
+            <Banner tone="info">
+              Your first export is on us — no account needed. Sign in afterwards for {SIGNED_IN_FREE_LIMIT} a month.
+            </Banner>
+          )}
           {/* Capability check: the export pipeline only ever processes the FIRST
               segment (see ffmpegBridge.ts) — silently, with no other warning
               anywhere. This surfaces that limitation before the user waits on a

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Validates a Rampify-exported file's dimensions, duration, and playability —
+# Validates a Rampcut-exported file's dimensions, duration, and playability —
 # run this after manually exporting one of the fixtures below through the
 # real app in a real browser (see docs/validation/RESULTS.md's manual
 # checklist). Requires system ffmpeg/ffprobe.

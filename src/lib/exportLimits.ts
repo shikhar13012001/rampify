@@ -96,7 +96,7 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
     return {
       allowed: remaining > 0,
       remaining,
-      reason: remaining <= 0 ? 'Your free guest export is used. Sign in for 3 more per month.' : undefined,
+      reason: remaining <= 0 ? `That was your free export — sign in for ${SIGNED_IN_FREE_LIMIT} a month, or go Pro for unlimited.` : undefined,
     };
   }
   return {

@@ -6,32 +6,32 @@ const SECTIONS = [
   {
     title: '1. Acceptance of terms',
     body: [
-      'By using Rampify, you agree to these terms. If you don\'t agree, don\'t use the service. These terms apply to all visitors, regardless of whether you have a paid subscription.',
+      'By using Rampcut, you agree to these terms. If you don\'t agree, don\'t use the service. These terms apply to all visitors, regardless of whether you have a paid subscription.',
     ],
   },
   {
     title: '2. Your account',
     body: [
       'You sign in with Google. You are responsible for keeping your account secure and for all activity that happens under your account.',
-      'You must be at least 13 years old to use Rampify. If you\'re under 18, you need a parent or guardian\'s permission to subscribe.',
+      'You must be at least 13 years old to use Rampcut. If you\'re under 18, you need a parent or guardian\'s permission to subscribe.',
       'One account per person. Sharing accounts to avoid subscription fees is not permitted and will result in suspension.',
     ],
   },
   {
     title: '3. Acceptable use',
     body: [
-      'You may use Rampify to edit videos you own or have permission to edit. You may not use it to process content that is illegal in your jurisdiction or that infringes someone else\'s rights.',
+      'You may use Rampcut to edit videos you own or have permission to edit. You may not use it to process content that is illegal in your jurisdiction or that infringes someone else\'s rights.',
       'You may not reverse-engineer, decompile, or attempt to extract the RIFE model or any other proprietary component from the application.',
-      'You may not use the API or editor to build a competing product, or to offer Rampify as a service to third parties without written permission.',
+      'You may not use the API or editor to build a competing product, or to offer Rampcut as a service to third parties without written permission.',
     ],
   },
   {
     title: '4. Subscriptions and billing',
     body: [
-      'Rampify offers a Free plan (3 exports per month, 720p) and a Pro plan (unlimited exports, 4K, AI interpolation, beat sync). Pro is available monthly at $12/month or annually at $96/year.',
+      'Rampcut offers a Free plan (3 exports per month, 720p) and a Pro plan (unlimited exports, 4K, AI interpolation, beat sync). Pro is available monthly at $12/month or annually at $96/year.',
       'Payment is processed by Dodo Payments, our Merchant of Record. We never see or store your card details.',
       'You can cancel at any time from the editor. Cancellation takes effect at the end of your billing period — you keep Pro access until then.',
-      'If you\'re not satisfied within 14 days of your first Pro payment, contact hello@rampify.app for a full refund. After 14 days, you can cancel future billing but past payments are non-refundable.',
+      'If you\'re not satisfied within 14 days of your first Pro payment, contact hello@rampcut.com for a full refund. After 14 days, you can cancel future billing but past payments are non-refundable.',
       'We may change prices with at least 30 days\' notice. Existing subscribers keep their current price until the next renewal.',
     ],
   },
@@ -46,7 +46,7 @@ const SECTIONS = [
   {
     title: '6. Service availability',
     body: [
-      'Rampify is provided "as is" without guarantee of uptime, availability, or fitness for a particular purpose. We do not guarantee that the editor will work on every browser or device.',
+      'Rampcut is provided "as is" without guarantee of uptime, availability, or fitness for a particular purpose. We do not guarantee that the editor will work on every browser or device.',
       'We may change, suspend, or discontinue features at any time. If we discontinue a paid feature, we will prorate a refund for the unused portion of your billing period.',
       'Browser support depends on SharedArrayBuffer and WebAssembly, which require specific HTTP headers. Some browsers or corporate networks may block these.',
     ],
@@ -54,14 +54,14 @@ const SECTIONS = [
   {
     title: '7. Limitation of liability',
     body: [
-      'To the maximum extent permitted by law, Rampify\'s total liability for any claim is limited to the amount you paid us in the 12 months preceding the claim, or $50, whichever is greater.',
+      'To the maximum extent permitted by law, Rampcut\'s total liability for any claim is limited to the amount you paid us in the 12 months preceding the claim, or $50, whichever is greater.',
       'We are not liable for lost work, corrupted exports, or data loss resulting from browser crashes, network failures, or unsupported video formats. Save your work frequently.',
     ],
   },
   {
     title: '8. Termination',
     body: [
-      'You can stop using Rampify at any time. You can delete your account by emailing hello@rampify.app.',
+      'You can stop using Rampcut at any time. You can delete your account by emailing hello@rampcut.com.',
       'We may suspend or terminate your account if you violate these terms, abuse the service, or engage in fraudulent billing.',
     ],
   },
@@ -77,8 +77,8 @@ export function Terms() {
   return (
     <div className="clay-page">
       <Seo
-        title="Terms of Service — Rampify Video Speed Editor"
-        description="Rampify terms of service: acceptable use, subscription billing, refunds, and liability for a browser-based local-first video editing tool."
+        title="Terms of Service — Rampcut Video Speed Editor"
+        description="Rampcut terms of service: acceptable use, subscription billing, refunds, and liability for a browser-based local-first video editing tool."
         path="/terms"
       />
       <ClayNav ctaLabel="Open editor" />
@@ -147,10 +147,10 @@ export function Terms() {
           <p className="clay-body" style={{ margin: '40px 0 0', fontSize: 13, color: 'var(--color-clay-ink-muted)' }}>
             Questions about these terms? Email{' '}
             <a
-              href="mailto:legal@rampify.app"
+              href="mailto:legal@rampcut.com"
               style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}
             >
-              legal@rampify.app
+              legal@rampcut.com
             </a>
             .
           </p>

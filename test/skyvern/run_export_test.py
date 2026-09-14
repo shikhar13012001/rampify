@@ -32,7 +32,7 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
-TEST_EMAIL = "skyvern-test@rampify.local"
+TEST_EMAIL = "skyvern-test@rampcut.local"
 TEST_PASSWORD = "Sk9v3rn-Test-Only!"
 
 
@@ -44,7 +44,7 @@ def configure_local_skyvern() -> None:
         "ENV": "local",
         "ENABLE_OLLAMA": "true",
         "LLM_KEY": "OLLAMA",
-        "OLLAMA_MODEL": "rampify-skyvern:latest",
+        "OLLAMA_MODEL": "rampcut-skyvern:latest",
         "OLLAMA_SERVER_URL": "http://127.0.0.1:11434",
         "OLLAMA_SUPPORTS_VISION": "true",
         "SKYVERN_TELEMETRY": "false",
@@ -92,7 +92,7 @@ def probe_export(path: Path) -> None:
 
 async def main() -> int:
     configure_local_skyvern()
-    base_url = os.environ.get("RAMPIFY_BASE_URL", "http://127.0.0.1:3000")
+    base_url = os.environ.get("RAMPCUT_BASE_URL", "http://127.0.0.1:3000")
     headed = "--headed" in sys.argv
 
     with urlopen("http://127.0.0.1:11434/api/tags", timeout=5) as response:
@@ -112,7 +112,7 @@ async def main() -> int:
 
         print("Signing in via the Firebase Auth Emulator (fake test user, no real Google account)...")
         await page.evaluate(
-            "([email, password]) => window.__rampifyTestSignIn(email, password)",
+            "([email, password]) => window.__rampcutTestSignIn(email, password)",
             [TEST_EMAIL, TEST_PASSWORD],
         )
         # onAuthStateChanged is async; give the store a moment to pick up the
@@ -121,7 +121,7 @@ async def main() -> int:
 
         print("Loading the demo clip...")
         await page.goto(f"{base_url}/editor?demo=1", wait_until="domcontentloaded")
-        await page.get_by_text("rampify-demo-clip.mp4", exact=False).wait_for(state="visible", timeout=20_000)
+        await page.get_by_text("rampcut-demo-clip.mp4", exact=False).wait_for(state="visible", timeout=20_000)
 
         print("Opening the export modal and starting a real export...")
         await page.get_by_title("Export video (Ctrl+E)").click()

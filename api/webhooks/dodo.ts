@@ -3,6 +3,8 @@ import type DodoPayments from 'dodopayments';
 import { Webhook } from 'standardwebhooks';
 import { initAdmin, loadLocalEnv, adminDb } from '../_adminInit.js';
 import { getServerEnv } from '../_env.js';
+import { FOUNDER_META_DOC } from '../_plans.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
 /**
  * Dodo Payments follows the Standard Webhooks spec (https://www.standardwebhooks.com/).
@@ -120,6 +122,20 @@ async function downgradeByCustomer(db: ReturnType<typeof adminDb>, customerId: s
   );
 }
 
+/** A refunded Founder purchase gives the seat back (the cap is a marketing
+ *  promise — "25 seats" must mean 25 paying customers, not 25 attempts). */
+async function releaseFounderSeatIfAny(db: ReturnType<typeof adminDb>, customerId: string | undefined): Promise<void> {
+  if (!customerId) return;
+  try {
+    const snap = await db.collection('users').where('dodoCustomerId', '==', customerId).get();
+    const wasFounder = snap.docs.some((d) => d.data().plan === 'founder' && d.data().subscriptionTier === 'pro');
+    if (!wasFounder) return;
+    await db.doc(FOUNDER_META_DOC).set({ sold: FieldValue.increment(-1), updatedAt: new Date() }, { merge: true });
+  } catch (err) {
+    console.error('[dodo-webhook] founder seat release failed:', err);
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -188,11 +204,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.error(`[dodo-webhook] ${event.type} — could not resolve userId`, webhookId);
           break; // 200 so Dodo doesn't retry a permanent error
         }
+        const billingPeriod = (billingEvent.data.metadata?.billingPeriod as string | undefined) ?? null;
+        const isFounder = billingPeriod === 'founder';
         const extra: Record<string, unknown> = { dodoCustomerId: billingEvent.data.customer.customer_id };
+        if (billingPeriod) extra.plan = billingPeriod;
         if (billingEvent.data.payload_type === 'Subscription') {
           extra.subscriptionEnd = new Date(billingEvent.data.next_billing_date);
+        } else if (isFounder) {
+          // One-time Founder purchase: Pro forever. subscriptionEnd stays
+          // null, which check-subscription.ts's isStillValid() treats as
+          // "no expiry". A Payment payload for a *subscription* checkout is
+          // followed by subscription.active carrying next_billing_date, so
+          // only the founder case is allowed to pin subscriptionEnd to null.
+          extra.subscriptionEnd = null;
         }
         await setTier(db, userId, 'pro', extra);
+        if (isFounder && event.type === 'payment.succeeded') {
+          // Seat counter read by /api/founder-seats and the checkout guard.
+          // Best-effort: a failed increment must not un-grant Pro.
+          try {
+            await db.doc(FOUNDER_META_DOC).set(
+              { sold: FieldValue.increment(1), updatedAt: new Date() },
+              { merge: true },
+            );
+          } catch (err) {
+            console.error('[dodo-webhook] founder seat increment failed:', err);
+          }
+        }
         await recordPaymentSucceeded(
           db,
           webhookId,
@@ -239,6 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // switch, so a cast is needed here too — safe per Dodo's API
         // contract, a refund.succeeded event's data is always a Refund payload.
         const refundEvent = event as DodoEvent & { data: Extract<DodoEvent['data'], { payload_type: 'Refund' }> };
+        await releaseFounderSeatIfAny(db, refundEvent.data.customer?.customer_id);
         await downgradeByCustomer(db, refundEvent.data.customer?.customer_id);
         break;
       }

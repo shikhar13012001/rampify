@@ -102,12 +102,12 @@ describe('computeIsTestSession (pure test-session decision)', () => {
     expect(computeIsTestSession({ isDev: true, queryFlag: '0', storedFlag: false })).toBe(true);
   });
 
-  it('honors an explicit ?rampify_test=1 override outside dev', async () => {
+  it('honors an explicit ?rampcut_test=1 override outside dev', async () => {
     const { computeIsTestSession } = await import('./analytics');
     expect(computeIsTestSession({ isDev: false, queryFlag: '1', storedFlag: false })).toBe(true);
   });
 
-  it('honors an explicit ?rampify_test=0 override even if a flag was previously stored', async () => {
+  it('honors an explicit ?rampcut_test=0 override even if a flag was previously stored', async () => {
     const { computeIsTestSession } = await import('./analytics');
     expect(computeIsTestSession({ isDev: false, queryFlag: '0', storedFlag: true })).toBe(false);
   });
@@ -229,7 +229,7 @@ describe('trackEvent', () => {
 
   it('does not send anything when consent is denied', async () => {
     installBrowserGlobals();
-    (globalThis as unknown as { localStorage: Storage }).localStorage.setItem('rampify:analytics-consent', 'denied');
+    (globalThis as unknown as { localStorage: Storage }).localStorage.setItem('rampcut:analytics-consent', 'denied');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 

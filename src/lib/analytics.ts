@@ -16,8 +16,10 @@
  */
 import { useEditorStore } from '@/store/editorStore';
 import { checkExportCapabilities, type CapabilityCheck } from './browserCapabilities';
+import { gtagEvent } from './googleAnalytics';
 
 export type AnalyticsEventName =
+  | 'page_view'
   | 'landing_view'
   | 'editor_opened'
   | 'clip_loaded'
@@ -30,7 +32,10 @@ export type AnalyticsEventName =
   | 'signup_completed'
   | 'upgrade_viewed'
   | 'checkout_started'
-  | 'payment_succeeded';
+  | 'payment_succeeded'
+  | 'curve_link_copied'
+  | 'curve_link_opened'
+  | 'pwa_installed';
 
 // Bounded, primitive-only prop bag — never nested objects/arrays, never
 // arbitrary free-text (filenames, raw error messages, URLs). Event builders
@@ -82,12 +87,12 @@ export function classifyErrorStage(raw: string): ErrorStage {
   return 'unknown';
 }
 
-const ANON_ID_KEY = 'rampify:anon-id';
-const SESSION_ID_KEY = 'rampify:session-id';
-const CONSENT_KEY = 'rampify:analytics-consent';
-const TEST_SESSION_KEY = 'rampify:test-session';
-const ACQUISITION_KEY = 'rampify:acquisition';
-const JOURNEY_LOG_KEY = 'rampify:journey-log';
+const ANON_ID_KEY = 'rampcut:anon-id';
+const SESSION_ID_KEY = 'rampcut:session-id';
+const CONSENT_KEY = 'rampcut:analytics-consent';
+const TEST_SESSION_KEY = 'rampcut:test-session';
+const ACQUISITION_KEY = 'rampcut:acquisition';
+const JOURNEY_LOG_KEY = 'rampcut:journey-log';
 const JOURNEY_LOG_MAX = 200;
 
 function safeStorage(get: () => Storage): Storage | null {
@@ -188,7 +193,7 @@ export function hasAnalyticsConsent(): boolean {
  *   - isDev true (always true under `npm run dev`, never in a production
  *     build) short-circuits to test — no real visitor reaches this app any
  *     other way.
- *   - `?rampify_test=1` / `=0` in the query string is a manual override,
+ *   - `?rampcut_test=1` / `=0` in the query string is a manual override,
  *     checked before falling back to whatever was already stored.
  */
 export function computeIsTestSession(opts: {
@@ -218,7 +223,7 @@ export function isTestSession(): boolean {
   let queryFlag: string | null = null;
   try {
     const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
-    queryFlag = params?.get('rampify_test') ?? null;
+    queryFlag = params?.get('rampcut_test') ?? null;
   } catch { /* leave queryFlag at its default of null */ }
 
   // Persist an explicit override for the rest of the session, so it survives
@@ -332,15 +337,15 @@ function printJourneyLog(): void {
     const storage = safeStorage(() => sessionStorage);
     const raw = storage?.getItem(JOURNEY_LOG_KEY);
     const list = raw ? (JSON.parse(raw) as JourneyLogEntry[]) : [];
-    console.log('[rampify] sessionId:', getSessionId());
+    console.log('[rampcut] sessionId:', getSessionId());
     console.table(list);
   } catch { /* ignore */ }
 }
 
 // Dev-only console helper — stripped from production builds the same way
-// editorStore.ts's __rampifyStore is (import.meta.env.DEV dead-code-elimination).
+// editorStore.ts's __rampcutStore is (import.meta.env.DEV dead-code-elimination).
 if (import.meta.env.DEV && typeof window !== 'undefined') {
-  (window as unknown as { __rampifyJourney?: typeof printJourneyLog }).__rampifyJourney = printJourneyLog;
+  (window as unknown as { __rampcutJourney?: typeof printJourneyLog }).__rampcutJourney = printJourneyLog;
 }
 
 // ─── trackEvent — the one call site every instrumentation point uses ──────
@@ -377,6 +382,12 @@ export function trackEvent(event: AnalyticsEvent): void {
       body: JSON.stringify(payload),
       keepalive: true,
     }).catch(() => { /* best-effort — a network failure here is invisible to the caller by design */ });
+
+    // Mirror into GA4 (no-op unless VITE_GA_MEASUREMENT_ID is configured —
+    // see googleAnalytics.ts). Test sessions are excluded, same as the
+    // first-party pipeline's own funnel-exclusion rule, so local dev and QA
+    // runs never pollute real GA traffic.
+    if (!payload.isTestSession) gtagEvent(event.name, event.props);
 
     appendToJourneyLog({
       eventId: payload.eventId,

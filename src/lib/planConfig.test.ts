@@ -102,8 +102,8 @@ describe('planConfig — entitlement matrix', () => {
     expect(isUnsupportedCombination(ctx({ res: '1080p', of: flow(true) }))).toBe(false);
   });
 
-  it('guest experiment ships disabled, targeting 1080p with allowance 1', () => {
-    expect(GUEST_EXPERIMENT.enabled).toBe(false);
+  it('guest experiment ships ENABLED (one free 1080p export before the sign-in wall — 2026-09-14 exposure experiment)', () => {
+    expect(GUEST_EXPERIMENT.enabled).toBe(true);
     expect(GUEST_EXPERIMENT.resolution).toBe('1080p');
     expect(GUEST_EXPERIMENT.allowance).toBe(1);
   });

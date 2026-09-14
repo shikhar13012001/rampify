@@ -1,8 +1,8 @@
-# Rampify — Claude Code Guide
+# Rampcut — Claude Code Guide
 
 ## Validation sprint (in progress)
 
-Rampify is mid a four-week validation sprint (activation, acquisition, repeat use,
+Rampcut is mid a four-week validation sprint (activation, acquisition, repeat use,
 payment — not further feature expansion). Before starting sprint-related work, read
 `docs/validation/WORKING_AGREEMENT.md` (rules of engagement — approval requirements,
 test-environment rules) and `docs/validation/STATUS.md` (current findings, priorities,
@@ -165,7 +165,7 @@ usage analytics are complete, but the cap is not applied.
 ### 1. opticalFlowWorker.ts — AI frame interpolation
 
 - **Model**: RIFE (Real-time Intermediate Flow Estimation), ONNX format
-- **Cache**: Model weights stored in IndexedDB (`rampify-onnx-cache` store) on first download
+- **Cache**: Model weights stored in IndexedDB (`rampcut-onnx-cache` store) on first download
   to avoid a 6MB network round-trip on every session
 - **Inference**: `ort.InferenceSession` (onnxruntime-web); GPU via WebGL EP where available,
   CPU fallback otherwise
@@ -192,7 +192,7 @@ usage analytics are complete, but the cap is not applied.
 
 ## Dodo Payments + Firebase subscription flow
 
-Dodo Payments is Rampify's Merchant of Record (migrated from Stripe 2026-09-08) —
+Dodo Payments is Rampcut's Merchant of Record (migrated from Stripe 2026-09-08) —
 it handles global tax compliance and natively supports UPI for Indian customers.
 It follows the [Standard Webhooks](https://www.standardwebhooks.com/) spec
 (`webhook-id` / `webhook-signature` / `webhook-timestamp` headers), verified via
@@ -228,7 +228,7 @@ User manages/cancels from the account menu
 
 **Webhook async gap**: the user may return from Dodo before the webhook fires.
 `UpgradeSuccess.tsx` handles this with the 30-second polling window (unchanged —
-this page is provider-agnostic, it only calls Rampify's own `/api/check-subscription`).
+this page is provider-agnostic, it only calls Rampcut's own `/api/check-subscription`).
 
 **Event ordering**: per Dodo's docs, `subscription.cancelled` can arrive before
 `subscription.active` under network delay. `api/webhooks/dodo.ts` doesn't currently

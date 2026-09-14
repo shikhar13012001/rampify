@@ -65,7 +65,7 @@ export function encodeCurve(curve: SpeedCurve): string | null {
 }
 
 /** Builds the full shareable URL for a curve, e.g.
- *  `https://rampcut.com/editor?c=eyJ0Ijoi...`. `origin` defaults to the
+ *  `https://rampcut.astralbuilds.dev/editor?c=eyJ0Ijoi...`. `origin` defaults to the
  *  current page's origin so this works identically in dev and prod. */
 export function buildCurveLinkUrl(curve: SpeedCurve, origin: string = window.location.origin): string | null {
   const encoded = encodeCurve(curve);
@@ -74,7 +74,7 @@ export function buildCurveLinkUrl(curve: SpeedCurve, origin: string = window.loc
 }
 
 /** Builds the shareable URL for a named library preset, e.g.
- *  `https://rampcut.com/editor?p=heroMoment` — shorter than a full curve
+ *  `https://rampcut.astralbuilds.dev/editor?p=heroMoment` — shorter than a full curve
  *  link and always resolves to the canonical, current version of that
  *  preset even if its points are later tuned. */
 export function buildPresetLinkUrl(presetId: string, origin: string = window.location.origin): string {

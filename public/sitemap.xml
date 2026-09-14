@@ -1,86 +1,86 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://rampcut.com/</loc>
+    <loc>https://rampcut.astralbuilds.dev/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <!-- Feature subpages — keyword-targeted, high priority -->
   <url>
-    <loc>https://rampcut.com/features/speed-ramp</loc>
+    <loc>https://rampcut.astralbuilds.dev/features/speed-ramp</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/features/beat-sync</loc>
+    <loc>https://rampcut.astralbuilds.dev/features/beat-sync</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/features/ai-slow-motion</loc>
+    <loc>https://rampcut.astralbuilds.dev/features/ai-slow-motion</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/features/4k-export</loc>
+    <loc>https://rampcut.astralbuilds.dev/features/4k-export</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/features/privacy</loc>
+    <loc>https://rampcut.astralbuilds.dev/features/privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/pricing</loc>
+    <loc>https://rampcut.astralbuilds.dev/pricing</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/docs</loc>
+    <loc>https://rampcut.astralbuilds.dev/docs</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/changelog</loc>
+    <loc>https://rampcut.astralbuilds.dev/changelog</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/roadmap</loc>
+    <loc>https://rampcut.astralbuilds.dev/roadmap</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/about</loc>
+    <loc>https://rampcut.astralbuilds.dev/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/contact</loc>
+    <loc>https://rampcut.astralbuilds.dev/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/privacy</loc>
+    <loc>https://rampcut.astralbuilds.dev/privacy</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
     <lastmod>2026-06-24</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/terms</loc>
+    <loc>https://rampcut.astralbuilds.dev/terms</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
     <lastmod>2026-06-24</lastmod>
@@ -89,79 +89,79 @@
        Long-tail, keyword-specific ("bullet time speed curve", "how to slow
        motion a jump shot") and each links into the editor via ?p=<presetId>. -->
   <url>
-    <loc>https://rampcut.com/curves</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/hero-moment</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/hero-moment</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/bullet-time</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/bullet-time</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/jump-cut</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/jump-cut</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/montage</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/montage</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/whip-pan</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/whip-pan</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/impact-drop</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/impact-drop</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/heartbeat</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/heartbeat</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/slow-reveal</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/slow-reveal</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/timelapse-ramp</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/timelapse-ramp</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/double-tap</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/double-tap</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/drift-in</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/drift-in</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-14</lastmod>
   </url>
   <url>
-    <loc>https://rampcut.com/curves/flat</loc>
+    <loc>https://rampcut.astralbuilds.dev/curves/flat</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
     <lastmod>2026-09-14</lastmod>

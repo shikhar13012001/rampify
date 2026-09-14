@@ -33,6 +33,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { CURVES, curveSvg, curveTableRows, curveRange } from '../src/content/curves.mjs';
+import { SITE_URL } from '../src/config/brand.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
@@ -43,7 +44,11 @@ if (!existsSync(templatePath)) {
   process.exit(1);
 }
 
-const SITE_URL = 'https://rampcut.com';
+// SITE_URL used to be duplicated here as its own hardcoded literal, separate
+// from src/config/brand.mjs's copy — exactly the kind of drift that caused
+// this file to still say rampcut.com after brand.mjs's domain was corrected
+// to rampcut.astralbuilds.dev. Now imported directly so there is only ever
+// one place to change it.
 
 // process.env.VERCEL_ENV is set by Vercel's build step to 'production',
 // 'preview', or 'development'; undefined for a local `npm run build`. Only a

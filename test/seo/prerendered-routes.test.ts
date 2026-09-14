@@ -18,6 +18,10 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+// Imported rather than hardcoded a second time in this file — this is
+// exactly how the domain drifted to a stale value once already (see
+// scripts/prerender-seo.mjs's own SITE_URL import for the same fix).
+import { SITE_URL } from '../../src/config/brand.mjs';
 
 const root = join(__dirname, '..', '..');
 const distDir = join(root, 'dist');
@@ -75,7 +79,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes) {
       const html = readDist(r.file);
       const canonical = extractTag(html, /<link rel="canonical" href="([^"]*)"/, 'canonical');
-      expect(canonical).toBe(`https://rampcut.com${r.path}`);
+      expect(canonical).toBe(`${SITE_URL}${r.path}`);
     }
   });
 
@@ -83,7 +87,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes) {
       const html = readDist(r.file);
       const ogUrl = extractTag(html, /<meta property="og:url" content="([^"]*)"/, 'og:url');
-      expect(ogUrl).toBe(`https://rampcut.com${r.path}`);
+      expect(ogUrl).toBe(`${SITE_URL}${r.path}`);
     }
   });
 
@@ -107,7 +111,7 @@ describe('production build — prerendered marketing routes', () => {
     for (const r of routes.slice(1)) {
       const html = readDist(r.file);
       expect(html).toContain('"@type":"BreadcrumbList"');
-      expect(html).toContain(`"item":"https://rampcut.com${r.path}"`);
+      expect(html).toContain(`"item":"${SITE_URL}${r.path}"`);
     }
   });
 
@@ -157,7 +161,7 @@ describe('/features/speed-ramp — static HTML (direct navigation, before hydrat
 
   it('canonical points to itself, consistent with the h1/title also served', () => {
     const html = readDist('features/speed-ramp/index.html');
-    expect(html).toContain('<link rel="canonical" href="https://rampcut.com/features/speed-ramp" />');
+    expect(html).toContain(`<link rel="canonical" href="${SITE_URL}/features/speed-ramp" />`);
     expect(html).toContain('<title>Speed Ramp Video Editor');
     const h1Matches = [...html.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)];
     expect(h1Matches.length).toBe(1);
@@ -182,9 +186,9 @@ describe('production build — sitemap keeps private/account routes out', () => 
   it('sitemap.xml only lists the 3 prioritized routes plus other real, non-private routes', () => {
     const sitemap = readDist('sitemap.xml');
     const locs = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
-    expect(locs).toContain('https://rampcut.com/');
-    expect(locs).toContain('https://rampcut.com/pricing');
-    expect(locs).toContain('https://rampcut.com/features/speed-ramp');
+    expect(locs).toContain(`${SITE_URL}/`);
+    expect(locs).toContain(`${SITE_URL}/pricing`);
+    expect(locs).toContain(`${SITE_URL}/features/speed-ramp`);
     for (const loc of locs) {
       expect(loc).not.toMatch(/\/editor|\/upgrade/);
     }
@@ -219,7 +223,7 @@ describe('all 13 sitemap.xml routes are prerendered with correct, unique metadat
     for (const r of ALL_SITEMAP_ROUTES) {
       expect(existsSync(join(distDir, r.file))).toBe(true);
       const html = readDist(r.file);
-      expect(html).toContain(`<link rel="canonical" href="https://rampcut.com${r.path}" />`);
+      expect(html).toContain(`<link rel="canonical" href="${SITE_URL}${r.path}" />`);
     }
   });
 

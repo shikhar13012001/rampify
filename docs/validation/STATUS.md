@@ -1261,3 +1261,65 @@ mismatch (both currently undecided — need a product call on whether/when to fi
     clips (needs real rendered footage), `/guides/*` and `/compare/*` pages,
     docs URL-splitting, per-route OG images — all listed in the launch plan
     above as follow-up work, not attempted this session.
+
+- **Domain correction (2026-09-14, later same day)**
+  - The owner corrected the canonical domain: not `rampcut.com` (that entry
+    assumed it would be purchased before launch) — the real production
+    domain is `rampcut.astralbuilds.dev`, a subdomain of an existing
+    personal domain, the same arrangement the product already used
+    pre-rebrand (`rampify.astralbuild.dev`). No domain purchase is needed;
+    the "buy rampcut.com" item in the owner checklist was wrong and has
+    been corrected in the republished launch plan.
+  - **`src/config/brand.mjs`** (single source of truth) updated:
+    `SITE_URL` → `https://rampcut.astralbuilds.dev`; `LEGACY_HOSTS`'
+    `rampify.astralbuild.dev` corrected to `rampify.astralbuilds.dev` (this
+    was very likely a transcription typo of mine in the original market-audit
+    report, carried forward uncorrected through the rebrand — the same base
+    personal domain, not two different domains).
+  - **`scripts/prerender-seo.mjs`** no longer duplicates `SITE_URL` as its
+    own separate hardcoded literal — it now imports it from `brand.mjs`.
+    That duplication is exactly how the stale `rampcut.com` value survived
+    in this file's own copy after the first correction; removing it means
+    there is now only one place a future domain change needs to touch.
+    `test/seo/prerendered-routes.test.ts` was changed the same way (imports
+    `SITE_URL` instead of repeating the literal in ~8 assertions).
+  - **`vercel.json`**: both legacy-host redirect destinations updated to the
+    corrected domain; the host being matched for the old `astralbuild.dev`
+    typo corrected to `astralbuilds.dev`.
+  - **Also updated**: `index.html` (canonical, OG, JSON-LD `url`/`logo`),
+    `public/sitemap.xml`, `public/robots.txt`, `.env.example`'s
+    `ALLOWED_ORIGINS`, `README.md`'s Live link, `src/lib/curveLink.ts`'s
+    doc-comment examples, `test/seo/vercel-routing.test.ts`'s legacy-host
+    assertions.
+  - **Real bug found and fixed while doing this, unrelated to the domain
+    itself**: `public/og-image.svg` and the `og-image.png` actually
+    referenced by every page's `og:image`/`twitter:image` meta tag had
+    "rampcut.com" hardcoded into the image pixels, AND a second,
+    already-existing inconsistency — the CTA button read "Free to start —
+    rampcut.app" (a third, never-valid domain, predating this session).
+    Fixed the SVG source and regenerated `og-image.png` from it (via
+    `sharp`, headless — no browser available in this environment); the CTA
+    text now reads "Free to start — no install" instead of repeating a
+    domain the corner label already states. The standalone
+    `scripts/generate-og-image.html` manual-regeneration tool had the
+    identical bug and was fixed the same way, so a future manual
+    regeneration doesn't reintroduce either mistake.
+  - **Tests**: `npx tsc -b` — zero errors. `npm run build` — succeeds.
+    `npx vitest run` — **303/303 passing, 23 files** (unchanged count — this
+    was a value correction across existing assertions, not new coverage).
+  - **Not done this entry**: the "Rampcut Launch Plan" artifact published
+    earlier today still says rampcut.com and "buy the domain" — needs
+    republishing with the correction before the owner checklist can be
+    trusted. Do that before telling the owner this is finished.
+  - **An export failure was reported by the owner mid-task**
+    (`TypeError: Failed to construct 'URL': Invalid URL`, during a guest
+    1080p export). Searched every `new URL(...)` call site in `src/` —
+    `UpgradeModal.tsx`'s checkout-URL validator, `App.tsx`'s referrer
+    parsing, `analytics.ts`'s referrer-hostname parsing — all three are
+    already try/caught and none are on the export path. Nothing in the
+    export pipeline itself (`ffmpegBridge.ts`, `exportLimits.ts`,
+    `ffmpegWorker.ts`) constructs a URL directly. Could not reproduce
+    without browser access; asked the owner for the full console stack
+    trace and which build (production vs. local dev, guest vs. signed-in)
+    rather than guessing at a fix. Unresolved — flag for the next session if
+    the owner doesn't get a reply in first.

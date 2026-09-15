@@ -62,7 +62,13 @@ const recentLogs: string[] = [];
 
 ffmpeg.on('progress', ({ progress }) => {
   if (suppressProgress) return;
-  self.postMessage({ type: 'progress', progress: Math.round(progress * 100) });
+  // ffmpeg.wasm's own 'progress' ratio is computed against an estimated total
+  // duration and can genuinely exceed 1.0 — e.g. when a filter graph (setpts,
+  // blur-frame overlays, the image2 demuxer at a computed framerate) produces
+  // an output slightly longer than that estimate. Unclamped, this surfaced as
+  // "Encoding… 125%" in the Export modal. Clamp to [0, 1] before reporting.
+  const clamped = Math.max(0, Math.min(1, progress));
+  self.postMessage({ type: 'progress', progress: Math.round(clamped * 100) });
 });
 
 ffmpeg.on('log', ({ message }) => {

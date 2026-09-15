@@ -1717,3 +1717,72 @@ service worker from a previous version. If this exact error recurs a third
 time, the service-worker-interception theory becomes the leading
 suspect and would need testing with an actual previously-registered service
 worker in play, not just a fresh preview session.
+
+## CRITICAL — AI frame interpolation completely broken by a version-mismatched CDN URL, its own error silently swallowed (2026-09-15)
+
+**The single most serious bug found this sprint.** Owner reported the "AI
+model failed to load, no percentage shown" — the earlier "software WebGL is
+just slow" theory (previous entry) was **wrong**; this was a hard failure
+the entire time, just invisible.
+
+**Two independent, compounding bugs, both real:**
+
+1. **`opticalFlowWorker.ts` hardcoded `onnxruntime-web@1.17.3`** for its CDN
+   WASM path, but the actual installed/imported version is **1.26.0**
+   (`package.json`) — a drift that happened silently at some point, no
+   commit visibly changed both together. The 1.26.0 JS API requests a WASM
+   filename (`ort-wasm-simd-threaded.jsep.mjs`) that returns a plain
+   **404** from the 1.17.3 CDN path (verified directly:
+   `curl -I https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/ort-wasm-simd-threaded.jsep.mjs`
+   → `404`; the same file at `@1.26.0` → `200`). This is not a COEP/CORS
+   issue despite superficially resembling one — jsdelivr's CORP/CORS
+   headers on the correct-version file are entirely fine.
+2. **`slowMotionPipeline.ts`'s worker message listener only ever handled
+   `'ready'` and `'progress'` messages** — the worker's own `'error'`
+   message (correctly posted by `loadModel()`'s `.catch()` on the 404
+   above) was received and silently discarded. No console log, no UI
+   state change, nothing. The UI just stayed on "loading" forever,
+   indistinguishable from a genuine hang — which is exactly why the first
+   pass at this (see the two entries above) misdiagnosed it as slow
+   CPU-fallback computation rather than an immediate, hard failure.
+
+**Fixes**:
+- Corrected the CDN version string to `1.26.0`, verified live against
+  jsdelivr (`200`, not `404`).
+- Added `test/lib/opticalFlowWorkerVersion.test.ts` — fails the build if
+  this hardcoded string and the installed `onnxruntime-web` version in
+  `package.json` ever diverge again. A dynamic `import ... from
+  'onnxruntime-web/package.json'` was tried first (would have made this
+  literally impossible to drift) but TypeScript couldn't resolve that
+  subpath import under this project's module resolution — the regression
+  test is the fallback that still catches it, just not as automatically.
+- Added a real `'error'` state to `ModelStatus` (`slowMotionPipeline.ts`)
+  and wired the worker's `'error'` message to it — a real, visible error
+  message now shows in the sidebar (`Sidebar.tsx`) instead of an infinite
+  silent "loading" state, for this or any future optical-flow init failure.
+- Also fixed while investigating: the UI claimed the RIFE model is "6 MB"
+  (`Sidebar.tsx`, `AiSlowMotion.tsx` ×2, `CLAUDE.md`) — the real file is
+  **~20 MB** (`public/models/rife_v4_lite.onnx`, confirmed via
+  `Content-Length: 21458882` on both the dev server and live production).
+  Left the dated `Changelog.tsx` entry alone (historical record). Also
+  wired real byte-level download progress through from the worker (it was
+  already computing and sending it; the main thread silently dropped this
+  too) — replaces a fake, static 40%-width shimmer animation that never
+  reflected actual progress regardless of what was really happening.
+
+**Verified after the version fix**: the hard 404/crash is confirmed gone —
+re-running the same automated test now shows a clean, graceful
+`"removing requested execution provider 'webgl'... not available: backend
+not found"` warning followed by an automatic CPU fallback, which is
+correct, designed behavior, not an error. Full end-to-end completion (a
+real exported file) in this sandboxed CPU-only environment is a separate,
+still-running verification — CPU-only RIFE inference is genuinely slow by
+design (`CLAUDE.md`'s own documented caveat), so "slow" here is expected,
+not confirmation of a further bug. Real completion proof, if obtained, will
+be added as a follow-up note.
+
+**Owner action**: this fix is not yet deployed as of this entry — same
+"local working tree only, no push without explicit approval" status as
+prior entries. Given every single Pro customer who ever enables Frame
+interpolation hits this immediately, this is the highest-priority thing to
+ship of everything in this file.

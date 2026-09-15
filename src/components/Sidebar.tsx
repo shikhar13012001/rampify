@@ -3,7 +3,7 @@ import { useEditorStore } from '@/store/editorStore';
 import { PresetPanel } from '@/features/curve/PresetPanel';
 import { formatTime } from '@/features/preview/formatTime';
 import { hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
-import { subscribeModelStatus, subscribeModelDownloadProgress, waitForWorkerReady } from '@/lib/slowMotionPipeline';
+import { subscribeModelStatus, subscribeModelDownloadProgress, subscribeModelError, waitForWorkerReady } from '@/lib/slowMotionPipeline';
 import type { ModelStatus } from '@/lib/slowMotionPipeline';
 import { planTierFor } from '@/lib/exportLimits';
 import { canUseBlurIntensity, canUseOpticalFlow, type PlanTier } from '@/lib/planConfig';
@@ -706,10 +706,12 @@ function OpticalFlowControl({
 }) {
   const [modelStatus, setModelStatusLocal] = useState<ModelStatus>('idle');
   const [downloadPct, setDownloadPct] = useState<number | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
   const isPro = canUseOpticalFlow(tier);
 
   useEffect(() => subscribeModelStatus(setModelStatusLocal), []);
   useEffect(() => subscribeModelDownloadProgress(setDownloadPct), []);
+  useEffect(() => subscribeModelError(setModelError), []);
 
   useEffect(() => {
     // Only pre-warm the (~20 MB) AI model for Pro users who can actually export
@@ -802,6 +804,14 @@ function OpticalFlowControl({
                 )}
               </div>
             </div>
+          )}
+          {enabled && isPro && modelStatus === 'error' && (
+            <span
+              style={{ fontSize: 9, color: '#ff4d8b', lineHeight: 1.4, maxWidth: 200 }}
+              title={modelError ?? undefined}
+            >
+              AI model failed to load{modelError ? ` — ${modelError.length > 60 ? modelError.slice(0, 57) + '…' : modelError}` : ''}. Try reloading the page.
+            </span>
           )}
           {enabled && modelStatus === 'ready' && (
             <span

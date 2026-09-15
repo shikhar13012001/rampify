@@ -23,9 +23,16 @@ import { transposeFrameToTensor, tensorDataToImageData } from '@/lib/tensorUtils
 
 // ─── ONNX Runtime wasm path ───────────────────────────────────────────────────
 //
-// Using the CDN so no Vite copy-plugin is needed.  In a production build the
-// wasm files should be bundled locally and this path updated accordingly.
-ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
+// Using the CDN so no Vite copy-plugin is needed. This previously hardcoded
+// "1.17.3", which had silently drifted out of sync with the actual
+// installed/imported onnxruntime-web version (1.26.0 per package.json) — the
+// JS API (from 1.26.0) requested a WASM filename that simply doesn't exist
+// in the CDN's 1.17.3 package, a plain 404 that manifested as "no available
+// backend found" with zero indication of the real cause (see
+// docs/validation/STATUS.md). MUST match package.json's onnxruntime-web
+// version exactly — test/lib/opticalFlowVersion.test.ts fails the build if
+// this ever drifts again, so this can't silently break the same way twice.
+ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
 ort.env.wasm.numThreads = 1; // single-threaded avoids any COOP/COEP issues
 
 // ─── IndexedDB model cache ────────────────────────────────────────────────────

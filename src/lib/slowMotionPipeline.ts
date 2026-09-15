@@ -22,9 +22,10 @@ import OpticalFlowWorkerCtor from '../workers/opticalFlowWorker.ts?worker';
 
 // ─── Model status ─────────────────────────────────────────────────────────────
 
-export type ModelStatus = 'idle' | 'loading' | 'ready';
+export type ModelStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 let modelStatus: ModelStatus = 'idle';
+let modelError: string | null = null;
 const statusListeners = new Set<(s: ModelStatus) => void>();
 
 function setModelStatus(s: ModelStatus): void {
@@ -38,6 +39,21 @@ export function subscribeModelStatus(cb: (s: ModelStatus) => void): () => void {
   statusListeners.add(cb);
   cb(modelStatus); // emit current state immediately
   return () => statusListeners.delete(cb);
+}
+
+const errorListeners = new Set<(msg: string | null) => void>();
+
+function setModelError(msg: string | null): void {
+  modelError = msg;
+  for (const cb of errorListeners) cb(msg);
+}
+
+/** Subscribe to the worker's own error message (set alongside ModelStatus
+ *  'error'; null otherwise). Returns an unsubscribe function. */
+export function subscribeModelError(cb: (msg: string | null) => void): () => void {
+  errorListeners.add(cb);
+  cb(modelError);
+  return () => errorListeners.delete(cb);
 }
 
 // Real byte-download progress (0-100) for the RIFE model fetch specifically —
@@ -96,11 +112,25 @@ function getOrCreateWorker(): Worker {
         // the UI doesn't show a frozen "100%" while session creation runs.
         setDownloadPct(null);
       }
+    } else if (e.data.type === 'error') {
+      // Previously silently dropped here — loadModel()'s own .catch() (see
+      // opticalFlowWorker.ts) correctly posts this on a real failure (e.g.
+      // ort.InferenceSession.create() rejecting), but nothing on the main
+      // thread ever listened for it: the UI just stayed on "loading"
+      // forever with zero feedback, indistinguishable from a real hang.
+      console.error('[opticalFlowWorker] model init failed:', e.data.message);
+      setModelStatus('error');
+      setModelError(e.data.message);
+      setDownloadPct(null);
+      for (const cb of readyWaiters) cb(); // stop waitForWorkerReady() callers from hanging too
+      readyWaiters.length = 0;
     }
   });
 
   workerInstance.addEventListener('error', (ev) => {
     console.error('[opticalFlowWorker]', ev.message);
+    setModelStatus('error');
+    setModelError(ev.message);
   });
 
   return workerInstance;
@@ -123,6 +153,7 @@ export function disposeWorker(): void {
   readyWaiters.length = 0;
   setModelStatus('idle');
   setDownloadPct(null);
+  setModelError(null);
 }
 
 // ─── Worker RPC ───────────────────────────────────────────────────────────────

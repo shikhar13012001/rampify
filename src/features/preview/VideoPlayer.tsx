@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { interpolateSpeed } from '@/lib/curveMath';
-import { hasSlowSegments } from '@/lib/ffmpegBridge';
+import { ASSUMED_FPS, findTransitionPoints, hasSlowSegments, INTENSITY_NUM } from '@/lib/ffmpegBridge';
+import { getBlurIntensity, getTransitionFrameCount } from '@/lib/blurMath';
 import { planTierFor } from '@/lib/exportLimits';
 import { canUseBlurIntensity } from '@/lib/planConfig';
 import { useEditorStore } from '@/store/editorStore';
@@ -105,28 +106,62 @@ export function VideoPlayer() {
   const duration = project?.file.duration ?? 0;
 
   // ── Motion blur preview ──────────────────────────────────────────────────
-  // Blur scales with how far the current speed deviates from 1×. Anyone whose
-  // tier can actually export the CURRENTLY SELECTED intensity (Pro: any
-  // intensity; Free: Balanced only; Guest: none) sees intensity-scaled blur
-  // that matches what export will produce. Everyone else still sees a fixed
-  // teaser once they've explicitly toggled blur on, so they know what they'd
-  // get by switching to Balanced or upgrading — it's never automatic just
-  // because a ramp exists.
+  // Anyone whose tier can actually export the CURRENTLY SELECTED intensity
+  // (Pro: any intensity; Free: Balanced only; Guest: none) sees intensity-scaled
+  // blur that matches what export will produce. Everyone else still sees a
+  // fixed teaser once they've explicitly toggled blur on, so they know what
+  // they'd get by switching to Balanced or upgrading — it's never automatic
+  // just because a ramp exists.
   const blurWillExport = canUseBlurIntensity(blurSettings.intensity, tier);
   const INTENSITY_MULT: Record<string, number> = { subtle: 0.6, balanced: 1.2, cinematic: 2.2 };
+
+  // The real export (ffmpegBridge.ts's processWithBlur) only blurs a short
+  // window around actual speed-TRANSITION points (found by findTransitionPoints)
+  // — never the full duration of a flat sped-up region. This previously drove
+  // blurPx off `rawSpeed` deviating from 1×, so a clip held flat at e.g. 3×
+  // showed blur continuously for its whole length — including static UI
+  // elements baked into the footage — which never happens in the real export.
+  // Reusing the same transition list, window size, and intensity math here
+  // (rather than a different, continuous timing model) makes the preview's
+  // WHEN and HOW MUCH match the export; a CSS filter still can't replicate the
+  // export's per-pixel "skip static regions" gating, so static content will
+  // still look softer here than in the final render.
+  const transitions = useMemo(
+    () => (project ? findTransitionPoints(project.segments) : []),
+    [project],
+  );
+
+  const transitionBlur = useMemo(() => {
+    if (!blurSettings.enabled) return null;
+    const intensityNum = INTENSITY_NUM[blurSettings.intensity] ?? 0.66;
+    for (const tp of transitions) {
+      const effectiveDelta = tp.speedDelta * intensityNum;
+      const n = getTransitionFrameCount(effectiveDelta);
+      const halfDur = n / (2 * ASSUMED_FPS);
+      const tStart = Math.max(0, tp.inputTime - halfDur);
+      const tEnd = tp.inputTime + halfDur;
+      if (playheadTime < tStart || playheadTime > tEnd) continue;
+      // 1 at the transition's centre, fading to 0 at the window edges —
+      // mirrors the real blend's exponentially-decreasing per-frame weights.
+      const proximity = 1 - Math.abs(playheadTime - tp.inputTime) / halfDur;
+      return { proximity, intensity: getBlurIntensity(tp.speedFrom, tp.speedTo) * intensityNum };
+    }
+    return null;
+  }, [transitions, blurSettings.enabled, blurSettings.intensity, playheadTime]);
+
   const blurPx = useMemo(() => {
-    if (!project || !blurSettings.enabled) return 0;
-    const speedDelta = Math.abs(rawSpeed - 1);
+    if (!project || !transitionBlur) return 0;
+    const { proximity, intensity } = transitionBlur;
     if (blurWillExport) {
       const mult = INTENSITY_MULT[blurSettings.intensity] ?? 1.2;
-      return Math.min(8, speedDelta * 2.5 * mult);
+      return Math.min(8, intensity * proximity * 6 * mult);
     }
     if (segmentsHaveSpeedRamp(project.segments)) {
-      return Math.min(4, speedDelta * 1.8);
+      return Math.min(4, intensity * proximity * 4);
     }
     return 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project, blurWillExport, blurSettings.enabled, blurSettings.intensity, rawSpeed]);
+  }, [project, blurWillExport, blurSettings.intensity, transitionBlur]);
 
   // Bottom hint strip: shown when previewing a feature that won't actually
   // apply at this tier/setting (blur at an intensity this tier can't export,
@@ -223,7 +258,7 @@ export function VideoPlayer() {
           >
             {blurWillExport && blurSettings.enabled ? (
               <span style={{ fontSize: 11, color: 'rgba(28,228,184,0.85)', fontWeight: 500 }}>
-                Motion blur preview — exact blur renders at export
+                Motion blur preview — timing matches export; static areas render sharper in the final video
               </span>
             ) : (
               <>

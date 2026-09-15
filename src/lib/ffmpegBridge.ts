@@ -23,10 +23,14 @@ export interface OFExportCallbacks {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SPEED_DELTA_THRESHOLD = 0.4;
-const ASSUMED_FPS = 30;
+// Exported so VideoPlayer's live preview can reproduce the same transition
+// windows the real export uses instead of approximating with a different
+// timing model (see the "Motion blur preview" section there).
+export const ASSUMED_FPS = 30;
 
 // Maps the three intensity presets to a [0, 1] numeric value fed to blurMath.
-const INTENSITY_NUM: Record<BlurSettings['intensity'], number> = {
+// Exported for the same reason as ASSUMED_FPS above.
+export const INTENSITY_NUM: Record<BlurSettings['intensity'], number> = {
   subtle:     0.33,
   balanced:   0.66,
   cinematic:  1.00,

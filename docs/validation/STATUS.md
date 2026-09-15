@@ -1361,3 +1361,52 @@ behind on this specific commit.
 construct 'URL': Invalid URL`) — still unresolved, still needs the owner's
 stack trace/environment detail per the previous entry. Not yet actually
 asked for in a reply to the owner; doing that now alongside this update.
+
+## Export bug investigation, round 2 — stage-tagged errors shipped (2026-09-15)
+
+Owner sent the actual console output for the `TypeError: Failed to
+construct 'URL': Invalid URL` export failure first reported in the previous
+session. Findings from reading it closely:
+
+- The real signal was buried in a lot of unrelated noise — a browser
+  extension ("twoseven"/dictation, keep-alive spam, `runtime.lastError`
+  bfcache messages) dominates the log. The actual error appears twice:
+  `installHook.js:1 [export] failed: TypeError: Failed to construct 'URL':
+  Invalid URL`, with a (minified, collapsed) stack through
+  `EditorRoute-ChQ5oazg.js` → `handleMessage` → `ffmpegWorker-DhQiUbSd.js`'s
+  `self.onmessage`. This confirms the failure is inside the ffmpeg export
+  worker's message handler (`src/workers/ffmpegWorker.ts`), not in any of
+  the three `new URL()` call sites already ruled out last session
+  (UpgradeModal, App.tsx referrer parsing, analytics.ts referrer parsing).
+- Two candidate causes inside that worker, and the minified trace can't
+  distinguish them: (a) `loadFFmpeg()` — the `@ffmpeg/core?url` asset URLs
+  baked in by Vite failing to resolve inside the worker's module context
+  (a known bug class for ffmpeg.wasm + bundler-built workers), or (b)
+  `fetchFile(msg.videoUrl)` receiving a malformed/missing `videoUrl`.
+  Ruled out one hypothesis: `videoUrl` is never persisted (checked
+  `src/lib/projectPersistence.ts` — only segments/settings are saved to
+  localStorage, never `file.url`), so this isn't a stale blob: URL surviving
+  a reload; `file.url` is always freshly created via
+  `URL.createObjectURL()` in the same session that uses it.
+- **Also noticed, not yet explained**: the console's own `[cs:early-page]:
+  Running on page: https://rampcut.astralbuild.dev/` line shows the browser
+  was on `astralbuild.dev` (no "s") — NOT the corrected canonical
+  `astralbuilds.dev`. Need to confirm with the owner whether that's a
+  leftover bookmark/stale tab or an actual second deployment; if the DNS for
+  the real domain isn't live yet, this could easily have been an old/stale
+  build.
+
+**Shipped now, without full root-cause certainty**: wrapped `loadFFmpeg()`
+and `fetchFile()` in `ffmpegWorker.ts` with stage-tagged re-throws
+(`[loadFFmpeg] ...` / `[fetchFile] ...`, including the attempted core URLs
+or the received `videoUrl` value in the message). Also added an explicit
+guard that throws a clear, specific error if `videoUrl` isn't a non-empty
+string, instead of letting a bad value reach `fetchFile()` and produce an
+opaque browser TypeError. This doesn't fix the bug (still unconfirmed which
+of the two stages is at fault) but turns the next occurrence into a
+one-shot diagnosis instead of another round of guessing from a collapsed
+minified stack trace. 303/303 tests still pass; `tsc -b` clean.
+
+**Still needed from the owner**: which stage tag shows up next time it
+fails, and confirmation of the `astralbuild.dev` vs `astralbuilds.dev`
+domain question above.

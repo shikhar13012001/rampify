@@ -117,12 +117,12 @@ describe('vercel.json redirects — legacy hosts consolidate to the canonical do
   const redirects = vercelConfig.redirects ?? [];
 
   it('has a permanent (308) redirect for each legacy host, matched by the Host header', () => {
-    const legacyHosts = ['rampify.astralbuild.dev', 'rampify-eight.vercel.app'];
+    const legacyHosts = ['rampify.astralbuilds.dev', 'rampify-eight.vercel.app'];
     for (const host of legacyHosts) {
       const rule = redirects.find((r) => r.has?.some((h) => h.type === 'host' && h.value === host));
       expect(rule, `no redirect rule matches host "${host}"`).toBeDefined();
       expect(rule!.permanent).toBe(true);
-      expect(rule!.destination).toBe('https://rampcut.com/:path*');
+      expect(rule!.destination).toBe('https://rampcut.astralbuilds.dev/:path*');
     }
   });
 

@@ -77,13 +77,27 @@ async function loadFFmpeg() {
   // (effectively `new URL(url)`), so a root-relative path — exactly what
   // Vite's `?url` import returns in a production build (dev mode happened
   // to serve something absolute-enough that this went unnoticed) — throws
-  // "Failed to construct 'URL': Invalid URL" instead of loading. toBlobURL
-  // fetches the asset relative to this worker's own location (fetch()
-  // handles relative URLs correctly, unlike a bare `new URL()`) and hands
-  // back a real blob: URL, which is always absolute.
+  // "Failed to construct 'URL': Invalid URL" instead of loading.
+  //
+  // toBlobURL() fixes that by fetching the asset and handing back a real
+  // blob: URL — but its own internal fetch(url) call still needs to resolve
+  // `url` if it's relative, and that resolution turned out NOT to be
+  // reliable here either (observed in production: "Failed to execute
+  // 'fetch' ... Failed to parse URL from /assets/...", almost certainly the
+  // PWA service worker intercepting a worker-originated fetch, or a base-URL
+  // quirk one level down in ffmpeg's own nested worker — either way, not
+  // something worth depending on). So resolve to a fully-qualified absolute
+  // URL ourselves first, using this worker's own self.location (which IS
+  // reliable — this worker is spawned via a plain relative string from the
+  // main thread, which the Worker constructor resolves against the page's
+  // real origin) — an already-absolute URL never needs to resolve against
+  // anything, sidestepping the whole class of problem regardless of which
+  // layer was actually misbehaving.
+  const absoluteCoreURL = new URL(coreJsURL, self.location.href).href;
+  const absoluteWasmURL = new URL(coreWasmURL, self.location.href).href;
   const [blobCoreURL, blobWasmURL] = await Promise.all([
-    toBlobURL(coreJsURL, 'text/javascript'),
-    toBlobURL(coreWasmURL, 'application/wasm'),
+    toBlobURL(absoluteCoreURL, 'text/javascript'),
+    toBlobURL(absoluteWasmURL, 'application/wasm'),
   ]);
   await ffmpeg.load({ coreURL: blobCoreURL, wasmURL: blobWasmURL });
 }

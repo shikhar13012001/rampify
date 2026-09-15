@@ -1675,3 +1675,45 @@ possible; not done automatically here per this project's standing
 currently has a "production build" mode. Worth adding a
 `-Preview`/`-Production` switch to at least the lightweight suite so this
 class of bug gets caught locally before a real user hits it next time.
+
+### Correction — the `toBlobURL()` fix alone was insufficient; deployed and still broke
+
+Owner reported the SAME export flow still failing after the above fix
+shipped, with a **different** error this time: `Failed to execute 'fetch'
+on 'WorkerGlobalScope': Failed to parse URL from /assets/ffmpeg-core-*.js`.
+This confirms the fix above did deploy (the error moved from a bare
+`new URL()` failure to inside `toBlobURL()`'s own `fetch()` call) but
+`toBlobURL()`'s internal relative-URL resolution turned out not to be
+reliable here either — most likely the PWA service worker intercepting a
+worker-originated fetch, or a location quirk one level down in
+`@ffmpeg/ffmpeg`'s own nested worker (confirmed via the built bundle:
+`ffmpegWorker-*.js` itself spawns a further nested worker via
+`new Worker(new URL(t, self.location.href))` — a second layer whose exact
+`self.location` behavior isn't directly inspectable from source alone).
+
+**Fix**: rather than keep chasing which exact layer's base URL is
+unreliable, resolve `coreJsURL`/`coreWasmURL` to a **fully-qualified
+absolute URL ourselves**, in `ffmpegWorker.ts`, using `new URL(coreJsURL,
+self.location.href).href` — this worker's OWN `self.location` is
+established as reliable (it's spawned via a plain relative string from the
+main thread: `new Worker('/assets/ffmpegWorker-*.js', ...)`, which the
+Worker constructor resolves against the page's real origin). An
+already-absolute URL never needs to resolve against anything downstream,
+sidestepping the whole class of problem regardless of which layer was
+actually misbehaving.
+
+**Verified again, same rigor as before**: rebuilt, served the real `dist/`
+via `vite preview`, drove a real guest export through a real headless
+browser, confirmed a genuine 8.02s MP4 (H.264 + AAC) with a full clean
+`ffmpeg` decode. `npm run lint` / `npm run test` (303/303) still clean.
+**Still not deployed** — same as before, withheld pending explicit
+approval to push.
+
+**One honest limitation of this verification**: `vite preview` is a very
+close but not perfect stand-in for the real Vercel production
+environment — no PWA service worker was necessarily active in exactly the
+same way it would be for a returning real visitor with an already-installed
+service worker from a previous version. If this exact error recurs a third
+time, the service-worker-interception theory becomes the leading
+suspect and would need testing with an actual previously-registered service
+worker in play, not just a fresh preview session.

@@ -1541,3 +1541,137 @@ now-stale expectation from before the merge — updated to match the
 now-correct, more faithful implementation. **Verified clean: `npm run
 build`, `npm run lint` (0 errors), `tsc -b` (0 errors), `npm run test`
 (303/303).**
+
+## Dodo Payments switched to live_mode (2026-09-15)
+
+**Live, real-money checkout is now active on production.** Owner created all
+three products fresh in Dodo's live-mode catalog (test-mode products don't
+carry over — separate catalogs) and provided the new live API key, webhook
+secret, and product IDs. Owner personally confirmed the Annual product's
+billing interval reads **Year** in the Dodo dashboard — this closes the
+12×-overcharge risk that had been flagged, unresolved, since the very first
+audit of this sprint.
+
+`.env.local` updated with all six values (owner's own edit + mine,
+verified intact). Vercel Production environment variables updated to match
+— **partially by me, partially required the owner to finish directly in the
+Vercel dashboard**: Claude Code's own auto-mode safety classifier blocked
+two of my attempted writes mid-sequence (`DODO_PAYMENTS_ENVIRONMENT` flagged
+"[Production Deploy]", a product-ID write flagged "[Secret-Store Writes]"),
+and then blocked all further `vercel env` calls including plain reads. This
+left Production briefly in a broken, inconsistent state (live API
+key + live webhook secret present, but `DODO_PAYMENTS_ENVIRONMENT` /
+`DODO_PRO_MONTHLY_PRODUCT_ID` / `DODO_PRO_ANNUAL_PRODUCT_ID` entirely
+missing — every Dodo-touching API route would have thrown on
+`getServerEnv()`'s validation). My own attempt to revert this back to a
+consistent test-mode state was ALSO partially blocked mid-way. Owner
+completed the live-mode cutover directly in the Vercel dashboard.
+
+Verified after the owner's fix, entirely via read-only HTTP against the live
+site (no Vercel CLI, no direct Dodo API call from here — both are the exact
+boundary the safety classifier drew, and the right one):
+- `GET /api/check-subscription` (no auth) → `401 Unauthorized`, not `500` —
+  confirms `getServerEnv()` now validates cleanly; the site was in the
+  broken missing-vars state before this.
+- `GET /api/webhooks/dodo` → `405 Method Not Allowed` — route initializes
+  fine, correctly rejects GET.
+- `GET /api/founder-seats` → `{"configured":true,"available":true,
+  "total":25,"sold":0,"remaining":25,"priceUsd":59}` — founder tier is live,
+  `DODO_PRO_FOUNDER_PRODUCT_ID` is set, the Firestore seat counter is
+  initialized.
+- The deployed JS bundle (`/assets/index-*.js`) contains the founder-tier
+  copy — confirms it shipped client-side, not just backend-configured. (The
+  static prerendered `/pricing` HTML does NOT mention "founder" — expected,
+  not a bug: seat count is a live Firestore read, can't be prerendered, same
+  known shell-vs-hydrated-DOM gap documented elsewhere in this file.)
+
+**Not yet done, still needed before real promotion:**
+- One real-card test purchase per plan (monthly, annual, founder), then
+  refund each — the one item from `BILLING.md`'s checklist that only a real
+  card can prove, still outstanding.
+- `DODO_WEBHOOK_DEV_BYPASS` — confirm this is NOT set in Production (should
+  never be; not independently re-checked after the env churn above).
+
+## CRITICAL — Google Sign-In broken on production: `Error 400: origin_mismatch` (2026-09-15)
+
+**Current top blocker — more urgent than anything in `LAUNCH.md`.** Owner
+reported hitting Google's own error page attempting sign-in on the live
+site: "You can't sign in to this app because it doesn't comply with
+Google's OAuth 2.0 policy... register the JavaScript origin in the Google
+Cloud Console." This is a real, reproducible, launch-blocking bug, not a
+config file issue — it lives entirely in Google Cloud Console / Firebase
+Console, outside this repo.
+
+**Root cause**: Google Identity Services (One Tap sign-in,
+`initOneTap()` in `src/lib/auth.tsx`) checks the requesting origin against
+the OAuth 2.0 Client ID's registered **Authorized JavaScript origins**
+(`VITE_GOOGLE_CLIENT_ID` = `607382673372-...apps.googleusercontent.com`).
+That list was never updated when the site moved from
+`rampify.astralbuild.dev` to `rampcut.astralbuild.dev` — Google rejects the
+request before Firebase ever sees it.
+
+**Impact**: guest export (no sign-in required) still works. Everything
+past that — creating a Free account, upgrading to Pro, the founder
+offer — is completely broken for every real visitor right now.
+
+**Fix — owner-only, two places, no code change**:
+1. Google Cloud Console → APIs & Services → Credentials → the OAuth 2.0
+   Client ID → Authorized JavaScript origins → add
+   `https://rampcut.astralbuild.dev`.
+2. Firebase Console → Authentication → Settings → Authorized domains → add
+   `rampcut.astralbuild.dev`. Separate allowlist from (1) — both are
+   required, the flow breaks at whichever one is still missing the domain.
+
+Neither requires a redeploy; both typically take effect within minutes.
+**Not independently re-verified yet** — the real Google OAuth origin check
+can't be simulated against the local Firebase Auth Emulator, so this needs
+a real click-through on the live site after the owner makes both changes.
+
+## CRITICAL — export completely broken in production: `Failed to construct 'URL': Invalid URL` (2026-09-15)
+
+**Root cause found and fixed — needs deploying.** Owner reported the export
+error message directly from the live site: `[loadFFmpeg] TypeError: Failed
+to construct 'URL': Invalid URL (coreURL=/assets/ffmpeg-core-D7VZX-aa.js,
+wasmURL=/assets/ffmpeg-core-Cbz6om2n.wasm)`. This is a real, 100%-repro bug
+that has been in `src/workers/ffmpegWorker.ts` this entire session —
+**every export-pipeline test run in this whole sprint used the dev server
+(`npm run dev` / `vite --port 5173`), never a production build
+(`vite preview` / the actual deployed `dist/`)**, so it was never caught
+until a real user hit it.
+
+**Root cause**: `@ffmpeg/ffmpeg`'s internal loader resolves its `coreURL`/
+`wasmURL` config with no base URL (effectively a bare `new URL(url)`).
+Vite's `?url` import (`import coreJsURL from '@ffmpeg/core?url'`) returns a
+root-relative path (`/assets/ffmpeg-core-*.js`) in a **production build**
+specifically — dev-server mode apparently serves something that happens
+not to trigger this, which is exactly why it went unnoticed all session. A
+bare `new URL('/assets/...')` with no base throws exactly the observed
+error; it needs either a fully-qualified absolute URL or a `blob:` URL.
+
+**Fix**: wrap both URLs in `@ffmpeg/util`'s `toBlobURL()` (the officially
+documented pattern for this exact situation) before passing them to
+`ffmpeg.load()` — it fetches the asset (via `fetch()`, which correctly
+resolves relative URLs against the worker's own location, unlike a bare
+`new URL()`) and returns a real, always-absolute `blob:` URL.
+
+**Verified properly this time** — against the actual production build, not
+dev server: ran `npm run build`, served the real `dist/` output via `vite
+preview --host 127.0.0.1 --port 5173`, and drove a real guest export (no
+sign-in needed — `GUEST_EXPERIMENT.enabled`) through a real headless
+browser. Confirmed a genuine 8.02s MP4 (H.264 + AAC), full clean decode via
+`ffprobe`/`ffmpeg`, no errors. This is the first time this sprint the
+export pipeline has been checked against what actually ships, rather than
+the dev server. `npm run build` / `lint` / `tsc -b` / `npm run test`
+(303/303) all still clean after the fix.
+
+**Not yet deployed** — this fix exists only in the local working tree.
+Given the severity (export is the core feature and it's completely broken
+for every real visitor right now), this should be deployed as soon as
+possible; not done automatically here per this project's standing
+"no push without explicit approval" rule.
+
+**A process gap worth fixing going forward**: `test/skyvern/run.ps1` and
+`run_export_test.ps1` both exercise the dev server exclusively. Neither
+currently has a "production build" mode. Worth adding a
+`-Preview`/`-Production` switch to at least the lightweight suite so this
+class of bug gets caught locally before a real user hits it next time.

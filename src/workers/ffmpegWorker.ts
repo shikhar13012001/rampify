@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 // ?url tells Vite to emit these as same-origin assets (no CDN / no COEP issues).
 // @ffmpeg/core exports: '.' → ffmpeg-core.js, './wasm' → ffmpeg-core.wasm
 import coreJsURL   from '@ffmpeg/core?url';
@@ -73,7 +73,19 @@ ffmpeg.on('log', ({ message }) => {
 
 async function loadFFmpeg() {
   if (ffmpeg.loaded) return;
-  await ffmpeg.load({ coreURL: coreJsURL, wasmURL: coreWasmURL });
+  // @ffmpeg/ffmpeg's internal loader resolves coreURL/wasmURL with no base
+  // (effectively `new URL(url)`), so a root-relative path — exactly what
+  // Vite's `?url` import returns in a production build (dev mode happened
+  // to serve something absolute-enough that this went unnoticed) — throws
+  // "Failed to construct 'URL': Invalid URL" instead of loading. toBlobURL
+  // fetches the asset relative to this worker's own location (fetch()
+  // handles relative URLs correctly, unlike a bare `new URL()`) and hands
+  // back a real blob: URL, which is always absolute.
+  const [blobCoreURL, blobWasmURL] = await Promise.all([
+    toBlobURL(coreJsURL, 'text/javascript'),
+    toBlobURL(coreWasmURL, 'application/wasm'),
+  ]);
+  await ffmpeg.load({ coreURL: blobCoreURL, wasmURL: blobWasmURL });
 }
 
 // Fallback used only if the input has no parseable audio stream info (e.g. no

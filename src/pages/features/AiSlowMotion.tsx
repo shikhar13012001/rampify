@@ -20,7 +20,7 @@ const FAQ = [
   },
   {
     q: 'Why does the model take a moment to load the first time?',
-    a: 'The RIFE model weights are about 6MB. Rampcut downloads them once and caches them in IndexedDB (the rampify-onnx-cache store), so every session after the first skips the network round-trip entirely.',
+    a: 'The RIFE model weights are about 20MB. Rampcut downloads them once and caches them in IndexedDB (the rampcut-models store), so every session after the first skips the network round-trip entirely.',
   },
   {
     q: 'When should I use Quality instead of Ultra?',
@@ -114,7 +114,7 @@ export function AiSlowMotionFeature() {
       <FeatureSection heading="GPU acceleration and memory">
         <p style={{ margin: 0 }}>
           ONNX Runtime Web uses the WebGL execution provider when a capable GPU is available,
-          falling back to WASM/CPU otherwise. Model weights (~6MB) are cached in IndexedDB on
+          falling back to WASM/CPU otherwise. Model weights (~20MB) are cached in IndexedDB on
           first load, so subsequent sessions skip the download. Each batch of interpolated
           frames is converted to JPEG immediately and released to keep GPU memory bounded,
           rather than holding a whole segment's frames in memory at once.

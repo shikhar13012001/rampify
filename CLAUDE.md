@@ -165,8 +165,8 @@ usage analytics are complete, but the cap is not applied.
 ### 1. opticalFlowWorker.ts — AI frame interpolation
 
 - **Model**: RIFE (Real-time Intermediate Flow Estimation), ONNX format
-- **Cache**: Model weights stored in IndexedDB (`rampcut-onnx-cache` store) on first download
-  to avoid a 6MB network round-trip on every session
+- **Cache**: Model weights (~20MB) stored in IndexedDB (`rampcut-models` DB, `models` store) on
+  first download to avoid re-fetching on every session
 - **Inference**: `ort.InferenceSession` (onnxruntime-web); GPU via WebGL EP where available,
   CPU fallback otherwise
 - **Interpolation depth**: controlled by `interpolationCount` (1 = ×2 frames, 2 = ×4, 3 = ×8)

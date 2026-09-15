@@ -11,7 +11,10 @@
  *   IN  { type: 'interpolate', frameA: ImageBitmap, frameB: ImageBitmap, count: number }
  *       count = interpolation depth (1 → 1 frame, 2 → 3 frames, 3 → 7 frames).
  *   OUT { type: 'done',        frames: ImageBitmap[] }
- *   OUT { type: 'progress',    phase: 'ready' | 'downloading' | 'loading' }
+ *   OUT { type: 'progress',    phase: 'ready' | 'downloading' | 'loading', pct?: number }
+ *       pct is real byte progress (0-100) for the 'downloading' phase only —
+ *       omitted once the model is cached in IndexedDB (no re-download) or if
+ *       the response had no Content-Length to measure against.
  *   OUT { type: 'error',       message: string }
  */
 
@@ -70,10 +73,38 @@ async function loadModel(): Promise<ort.InferenceSession> {
   let modelBuffer = await idbGet(db, MODEL_KEY);
 
   if (!modelBuffer) {
-    self.postMessage({ type: 'progress', phase: 'downloading' });
+    self.postMessage({ type: 'progress', phase: 'downloading', pct: 0 });
     const res = await fetch(MODEL_URL);
     if (!res.ok) throw new Error(`Failed to fetch RIFE model: HTTP ${res.status}`);
-    modelBuffer = await res.arrayBuffer();
+
+    // Stream the response so real byte progress can be reported — the model
+    // is ~20MB (see public/models/README.md), not the "6 MB" the UI used to
+    // claim, so a plain fetch().arrayBuffer() with no progress feedback made
+    // a real, in-progress download look identical to a hung one.
+    const total = Number(res.headers.get('content-length')) || 0;
+    if (res.body && total > 0) {
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        self.postMessage({ type: 'progress', phase: 'downloading', pct: Math.round((received / total) * 100) });
+      }
+      const merged = new Uint8Array(received);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      modelBuffer = merged.buffer;
+    } else {
+      // No content-length or no streaming body (older browser) — fall back
+      // to an unmeasured download rather than failing outright.
+      modelBuffer = await res.arrayBuffer();
+    }
     await idbPut(db, MODEL_KEY, modelBuffer);
   }
 

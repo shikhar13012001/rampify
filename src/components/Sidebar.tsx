@@ -3,7 +3,7 @@ import { useEditorStore } from '@/store/editorStore';
 import { PresetPanel } from '@/features/curve/PresetPanel';
 import { formatTime } from '@/features/preview/formatTime';
 import { hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
-import { subscribeModelStatus, waitForWorkerReady } from '@/lib/slowMotionPipeline';
+import { subscribeModelStatus, subscribeModelDownloadProgress, waitForWorkerReady } from '@/lib/slowMotionPipeline';
 import type { ModelStatus } from '@/lib/slowMotionPipeline';
 import { planTierFor } from '@/lib/exportLimits';
 import { canUseBlurIntensity, canUseOpticalFlow, type PlanTier } from '@/lib/planConfig';
@@ -705,12 +705,14 @@ function OpticalFlowControl({
   onUpgrade: () => void;
 }) {
   const [modelStatus, setModelStatusLocal] = useState<ModelStatus>('idle');
+  const [downloadPct, setDownloadPct] = useState<number | null>(null);
   const isPro = canUseOpticalFlow(tier);
 
   useEffect(() => subscribeModelStatus(setModelStatusLocal), []);
+  useEffect(() => subscribeModelDownloadProgress(setDownloadPct), []);
 
   useEffect(() => {
-    // Only pre-warm the (6 MB) AI model for Pro users who can actually export
+    // Only pre-warm the (~20 MB) AI model for Pro users who can actually export
     // with it — free/guest users just see the curve-editor preview, no download needed.
     if (enabled && isPro) waitForWorkerReady();
   }, [enabled, isPro]);
@@ -754,7 +756,9 @@ function OpticalFlowControl({
           {enabled && isPro && modelStatus === 'loading' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontSize: 9, color: '#8a8a8a', fontFamily: 'var(--font-mono)' }}>
-                Downloading AI model (6 MB)…
+                {downloadPct !== null
+                  ? `Downloading AI model (~20 MB)… ${downloadPct}%`
+                  : 'Preparing AI model…'}
               </span>
               <div
                 style={{
@@ -765,15 +769,37 @@ function OpticalFlowControl({
                   width: '100%',
                 }}
               >
-                <div
-                  style={{
-                    height: '100%',
-                    width: '40%',
-                    borderRadius: 999,
-                    background: '#b8a4ed',
-                    animation: 'sidebar-shimmer 1.4s ease-in-out infinite',
-                  }}
-                />
+                {downloadPct !== null ? (
+                  // Real byte progress once we know how much there is to
+                  // download — was a static 40%-width shimmer regardless of
+                  // actual progress before, which made a genuinely-working
+                  // ~20MB download (the size was also wrongly labeled "6 MB")
+                  // look identical to a hung one.
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${downloadPct}%`,
+                      borderRadius: 999,
+                      background: '#b8a4ed',
+                      transition: 'width 200ms ease',
+                    }}
+                  />
+                ) : (
+                  // No byte progress available yet (already cached in
+                  // IndexedDB, so no re-download — or the ONNX session-init
+                  // step post-download, which has no byte-level progress of
+                  // its own) — indeterminate animation is honest here since
+                  // there's genuinely nothing to measure.
+                  <div
+                    style={{
+                      height: '100%',
+                      width: '40%',
+                      borderRadius: 999,
+                      background: '#b8a4ed',
+                      animation: 'sidebar-shimmer 1.4s ease-in-out infinite',
+                    }}
+                  />
+                )}
               </div>
             </div>
           )}

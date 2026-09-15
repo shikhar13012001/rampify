@@ -40,13 +40,34 @@ export function subscribeModelStatus(cb: (s: ModelStatus) => void): () => void {
   return () => statusListeners.delete(cb);
 }
 
+// Real byte-download progress (0-100) for the RIFE model fetch specifically —
+// separate from ModelStatus because it only ever applies during the
+// 'loading' status's download sub-phase, and is meaningless once cached in
+// IndexedDB (no re-download on later sessions). null when not downloading.
+let downloadPct: number | null = null;
+const downloadListeners = new Set<(pct: number | null) => void>();
+
+function setDownloadPct(pct: number | null): void {
+  downloadPct = pct;
+  for (const cb of downloadListeners) cb(pct);
+}
+
+/** Subscribe to RIFE model download progress (0-100, or null when not
+ *  actively downloading — e.g. already cached, or still initializing the
+ *  ONNX session after download completes). Returns an unsubscribe function. */
+export function subscribeModelDownloadProgress(cb: (pct: number | null) => void): () => void {
+  downloadListeners.add(cb);
+  cb(downloadPct);
+  return () => downloadListeners.delete(cb);
+}
+
 // ─── Worker singleton ─────────────────────────────────────────────────────────
 
 type WorkerMsg =
   | { type: 'ready' }
   | { type: 'done'; frames: ImageBitmap[] }
   | { type: 'error'; message: string }
-  | { type: 'progress'; phase: string };
+  | { type: 'progress'; phase: 'ready' | 'downloading' | 'loading'; pct?: number };
 
 let workerInstance: Worker | null  = null;
 let workerReady    = false;
@@ -63,8 +84,18 @@ function getOrCreateWorker(): Worker {
     if (e.data.type === 'ready') {
       workerReady = true;
       setModelStatus('ready');
+      setDownloadPct(null);
       for (const cb of readyWaiters) cb();
       readyWaiters.length = 0;
+    } else if (e.data.type === 'progress') {
+      if (e.data.phase === 'downloading' && typeof e.data.pct === 'number') {
+        setDownloadPct(e.data.pct);
+      } else {
+        // 'loading' (ONNX session init, post-download) has no byte
+        // progress — clear any stale percentage from a prior download so
+        // the UI doesn't show a frozen "100%" while session creation runs.
+        setDownloadPct(null);
+      }
     }
   });
 
@@ -91,6 +122,7 @@ export function disposeWorker(): void {
   workerReady    = false;
   readyWaiters.length = 0;
   setModelStatus('idle');
+  setDownloadPct(null);
 }
 
 // ─── Worker RPC ───────────────────────────────────────────────────────────────

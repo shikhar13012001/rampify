@@ -86,7 +86,7 @@ export function CurvesIndex() {
               <div
                 aria-hidden="true"
                 style={{ marginBottom: 8 }}
-                // eslint-disable-next-line react/no-danger -- curveSvg() is our own
+                // curveSvg() is our own
                 // pure generator (src/content/curves.mjs), not user input.
                 dangerouslySetInnerHTML={{ __html: curveSvg(curve, { width: 400, height: 110 }) }}
               />

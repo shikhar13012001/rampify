@@ -75,7 +75,7 @@ export function CurvePage() {
               background: 'var(--color-clay-card)',
             }}
             aria-hidden="true"
-            // eslint-disable-next-line react/no-danger -- curveSvg() is our own
+            // curveSvg() is our own
             // pure generator (src/content/curves.mjs), not user input.
             dangerouslySetInnerHTML={{ __html: curveSvg(curve, { width: 680, height: 200 }) }}
           />

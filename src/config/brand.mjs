@@ -25,8 +25,8 @@ export const BRAND_LOWER = 'rampcut';
 /** Canonical origin — no trailing slash. Must match the production domain
  *  attached to the Vercel project; every other host 308-redirects here
  *  (see vercel.json "redirects"). */
-export const SITE_URL = 'https://rampcut.astralbuilds.dev';
+export const SITE_URL = 'https://rampcut.astralbuild.dev';
 export const SUPPORT_EMAIL = 'hello@rampcut.com';
 export const TAGLINE = 'Speed ramp videos in your browser — no installs, no uploads.';
 /** Hosts that used to serve the product; kept only for redirects/docs. */
-export const LEGACY_HOSTS = ['rampify.astralbuilds.dev', 'rampify-eight.vercel.app'];
+export const LEGACY_HOSTS = ['rampify.astralbuild.dev', 'rampify-eight.vercel.app'];

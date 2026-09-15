@@ -47,7 +47,7 @@ if (!existsSync(templatePath)) {
 // SITE_URL used to be duplicated here as its own hardcoded literal, separate
 // from src/config/brand.mjs's copy — exactly the kind of drift that caused
 // this file to still say rampcut.com after brand.mjs's domain was corrected
-// to rampcut.astralbuilds.dev. Now imported directly so there is only ever
+// to rampcut.astralbuild.dev. Now imported directly so there is only ever
 // one place to change it.
 
 // process.env.VERCEL_ENV is set by Vercel's build step to 'production',

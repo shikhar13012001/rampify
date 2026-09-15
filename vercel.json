@@ -3,14 +3,14 @@
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "rampify.astralbuilds.dev" }],
-      "destination": "https://rampcut.astralbuilds.dev/:path*",
+      "has": [{ "type": "host", "value": "rampify.astralbuild.dev" }],
+      "destination": "https://rampcut.astralbuild.dev/:path*",
       "permanent": true
     },
     {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "rampify-eight.vercel.app" }],
-      "destination": "https://rampcut.astralbuilds.dev/:path*",
+      "destination": "https://rampcut.astralbuild.dev/:path*",
       "permanent": true
     }
   ],

@@ -162,7 +162,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
       try {
         await loadFFmpeg();
       } catch (err) {
-        throw new Error(`[loadFFmpeg] ${String(err)} (coreURL=${String(coreJsURL)}, wasmURL=${String(coreWasmURL)})`);
+        throw new Error(`[loadFFmpeg] ${String(err)} (coreURL=${String(coreJsURL)}, wasmURL=${String(coreWasmURL)})`, { cause: err });
       }
 
       if (typeof msg.videoUrl !== 'string' || msg.videoUrl.length === 0) {
@@ -173,7 +173,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
       try {
         inputData = await fetchFile(msg.videoUrl);
       } catch (err) {
-        throw new Error(`[fetchFile] ${String(err)} (videoUrl=${msg.videoUrl.slice(0, 64)})`);
+        throw new Error(`[fetchFile] ${String(err)} (videoUrl=${msg.videoUrl.slice(0, 64)})`, { cause: err });
       }
       await ffmpeg.writeFile('input.mp4', inputData);
       writtenFiles.push('input.mp4');

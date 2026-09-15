@@ -1481,3 +1481,63 @@ minified stack trace. 303/303 tests still pass; `tsc -b` clean.
 **Still needed from the owner**: which stage tag shows up next time it
 fails, and confirmation of the `astralbuild.dev` vs `astralbuilds.dev`
 domain question above.
+
+## Domain confirmed: rampcut.astralbuild.dev (2026-09-15)
+
+Owner confirmed the real domain has no "s" — `rampcut.astralbuild.dev`,
+matching the pre-rebrand `rampify.astralbuild.dev` pattern. The prior
+rebrand entry's "correction" had actually introduced a typo
+(`rampcut.astralbuilds.dev`, extra s) into `src/config/brand.mjs`'s
+`SITE_URL` and `LEGACY_HOSTS`, which then propagated into every
+brand.mjs-derived surface (Seo.tsx / all pages) plus the static files that
+don't derive from it. Fixed:
+- `src/config/brand.mjs` — `SITE_URL` and the `rampify.astralbuild.dev`
+  legacy-host entry, both corrected.
+- Static/generated files with their own hardcoded copies: `index.html`,
+  `public/sitemap.xml`, `public/robots.txt`, `public/og-image.svg`,
+  `scripts/generate-og-image.html`, `.env.example`, `vercel.json` (both the
+  legacy-host redirect rule and its destination), `test/seo/
+  vercel-routing.test.ts`'s legacy-host assertions, `src/lib/curveLink.ts`'s
+  doc-comment examples, `README.md`.
+- `.env.local`'s real `ALLOWED_ORIGINS` (was still `rampify-eight.vercel.app`
+  from before either domain migration) — corrected to
+  `https://rampcut.astralbuild.dev`. Edited the one line directly this time,
+  not appended — a blind append without checking for a trailing newline
+  corrupted `DODO_PRO_ANNUAL_PRODUCT_ID`'s value earlier in this same
+  session; caught immediately via `tail`, restored from a backup before any
+  build or commit touched it.
+- **Vercel project (`rampify`), live**: confirmed `rampcut.astralbuild.dev`
+  is already attached (`vercel domains add ... rampify` returned
+  `domain_already_assigned`) — the DNS/domain-attachment side was already
+  done before this task. The `ALLOWED_ORIGINS` **secret** in Vercel's
+  Production and Preview environments was 84 days old (almost certainly
+  still the pre-migration value, hidden so it couldn't be read directly) —
+  removed and re-added with `https://rampcut.astralbuild.dev` in both
+  environments via `vercel env rm` / `vercel env add`. This is the one
+  action in this entry that reaches a real, shared, outward-facing system
+  (Vercel's stored project config) rather than only this local checkout —
+  done on the owner's explicit instruction ("also update in vercel").
+  Server-side env var changes read fresh via `process.env` per invocation
+  for this Node-runtime function, so no redeploy should be required for it
+  to take effect — not independently re-verified against a live request.
+
+**Also fixed while getting a clean build/lint/test baseline after the
+`rampcut-sync` merge** (unrelated to the domain question, but blocking):
+`vite-plugin-pwa` and `@vercel/analytics` were declared in `package.json`
+but not installed (`npm install` resolved it); two
+`eslint-disable-next-line react/no-danger` comments in the new
+`CurvePage.tsx`/`CurvesIndex.tsx` referenced a rule from `eslint-plugin-
+react`, which this project has never installed (only `react-hooks`/
+`react-refresh` are configured) — removed the invalid directives, kept the
+safety explanation as a plain comment; two re-thrown errors in
+`ffmpegWorker.ts` were missing `{ cause: err }` (the `preserve-caught-error`
+rule); one unused `eslint-disable-next-line no-console` in `presets.ts`
+(that rule isn't enabled in this config at all). Also fixed
+`test/seo/vercel-routing.test.ts`'s trailing-slash test: the merge's
+version of `matchesAnyRewrite()` added real normalization (mirroring
+`trailingSlash: false`'s redirect-before-rewrite behavior), but the
+assertion for that specific case still carried an equivalent local fix's
+now-stale expectation from before the merge — updated to match the
+now-correct, more faithful implementation. **Verified clean: `npm run
+build`, `npm run lint` (0 errors), `tsc -b` (0 errors), `npm run test`
+(303/303).**

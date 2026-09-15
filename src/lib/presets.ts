@@ -84,7 +84,6 @@ if (import.meta.env.DEV) {
   const presetIds = new Set(PRESETS.map((p) => p.id as string));
   for (const def of CURVES) {
     if (!presetIds.has(def.presetId)) {
-      // eslint-disable-next-line no-console
       console.warn(`[presets] "${def.presetId}" is in curves.mjs but has no PRESETS entry.`);
     }
   }

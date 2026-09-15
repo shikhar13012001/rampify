@@ -3,4 +3,4 @@ Allow: /
 Disallow: /editor
 Disallow: /upgrade/
 
-Sitemap: https://rampcut.astralbuilds.dev/sitemap.xml
+Sitemap: https://rampcut.astralbuild.dev/sitemap.xml

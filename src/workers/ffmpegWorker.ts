@@ -313,6 +313,16 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
           '-filter_complex', filterComplex,
           '-map', '[vout]',
           '-map', '0:a:0?',
+          // Each blur-frame input above is `-loop 1` — an infinitely-looping
+          // still image, needed so its overlay can sit through its
+          // enable='between(t,...)' window. overlay's own `shortest` option
+          // defaults to 0 (it stops only when the LONGEST input ends), so
+          // with no bound here the looped image never ends and ffmpeg just
+          // keeps encoding forever — the real cause of a motion-blur export
+          // that hangs indefinitely on "Encoding…" and never completes.
+          // -shortest bounds the output by the finite audio track instead
+          // (same fix already applied to the optical-flow path below).
+          '-shortest',
         );
       } else {
         // ── Simple path: unchanged from original ─────────────────────────────

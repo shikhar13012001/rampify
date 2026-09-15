@@ -31,6 +31,22 @@ function seekAndCapture(video: HTMLVideoElement, time: number): Promise<ImageBit
       createImageBitmap(video).then(resolve, reject);
     };
 
+    // Assigning currentTime a value it already holds is a no-op in most
+    // browsers: no real seek happens, so neither 'seeked' nor
+    // requestVideoFrameCallback ever fire and this hangs until the 5s
+    // timeout. This is the common case for time = 0 — a freshly created
+    // <video> already starts at currentTime 0 (confirmed production bug:
+    // "Frame capture timed out at 0s" on the first blur transition frame).
+    // Wait for decoded frame data instead of a seek-completion event here.
+    if (Math.abs(video.currentTime - time) < 0.001) {
+      if (video.readyState >= video.HAVE_CURRENT_DATA) {
+        done();
+      } else {
+        video.addEventListener('loadeddata', done, { once: true });
+      }
+      return;
+    }
+
     if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
       // rVFC fires after the sought frame is composited — more accurate than 'seeked'.
       video.requestVideoFrameCallback(done);

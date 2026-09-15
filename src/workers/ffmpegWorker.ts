@@ -148,9 +148,33 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
     const writtenFiles: string[] = [];
     try {
       self.postMessage({ type: 'progress', progress: 0 });
-      await loadFFmpeg();
 
-      const inputData = await fetchFile(msg.videoUrl);
+      // Both steps below are wrapped separately and re-thrown with a stage
+      // prefix. A bare "TypeError: Failed to construct 'URL': Invalid URL"
+      // reaching the UI is ambiguous between two very different failure
+      // modes: (a) the ffmpeg-core asset URLs baked in by the `?url` imports
+      // above resolving to something unparseable in this worker's context
+      // (a known class of bug with bundler-built module workers), or
+      // (b) `msg.videoUrl` — normally a same-session blob: URL from
+      // URL.createObjectURL — being missing or malformed. Tagging the stage
+      // turns the next occurrence into a one-shot diagnosis instead of
+      // another round of guessing from a collapsed minified stack trace.
+      try {
+        await loadFFmpeg();
+      } catch (err) {
+        throw new Error(`[loadFFmpeg] ${String(err)} (coreURL=${String(coreJsURL)}, wasmURL=${String(coreWasmURL)})`);
+      }
+
+      if (typeof msg.videoUrl !== 'string' || msg.videoUrl.length === 0) {
+        throw new Error(`[fetchFile] videoUrl is missing or not a string (received: ${JSON.stringify(msg.videoUrl)})`);
+      }
+
+      let inputData: Uint8Array;
+      try {
+        inputData = await fetchFile(msg.videoUrl);
+      } catch (err) {
+        throw new Error(`[fetchFile] ${String(err)} (videoUrl=${msg.videoUrl.slice(0, 64)})`);
+      }
       await ffmpeg.writeFile('input.mp4', inputData);
       writtenFiles.push('input.mp4');
 

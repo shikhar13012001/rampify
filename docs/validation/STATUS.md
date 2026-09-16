@@ -2021,3 +2021,131 @@ entry in this file. Full verification run each phase: `tsc -b --noEmit`,
 the full Vitest suite (322 tests, up from 308 at the start of this entry),
 and a full production `vite build` (confirms bundling, not just
 type-checking) — all clean as of this entry.
+
+## Phase 5 — multi-clip export, implemented after all (2026-09-16, later same day)
+
+The previous entry deliberately stopped short of Phase 5, reasoning that
+the plan's own recommended migration (`EditorProject.clips: Clip[]`
+replacing the flat `{file, segments}` shape) would break a dozen-plus
+components reading `project.file`/`project.segments` directly, with no real
+browser available in this environment to verify the rewrite. Asked to
+continue anyway — implemented with a materially different, lower-risk
+design than the plan originally sketched, specifically BECAUSE that
+constraint (no live browser) is still real and unchanged.
+
+**Design actually used, and why it's safer than the plan's**: rather than
+replacing `EditorProject.file`/`segments`, `project` keeps its existing
+shape and meaning — "the active clip's data" — completely unchanged for
+every existing consumer (Timeline, CurveEditor, VideoPlayer, DropZone,
+ffmpegBridge, exportLimits, persistence, ExportModal, Sidebar — none of
+them were touched). A new `clips: Clip[]` + `activeClipId` sit alongside
+it in `editorStore.ts`; a store subscriber (added once, after the store's
+creation) mirrors any change to `project.segments` back into the matching
+`clips[]` entry automatically, so the existing, intricate segment-mutation
+actions (`addSegment`/`deleteSegment`'s three-way curve-merge math/
+`splitSegment`/`updateSegmentCurve`/`undo`) needed ZERO changes — the
+highest-risk code in the whole store was never touched. This trades a more
+"elegant" unified data model for a dramatically smaller, easier-to-verify
+diff, which is the right trade when the alternative is an unverifiable
+rewrite of the app's core state.
+
+**What's genuinely real, not a stub**:
+- `addClipToProject`/`setActiveClip`/`removeClipFromProject` (new
+  `editorStore.ts` actions) — 8 new tests, including the one that actually
+  matters: edit clip A's curve, switch to clip B, switch back to A, assert
+  the edit survived (it does — this is what proves the subscriber-sync
+  approach actually works, not just compiles).
+- New `ClipTabs.tsx` — lets a user add a second/third video, see all
+  clips as tabs, switch the active one, remove one.
+- New `FFmpegBridge.processMultiClip()` — exports each clip through
+  whichever single-clip pipeline already applies to it (decided per clip,
+  since each has its own curve/segments), then stitches the results via
+  ffmpeg's concat DEMUXER with `-c copy` (stream copy, no re-encode).
+  **Verified with real ffmpeg, not just written and assumed**: encoded two
+  parts with this app's actual encode settings (one via the real "Hero
+  Moment" curve, one flat), concatenated them, confirmed the stitched
+  duration matches the sum of both parts and the file decodes cleanly
+  end-to-end, and screenshotted a frame from the second half to confirm
+  the right content plays at the right time. A new `'concat'` message type
+  was added to `ffmpegWorker.ts` (mirrors the existing 'start' message's
+  writtenFiles-cleanup pattern) rather than bolting concat logic onto the
+  existing 'start' handler.
+
+**What's a deliberate, disclosed simplification, not an oversight**:
+- **No unified continuous timeline.** Clips are tabs, not lanes on one
+  scrubbable axis — switching clips is an explicit click, not a continuous
+  scrub across a boundary. This sidesteps both of the plan's own
+  flagged-as-hardest sub-problems (global-to-local coordinate mapping, and
+  gapless cross-clip preview playback) by construction: `VideoPlayer.tsx`
+  only ever shows the ACTIVE clip, so there's no cross-clip playback
+  problem to solve in v1 at all.
+- **Shared, not per-clip, blur/OF/crop/color/caption settings.** Only each
+  clip's own curve is genuinely independent in v1.
+- **Session persistence still only covers the active clip** — clips added
+  beyond the first are lost on a page reload (documented in
+  `editorStore.ts`'s `EditorState.clips` doc comment).
+- **Undo history clears on every clip switch** — not a per-clip stack.
+
+**Still not verified**: an actual live-browser click-through (add a second
+clip, edit both curves, export, confirm the downloaded file is really two
+clips stitched together with the right speed ramps). The ffmpeg mechanics
+are real and verified; the React/store wiring is type-checked and
+unit-tested; what's NOT been done is a human (or Playwright) actually
+using the feature end-to-end in a real browser. Flagging this explicitly
+rather than claiming full verification — the same honesty standard as
+every other entry in this file.
+
+Full suite as of this entry: `tsc -b --noEmit` clean, **330 tests passing**
+(up from 322), production `vite build` clean.
+
+## CRITICAL — editor went completely blank: `Uncaught ReferenceError: process is not defined` (2026-09-16, later same day)
+
+User reported the editor screen going blank and supplied the real browser
+console output (a photo of DevTools) — `Uncaught ReferenceError: process is
+not defined`, thrown synchronously from inside the `EditorRoute` bundle,
+crashing the whole route.
+
+**Root cause**: the `subtitle` npm package (added this session for SRT
+generation, Phase 3b captions) pulls in Node-oriented internals (`stream`,
+`multipipe`) that reference the bare `process` global — which doesn't exist
+in a browser. The production build had ALREADY logged a warning about this
+(`Module "stream" has been externalized for browser compatibility, imported
+by ".../subtitle/dist/subtitle.esm.js"`) but that warning was read past
+without recognizing it as the real problem it was — a genuine miss, not a
+new bug introduced silently; this session's earlier "recheck implementation
+after each phase" verification ran `tsc`/tests/build every time but never
+actually loaded the app in a real browser, so a runtime-only, browser-only
+error like this had no way to surface until a human hit it.
+
+**Fix**: replaced `stringifySync` (from `subtitle`) with a small hand-written
+SRT formatter (`formatSrtTimestamp` + a plain string template in
+`buildCaptionSrt`, `ffmpegBridge.ts`) — SRT is a trivial, stable format
+(index / timestamp range / text / blank line), so this removes a
+browser-incompatible dependency for a few lines of code. Uninstalled
+`subtitle` from `package.json` entirely.
+
+**This time actually verified in a real browser, not just reasoned about**:
+installed Playwright + a real Chromium binary in this environment (both
+downloaded successfully — this was NOT available earlier in the session,
+which is why every prior "verified" note in this file was explicit about
+lacking real-browser confirmation) and loaded the production build's
+`/editor` and `/editor?demo=1` routes headlessly. Zero page errors on
+either. The `?demo=1` load rendered the full editor correctly — curve
+presets, timeline, Crop/aspect-ratio and Color grading controls (Phase 3),
+the Captions panel (Phase 3b), and the new clip-tabs strip with
+"+ Add clip" (Phase 5) all present and rendering — screenshotted for
+confirmation. This closes out the "not yet verified in a live browser"
+caveat on the Phase 5 entry above, at least for initial render (adding a
+second clip, multi-clip export, and the full captions/crop/color export
+flows still haven't been click-tested end-to-end).
+
+**Lesson for the rest of this engagement**: real browser automation is
+available in this environment now (it was not, reliably, earlier in this
+session or in prior sessions per this file's own history) — use it to
+actually verify runtime behavior going forward instead of relying on
+type-checking and unit tests alone, which this bug proved is not sufficient
+for catching browser-only runtime errors from a dependency's internals.
+
+Full suite after this fix: `tsc -b --noEmit` clean, all 330 tests still
+passing, production build clean, and — new — zero console errors on a real
+headless-Chromium load of the editor.

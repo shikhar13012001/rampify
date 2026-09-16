@@ -88,6 +88,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const captionSettings = useEditorStore((state) => state.captionSettings);
   const captionCues = useEditorStore((state) => state.captionCues);
   const audioSettings = useEditorStore((state) => state.audioSettings);
+  const clips = useEditorStore((state) => state.clips);
   const exportResolution = useEditorStore((state) => state.exportResolution);
   const setExportResolution = useEditorStore((state) => state.setExportResolution);
 
@@ -266,7 +267,24 @@ export function ExportModal({ onClose }: ExportModalProps) {
         setStartedAt(null);
       };
 
-      if (useOFPipeline) {
+      if (clips.length > 1) {
+        // ── Multi-clip export path ──────────────────────────────────────────
+        // Each clip goes through its own single-clip pipeline (decided per
+        // clip, based on ITS OWN segments/curve), then all are stitched via
+        // ffmpeg's concat demuxer. Blur/OF/crop/color/caption settings are
+        // shared across the whole export in v1 — see processMultiClip's doc.
+        FFmpegBridge.guardExport({ onError: handleError }, () =>
+          bridge.processMultiClip(clips, blurSettings, ofSettings, audioSettings, {
+            onProgress: (pct, sub) => {
+              setProgress(pct);
+              setSubStatus(sub);
+              setExportProgress(pct);
+            },
+            onDone: handleDone,
+            onError: handleError,
+          }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues),
+        );
+      } else if (useOFPipeline) {
         // ── Optical flow export path ────────────────────────────────────────
         FFmpegBridge.guardExport({ onError: handleError }, () =>
           bridge.processWithOpticalFlow(project, ofSettings, audioSettings, {
@@ -321,7 +339,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       // an export is genuinely in flight.
       startInFlightRef.current = false;
     }
-  }, [project, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, cropSettings, colorSettings, captionSettings, captionCues, exportResolution, audioSettings, useOFPipeline, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
+  }, [project, clips, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, cropSettings, colorSettings, captionSettings, captionCues, exportResolution, audioSettings, useOFPipeline, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
 
   const cancel = useCallback(() => {
     // Only an actually-in-flight export (bridgeRef set by startExport, not

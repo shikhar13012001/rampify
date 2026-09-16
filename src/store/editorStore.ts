@@ -5,6 +5,7 @@ import type {
   BlurSettings,
   CaptionCue,
   CaptionSettings,
+  Clip,
   ColorPreset,
   ColorSettings,
   CropPreset,
@@ -15,6 +16,7 @@ import type {
   OpticalFlowSettings,
   Segment,
   SpeedCurve,
+  VideoFile,
 } from '@/types/editor';
 import { interpolateSpeed } from '@/lib/curveMath';
 
@@ -28,6 +30,10 @@ function hasValidProjectFile(project: EditorProject | null): project is EditorPr
 
   const { duration } = project.file;
   return Number.isFinite(duration) && duration > 0;
+}
+
+function makeClipId(): string {
+  return `clip_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function makeFullVideoSegment(duration: number): Segment {
@@ -58,6 +64,22 @@ export interface AuthUser {
 
 interface EditorState {
   project: EditorProject | null;
+  // Multi-clip timeline (v1). `project` above always mirrors whichever clip
+  // is active (see `activeClipId`) — every existing consumer of
+  // `project.file`/`project.segments` keeps working unchanged for a
+  // single-clip project. A subscriber set up right after this store's
+  // creation (below) mirrors `project` changes back into the matching
+  // entry here automatically, so none of the existing segment-mutation
+  // actions (addSegment/deleteSegment/splitSegment/updateSegmentCurve/undo)
+  // needed to change. `setActiveClip`/`addClipToProject`/
+  // `removeClipFromProject` are the only new actions.
+  //
+  // Known v1 limitation: session persistence (EditorRoute.tsx) only ever
+  // saves/restores the ACTIVE clip — clips added beyond the first are lost
+  // on a page reload. Undo history is also cleared on every clip switch
+  // (not a per-clip stack) — a disclosed simplification, not an oversight.
+  clips: Clip[];
+  activeClipId: string | null;
   selectedSegmentId: string | null;
   playheadTime: number;
   isPlaying: boolean;
@@ -127,10 +149,19 @@ interface EditorActions {
   setUpgradeModalOpen: (open: boolean) => void;
   setAuthLoading: (loading: boolean) => void;
   setIsDemoProject: (isDemo: boolean) => void;
+  /** Adds a new clip to the project. If no project is loaded yet, it also
+   *  becomes the active one (equivalent to a first `setProject`). */
+  addClipToProject: (file: VideoFile, segments?: Segment[]) => void;
+  /** Switches which clip `project` mirrors. Clears undo history and
+   *  selection — see the EditorState `clips` doc comment above. */
+  setActiveClip: (clipId: string) => void;
+  removeClipFromProject: (clipId: string) => void;
 }
 
 export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   project: null,
+  clips: [],
+  activeClipId: null,
   selectedSegmentId: null,
   user: null,
   isAuthLoading: false,
@@ -157,29 +188,51 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   isDemoProject: false,
 
   setProject: (project) =>
-    set((state) => ({
-      project: hasValidProjectFile(project)
-        ? {
-            ...project,
-            segments:
-              project.segments.length > 0
-                ? project.segments
-                : [makeFullVideoSegment(project.file.duration)],
-          }
-        : null,
-      selectedSegmentId: null,
-      playheadTime: 0,
-      isPlaying: false,
-      exportProgress: null,
-      isExporting: false,
-      history: [],
-      // Clearing the project always clears the demo flag too — "no project
-      // loaded" can't also be "a demo project is loaded". Loading a NEW
-      // project (demo or real) leaves this alone; the caller (DropZone.tsx)
-      // is responsible for calling setIsDemoProject() itself right alongside
-      // setProject() for that case.
-      isDemoProject: project === null ? false : state.isDemoProject,
-    })),
+    set((state) => {
+      if (!hasValidProjectFile(project)) {
+        return {
+          project: null,
+          clips: [],
+          activeClipId: null,
+          selectedSegmentId: null,
+          playheadTime: 0,
+          isPlaying: false,
+          exportProgress: null,
+          isExporting: false,
+          history: [],
+          // Clearing the project always clears the demo flag too — "no
+          // project loaded" can't also be "a demo project is loaded".
+          isDemoProject: false,
+        };
+      }
+
+      const segments = project.segments.length > 0
+        ? project.segments
+        : [makeFullVideoSegment(project.file.duration)];
+      const id = makeClipId();
+
+      return {
+        project: { ...project, segments },
+        // setProject always replaces the WHOLE project (this is the
+        // "load a fresh single-clip project" entry point DropZone.tsx uses)
+        // — resetting `clips` to just this one keeps the invariant that
+        // `clips` always matches whatever `project`/`activeClipId` claims,
+        // rather than silently accumulating stale clips from a previous
+        // session underneath a new one.
+        clips: [{ id, file: project.file, segments }],
+        activeClipId: id,
+        selectedSegmentId: null,
+        playheadTime: 0,
+        isPlaying: false,
+        exportProgress: null,
+        isExporting: false,
+        history: [],
+        // Loading a NEW project (demo or real) leaves this alone; the
+        // caller (DropZone.tsx) is responsible for calling
+        // setIsDemoProject() itself right alongside setProject() for that.
+        isDemoProject: state.isDemoProject,
+      };
+    }),
 
   setPlayheadTime: (playheadTime) => set({ playheadTime }),
 
@@ -466,7 +519,102 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   setUpgradeModalOpen: (upgradeModalOpen) => set({ upgradeModalOpen }),
   setAuthLoading: (isAuthLoading) => set({ isAuthLoading }),
   setIsDemoProject: (isDemoProject) => set({ isDemoProject }),
+
+  addClipToProject: (file, segments) =>
+    set((state) => {
+      const initialSegments = segments && segments.length > 0
+        ? segments
+        : [makeFullVideoSegment(file.duration)];
+      const id = makeClipId();
+      const newClip: Clip = { id, file, segments: initialSegments };
+      const clips = [...state.clips, newClip];
+
+      if (!state.project) {
+        // First clip in a fresh project — equivalent to setProject().
+        return {
+          clips,
+          activeClipId: id,
+          project: { file, segments: initialSegments },
+          selectedSegmentId: null,
+          playheadTime: 0,
+          isPlaying: false,
+          history: [],
+        };
+      }
+      // Appended alongside existing clips — doesn't disturb whichever
+      // clip is currently active/being edited.
+      return { clips };
+    }),
+
+  setActiveClip: (clipId) =>
+    set((state) => {
+      const clip = state.clips.find((c) => c.id === clipId);
+      if (!clip) return state;
+      return {
+        activeClipId: clipId,
+        project: { file: clip.file, segments: clip.segments },
+        selectedSegmentId: null,
+        playheadTime: 0,
+        isPlaying: false,
+        // Undo history is scoped to "since this clip became active" — see
+        // the EditorState `clips` doc comment for why this isn't a
+        // per-clip stack in v1.
+        history: [],
+      };
+    }),
+
+  removeClipFromProject: (clipId) =>
+    set((state) => {
+      const clips = state.clips.filter((c) => c.id !== clipId);
+      if (clipId !== state.activeClipId) return { clips };
+
+      // Removed clip was the active one — fall back to another remaining
+      // clip, or clear the project entirely if none are left.
+      const next = clips[0] ?? null;
+      if (!next) {
+        return {
+          clips,
+          activeClipId: null,
+          project: null,
+          selectedSegmentId: null,
+          history: [],
+          isDemoProject: false,
+        };
+      }
+      return {
+        clips,
+        activeClipId: next.id,
+        project: { file: next.file, segments: next.segments },
+        selectedSegmentId: null,
+        playheadTime: 0,
+        isPlaying: false,
+        history: [],
+      };
+    }),
 }));
+
+// Mirrors `project` changes (from addSegment/deleteSegment/splitSegment/
+// updateSegmentCurve/undo — none of which know about `clips`) back into the
+// matching entry in `clips`, so switching away and back to a clip via
+// setActiveClip() sees its latest edits. Runs after every store update;
+// the reference-equality guards make it a no-op (not an infinite loop) both
+// when `project` didn't change and when it's already in sync (e.g. right
+// after setProject/setActiveClip/addClipToProject/removeClipFromProject,
+// which already set both together themselves).
+useEditorStore.subscribe((state, prevState) => {
+  if (state.project === prevState.project) return;
+  if (!state.project || !state.activeClipId) return;
+
+  const idx = state.clips.findIndex((c) => c.id === state.activeClipId);
+  if (idx === -1) return;
+
+  const current = state.clips[idx];
+  if (current.file === state.project.file && current.segments === state.project.segments) return;
+
+  const clips = [...state.clips];
+  clips[idx] = { ...current, file: state.project.file, segments: state.project.segments };
+  useEditorStore.setState({ clips });
+});
 
 // Dev-only test hook — lets an external driver (e.g. the Playwright
 // integration test in test/integration/) simulate a signed-in free-tier user

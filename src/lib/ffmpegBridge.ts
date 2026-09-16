@@ -1,4 +1,3 @@
-import { stringifySync } from 'subtitle';
 import { curveToFFmpegFilter, getSpeedAtTime, interpolateSpeed, remapTime } from './curveMath';
 import { extractFrames } from './frameExtractor';
 import { getBlurIntensity, getTransitionFrameCount } from './blurMath';
@@ -9,6 +8,7 @@ import type {
   BlurSettings,
   CaptionCue,
   CaptionSettings,
+  Clip,
   ColorSettings,
   CropSettings,
   EditorProject,
@@ -56,6 +56,19 @@ export function hasStrongSpeedRamp(segment: Segment): boolean {
 }
 
 /**
+ * Formats milliseconds as an SRT timestamp: HH:MM:SS,mmm.
+ */
+function formatSrtTimestamp(ms: number): string {
+  const totalMs = Math.max(0, Math.round(ms));
+  const h  = Math.floor(totalMs / 3_600_000);
+  const m  = Math.floor((totalMs % 3_600_000) / 60_000);
+  const s  = Math.floor((totalMs % 60_000) / 1000);
+  const msRem = totalMs % 1000;
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+  return `${pad(h)}:${pad(m)}:${pad(s)},${pad(msRem, 3)}`;
+}
+
+/**
  * Builds a burn-in-ready SRT string from caption cues (absolute seconds in
  * the INPUT/source video, same convention as beatMarkers), remapping each
  * cue's start/end through the segment's speed curve so caption timing
@@ -66,25 +79,33 @@ export function hasStrongSpeedRamp(segment: Segment): boolean {
  * clip) are dropped rather than clamped — a clamped cue would collapse to a
  * zero-or-negative-duration subtitle at the boundary, which some libass
  * builds render as a flash rather than skipping cleanly.
+ *
+ * Formats SRT by hand rather than via the `subtitle` npm package: that
+ * package pulls in Node-oriented internals (`stream`, `multipipe`) that
+ * reference the bare `process` global, which doesn't exist in a browser —
+ * a real, confirmed production crash (`Uncaught ReferenceError: process is
+ * not defined`, the entire editor going blank), not a theoretical risk. SRT
+ * itself is a trivial, stable format (index / timestamp range / text /
+ * blank line), so hand-writing it removes a browser-incompatible dependency
+ * for very little code.
  */
 export function buildCaptionSrt(cues: CaptionCue[], segment: Segment, duration: number): string | null {
   if (cues.length === 0 || duration <= 0) return null;
 
-  const nodeList = cues
+  const entries = cues
     .filter((c) => c.start >= 0 && c.end <= duration && c.end > c.start)
     .map((c) => ({
-      type: 'cue' as const,
-      data: {
-        start: Math.round(remapTime(segment.curve, c.start, duration) * 1000),
-        end: Math.round(remapTime(segment.curve, c.end, duration) * 1000),
-        text: c.text,
-      },
+      startMs: Math.round(remapTime(segment.curve, c.start, duration) * 1000),
+      endMs: Math.round(remapTime(segment.curve, c.end, duration) * 1000),
+      text: c.text,
     }))
-    .filter((n) => n.data.end > n.data.start);
+    .filter((e) => e.endMs > e.startMs);
 
-  if (nodeList.length === 0) return null;
+  if (entries.length === 0) return null;
 
-  return stringifySync(nodeList, { format: 'SRT' });
+  return entries
+    .map((e, i) => `${i + 1}\n${formatSrtTimestamp(e.startMs)} --> ${formatSrtTimestamp(e.endMs)}\n${e.text}\n`)
+    .join('\n');
 }
 
 /** Shared by all three export methods: resolves caption settings into a
@@ -730,6 +751,122 @@ export class FFmpegBridge {
     });
 
     callbacks.onDone(blob);
+  }
+
+  // ── Multi-clip export ────────────────────────────────────────────────────────
+
+  /**
+   * Exports each clip independently through whichever single-clip pipeline
+   * applies to it (OF if enabled and that clip has a slow segment, else blur
+   * if enabled, else the standard path — decided PER CLIP, since each clip's
+   * curve is independent), then stitches the results with ffmpeg's concat
+   * demuxer (`-c copy`, no re-encode — safe because every part comes from
+   * this same bridge's identical encode settings). Blur/OF/crop/color/
+   * caption SETTINGS are shared across the whole export in v1 (not
+   * per-clip) — only each clip's own speed curve genuinely varies.
+   *
+   * A single-clip project (clips.length === 1) skips the concat step
+   * entirely — this is exactly the existing single-clip behavior, not a
+   * new code path masquerading as one.
+   */
+  async processMultiClip(
+    clips: Clip[],
+    blurSettings: BlurSettings,
+    ofSettings: OpticalFlowSettings,
+    audioSettings: AudioSettings,
+    callbacks: BlurExportCallbacks,
+    colorSettings?: ColorSettings,
+    cropSettings?: CropSettings,
+    resolution?: ExportResolution,
+    captionSettings?: CaptionSettings,
+    captionCues?: CaptionCue[],
+  ): Promise<void> {
+    if (clips.length === 0) {
+      callbacks.onError('No clips to export');
+      return;
+    }
+
+    const exportOne = (clip: Clip, onProgress: (pct: number) => void): Promise<Blob> => {
+      const project: EditorProject = { file: clip.file, segments: clip.segments };
+      const useOF = ofSettings.enabled && hasSlowSegments(clip.segments);
+      const useBlur = !useOF && blurSettings.enabled;
+
+      if (useOF) {
+        return new Promise<Blob>((resolve, reject) => {
+          FFmpegBridge.guardExport({ onError: reject }, () =>
+            this.processWithOpticalFlow(project, ofSettings, audioSettings, {
+              onProgress: (pct) => onProgress(pct),
+              onDone: resolve,
+              onError: reject,
+            }, colorSettings, cropSettings, resolution, captionSettings, captionCues),
+          );
+        });
+      }
+      if (useBlur) {
+        return new Promise<Blob>((resolve, reject) => {
+          FFmpegBridge.guardExport({ onError: reject }, () =>
+            this.processWithBlur(project, blurSettings, audioSettings, {
+              onProgress: (pct) => onProgress(pct),
+              onDone: resolve,
+              onError: reject,
+            }, colorSettings, cropSettings, resolution, captionSettings, captionCues),
+          );
+        });
+      }
+      return new Promise<Blob>((resolve, reject) => {
+        this.startProcessing(project, audioSettings, {
+          onProgress,
+          onDone: async (url) => resolve(await fetch(url).then((r) => r.blob())),
+          onError: reject,
+        }, colorSettings, cropSettings, resolution, captionSettings, captionCues);
+      });
+    };
+
+    if (clips.length === 1) {
+      try {
+        const blob = await exportOne(clips[0], (pct) => callbacks.onProgress(pct, 'Encoding…'));
+        callbacks.onDone(blob);
+      } catch (err) {
+        callbacks.onError(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+
+    try {
+      const parts: { name: string; data: Uint8Array }[] = [];
+
+      for (let i = 0; i < clips.length; i++) {
+        const label = `Exporting clip ${i + 1} of ${clips.length}…`;
+        const blob = await exportOne(clips[i], (pct) => {
+          const overall = Math.round(((i + pct / 100) / clips.length) * 90);
+          callbacks.onProgress(overall, label);
+        });
+        parts.push({ name: `part${i}.mp4`, data: new Uint8Array(await blob.arrayBuffer()) });
+      }
+
+      callbacks.onProgress(92, 'Combining clips…');
+
+      const worker = createWorker();
+      const transferables = parts.map((p) => p.data.buffer as ArrayBuffer);
+
+      const finalBlob = await new Promise<Blob>((resolve, reject) => {
+        worker.onmessage = (e) => {
+          const data = e.data as Record<string, unknown>;
+          if (data.type === 'done') {
+            resolve(new Blob([data.buffer as ArrayBuffer], { type: 'video/mp4' }));
+          } else if (data.type === 'error') {
+            reject(new Error(data.message as string));
+          }
+        };
+        worker.onerror = (ev) => reject(new Error(ev.message ?? 'Worker error'));
+        worker.postMessage({ type: 'concat', parts, outputName: 'output.mp4', returnMode: 'buffer' }, transferables);
+      }).finally(() => worker.terminate());
+
+      callbacks.onProgress(100, 'Done');
+      callbacks.onDone(finalBlob);
+    } catch (err) {
+      callbacks.onError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   // ── Shared error wrapper ─────────────────────────────────────────────────────

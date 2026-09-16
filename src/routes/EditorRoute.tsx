@@ -13,6 +13,7 @@ import { CurveEditor } from '@/features/curve/CurveEditor';
 import { ExportModal } from '@/features/export/ExportModal';
 import { VideoPlayer } from '@/features/preview/VideoPlayer';
 import { Timeline } from '@/features/timeline/Timeline';
+import { ClipTabs } from '@/features/timeline/ClipTabs';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useEditorStore } from '@/store/editorStore';
 import { trackEvent } from '@/lib/analytics';
@@ -319,6 +320,11 @@ export default function EditorRoute() {
                   <CurveEmptyState />
                 )}
               </section>
+            </ErrorBoundary>
+
+            {/* Clip tabs (multi-clip v1) */}
+            <ErrorBoundary>
+              <ClipTabs />
             </ErrorBoundary>
 
             {/* Timeline */}

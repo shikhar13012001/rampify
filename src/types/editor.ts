@@ -29,6 +29,22 @@ export interface EditorProject {
   segments: Segment[];
 }
 
+/**
+ * One clip within a multi-clip project (editorStore.ts's `clips` array).
+ * `EditorProject` above still represents "the active clip's data" — nearly
+ * every existing component reads `project.file`/`project.segments` and
+ * continues to do so unchanged; the store keeps `project` in sync with
+ * whichever `Clip` is currently active (see editorStore.ts's
+ * `setActiveClip`). This is the same shape `VideoClip` (batch queue) already
+ * used under a different name — generalized here so both features share one
+ * definition instead of two parallel ones.
+ */
+export interface Clip {
+  id: string;
+  file: VideoFile;
+  segments: Segment[];
+}
+
 export type BlurIntensity = 'subtle' | 'balanced' | 'cinematic';
 
 export interface BlurSettings {
@@ -83,12 +99,10 @@ export interface CaptionSettings {
 export type ClipStatus = 'queued' | 'processing' | 'done' | 'error';
 
 /**
- * One clip in a batch queue. Reuses EditorProject's {file, segments} shape
- * (a batch clip *is* a single-file project, just tagged with an id and
- * pipeline status) rather than defining a parallel structure.
+ * One clip in a batch queue. Extends the same `Clip` shape used by the
+ * editor's multi-clip timeline, plus batch-specific pipeline status.
  */
-export interface VideoClip extends EditorProject {
-  id: string;
+export interface VideoClip extends Clip {
   status: ClipStatus;
   progress?: number;
   resultBlob?: Blob;

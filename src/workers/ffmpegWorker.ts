@@ -60,7 +60,25 @@ interface StartMsg {
 }
 
 interface CancelMsg { type: 'cancel' }
-type InboundMsg = StartMsg | CancelMsg;
+
+/**
+ * Stitches N already-encoded MP4 parts (each produced by a prior 'start' job
+ * — same worker or another instance) into one file via ffmpeg's concat
+ * DEMUXER with `-c copy` (stream copy, no re-encode) — verified safe because
+ * every part comes from this same worker's identical encode settings
+ * (libx264/aac, same pixel format), which is exactly the condition the
+ * concat demuxer requires. Used for multi-clip export: each clip already
+ * went through its own full pipeline (simple/blur/OF, independently), and
+ * this just glues the finished files together.
+ */
+interface ConcatMsg {
+  type: 'concat';
+  parts: { name: string; data: Uint8Array }[];
+  outputName: string;
+  returnMode?: 'url' | 'buffer';
+}
+
+type InboundMsg = StartMsg | CancelMsg | ConcatMsg;
 
 // ─── Worker ───────────────────────────────────────────────────────────────────
 
@@ -184,6 +202,75 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
   if (msg.type === 'cancel') {
     if (running) ffmpeg.terminate();
     running = false;
+    return;
+  }
+
+  if (msg.type === 'concat') {
+    if (running) {
+      self.postMessage({ type: 'error', message: 'A job is already running on this worker' });
+      return;
+    }
+    running = true;
+    const writtenFiles: string[] = [];
+    try {
+      try {
+        await loadFFmpeg();
+      } catch (err) {
+        throw new Error(`[loadFFmpeg] ${String(err)}`, { cause: err });
+      }
+
+      // concat demuxer list — each line quoted per ffmpeg's own escaping
+      // rules (a literal `'` inside a filename would need `'\''`; part
+      // filenames are always worker-generated here, never user input, so
+      // this is a defensive check rather than a real expected case).
+      const listLines: string[] = [];
+      for (const part of msg.parts) {
+        await ffmpeg.writeFile(part.name, part.data);
+        writtenFiles.push(part.name);
+        listLines.push(`file '${part.name.replace(/'/g, "'\\''")}'`);
+      }
+      await ffmpeg.writeFile('concat_list.txt', new TextEncoder().encode(listLines.join('\n')));
+      writtenFiles.push('concat_list.txt');
+
+      const exitCode = await ffmpeg.exec([
+        '-f', 'concat', '-safe', '0', '-i', 'concat_list.txt',
+        '-c', 'copy', '-y', msg.outputName,
+      ]);
+      writtenFiles.push(msg.outputName);
+
+      if (exitCode !== 0) {
+        const logSnippet = recentLogs.slice(-15).join('\n');
+        throw new Error(`ffmpeg concat exited with code ${exitCode}.\n\nLast log lines:\n${logSnippet}`);
+      }
+
+      const data = await ffmpeg.readFile(msg.outputName);
+      const arr = (data as Uint8Array).slice();
+
+      if (arr.byteLength < 1024) {
+        throw new Error(`Concatenated output is suspiciously small (${arr.byteLength} bytes)`);
+      }
+
+      if (msg.returnMode === 'buffer') {
+        (self.postMessage as (msg: unknown, transfer: Transferable[]) => void)(
+          { type: 'done', buffer: arr.buffer },
+          [arr.buffer as ArrayBuffer],
+        );
+      } else {
+        const blob = new Blob([arr], { type: 'video/mp4' });
+        self.postMessage({ type: 'done', url: URL.createObjectURL(blob) });
+      }
+    } catch (err) {
+      self.postMessage({ type: 'error', message: String(err) });
+    } finally {
+      for (const name of writtenFiles) {
+        try {
+          await ffmpeg.deleteFile(name);
+        } catch {
+          // ignore — file may not exist if writeFile itself failed partway
+        }
+      }
+      running = false;
+    }
     return;
   }
 

@@ -23,7 +23,7 @@ export class LocalWasmEngine implements ExportEngine {
   }
 
   start(request: ExportRequest, onProgress: (event: ExportProgressEvent) => void): Promise<ExportResult> {
-    const { project, blurSettings, opticalFlowSettings, audioSettings } = request;
+    const { project, blurSettings, opticalFlowSettings, audioSettings, colorSettings, cropSettings, resolution, captionSettings, captionCues } = request;
     const bridge = new FFmpegBridge();
     this.bridge = bridge;
 
@@ -38,7 +38,7 @@ export class LocalWasmEngine implements ExportEngine {
             onProgress: (percent, phase) => onProgress({ phase, percent }),
             onDone: (blob) => resolve({ blob }),
             onError: fail,
-          }),
+          }, colorSettings, cropSettings, resolution, captionSettings, captionCues),
         );
       } else if (blurSettings.enabled) {
         FFmpegBridge.guardExport({ onError: fail }, () =>
@@ -46,7 +46,7 @@ export class LocalWasmEngine implements ExportEngine {
             onProgress: (percent, message) => onProgress({ phase: 'encoding', percent, message }),
             onDone: (blob) => resolve({ blob }),
             onError: fail,
-          }),
+          }, colorSettings, cropSettings, resolution, captionSettings, captionCues),
         );
       } else {
         bridge.startProcessing(project, audioSettings, {
@@ -56,7 +56,7 @@ export class LocalWasmEngine implements ExportEngine {
             resolve({ blob });
           },
           onError: fail,
-        });
+        }, colorSettings, cropSettings, resolution, captionSettings, captionCues);
       }
     });
   }

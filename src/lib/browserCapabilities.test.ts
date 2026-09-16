@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkExportCapabilities } from './browserCapabilities';
+import { checkExportCapabilities, detectInAppBrowser } from './browserCapabilities';
 
 describe('checkExportCapabilities', () => {
   const originalSAB = globalThis.SharedArrayBuffer;
@@ -44,5 +44,40 @@ describe('checkExportCapabilities', () => {
     (globalThis as { window?: unknown }).window = { crossOriginIsolated: true };
     const result = checkExportCapabilities();
     expect(result.supported).toBe(true);
+  });
+});
+
+describe('detectInAppBrowser', () => {
+  const originalNavigator = globalThis.navigator;
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'navigator', { value: originalNavigator, configurable: true });
+  });
+
+  function withUA(ua: string) {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: ua },
+      configurable: true,
+    });
+  }
+
+  it('returns null for a normal desktop Chrome UA', () => {
+    withUA('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36');
+    expect(detectInAppBrowser()).toBeNull();
+  });
+
+  it('detects Instagram', () => {
+    withUA('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Instagram 300.0.0.0.0');
+    expect(detectInAppBrowser()).toBe('Instagram');
+  });
+
+  it('detects Facebook via FBAN', () => {
+    withUA('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 [FBAN/FB4A;FBAV/450.0.0.0]');
+    expect(detectInAppBrowser()).toBe('Facebook');
+  });
+
+  it('detects TikTok', () => {
+    withUA('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 musical_ly_2024');
+    expect(detectInAppBrowser()).toBe('TikTok');
   });
 });

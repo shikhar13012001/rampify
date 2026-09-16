@@ -363,7 +363,7 @@ const FEATURES = [
   {
     color: 'var(--color-clay-lavender)',
     title: 'Beat sync',
-    desc: 'Auto-detect beats with STFT spectral flux analysis, then snap velocity peaks to the music. Your edit hits every drop.',
+    desc: 'Detect beats, then build the whole speed curve in one click — no dragging keyframes by ear. Other editors make you place every point yourself; Rampcut does it for you.',
     icon: 'beat',
   },
   {
@@ -878,27 +878,34 @@ function PricingSection() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Testimonials
+// Trust section — replaces a prior version of this page that showed three
+// invented customer quotes with fabricated names/photos/follower counts on a
+// zero-user, pre-launch product. That's a real trust liability (fake
+// testimonials are easy to notice and expensive to be caught with, and are
+// treated as deceptive endorsement under FTC guidance) — worse than showing
+// nothing. Replaced with claims that are true today and checkable by the
+// visitor themselves, which is a more credible trust signal for a tool whose
+// entire pitch is "nothing leaves your browser."
 // ════════════════════════════════════════════════════════════════════════════
 
-const TESTIMONIALS = [
+const TRUST_POINTS = [
   {
-    quote: "Replaced my Premiere speed-ramp workflow. The curve editor is faster than keyframing and the AI slow-mo is unreal.",
-    name: 'Marcus Chen',
-    role: 'Motion designer, 180k YouTube',
+    title: 'Verify it yourself',
+    desc: "Open your browser's Network tab, then export a clip. You'll see zero video bytes leave your machine — that's not a claim, it's something you can watch happen.",
     color: 'var(--color-clay-pink)',
+    icon: 'lock' as const,
   },
   {
-    quote: "I edit every TikTok in Rampcut now. Beat sync alone saves me 20 minutes per video. The fact that it runs in browser is wild.",
-    name: 'Sofia Ramirez',
-    role: 'Content creator, 2.1M TikTok',
+    title: 'Built solo, in the open',
+    desc: "One developer, no funding round, no growth team. Bugs get fixed fast because there's no process between finding one and shipping the fix.",
     color: 'var(--color-clay-teal)',
+    icon: 'curve' as const,
   },
   {
-    quote: "The motion blur on speed transitions is the best I've seen outside of After Effects. And it exports in seconds, not minutes.",
-    name: 'James Okafor',
-    role: 'Video editor, freelance',
+    title: 'No black box',
+    desc: 'Speed curves, beat detection, and motion blur are plain math — spectral flux analysis, bezier interpolation, WebGL frame blending. Nothing here is a mystery API call.',
     color: 'var(--color-clay-ochre)',
+    icon: 'flow' as const,
   },
 ];
 
@@ -917,10 +924,12 @@ function TestimonialsSection() {
               color: 'var(--color-clay-pink)',
             }}
           >
-            Testimonials
+            Why trust this
           </p>
           <h2 className="clay-display" style={{ margin: 0, fontSize: 'clamp(32px, 4vw, 48px)' }}>
-            Creators are shipping faster
+            No customers to quote yet.
+            <br />
+            Here's what's true instead.
           </h2>
         </div>
 
@@ -931,9 +940,9 @@ function TestimonialsSection() {
             gap: 20,
           }}
         >
-          {TESTIMONIALS.map((t) => (
+          {TRUST_POINTS.map((pt) => (
             <div
-              key={t.name}
+              key={pt.title}
               className="clay-lift"
               style={{
                 borderRadius: 24,
@@ -944,55 +953,39 @@ function TestimonialsSection() {
                 flexDirection: 'column',
               }}
             >
-              {/* Color bar */}
               <div
                 style={{
                   width: 40,
                   height: 4,
                   borderRadius: 2,
-                  background: t.color,
+                  background: pt.color,
                   marginBottom: 20,
                 }}
               />
+              <div style={{ marginBottom: 16 }}>
+                <FeatureIcon name={pt.icon} color="var(--color-clay-ink)" />
+              </div>
+              <h3
+                style={{
+                  margin: '0 0 10px',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: 'var(--color-clay-ink)',
+                }}
+              >
+                {pt.title}
+              </h3>
               <p
                 style={{
-                  margin: '0 0 24px',
+                  margin: 0,
                   fontSize: 14,
                   lineHeight: 1.6,
-                  color: 'var(--color-clay-ink)',
-                  fontWeight: 400,
+                  color: 'var(--color-clay-ink-soft)',
                   flex: 1,
                 }}
               >
-                "{t.quote}"
+                {pt.desc}
               </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: '50%',
-                    background: t.color,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: '#fffaf0',
-                    flexShrink: 0,
-                  }}
-                >
-                  {t.name.split(' ').map((n) => n[0]).join('')}
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-clay-ink)' }}>
-                    {t.name}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--color-clay-ink-muted)' }}>
-                    {t.role}
-                  </div>
-                </div>
-              </div>
             </div>
           ))}
         </div>

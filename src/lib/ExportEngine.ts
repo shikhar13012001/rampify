@@ -4,7 +4,17 @@
  * both through this interface so swapping engines never touches call sites.
  */
 
-import type { AudioSettings, BlurSettings, EditorProject, ExportResolution, OpticalFlowSettings } from '@/types/editor';
+import type {
+  AudioSettings,
+  BlurSettings,
+  CaptionCue,
+  CaptionSettings,
+  ColorSettings,
+  CropSettings,
+  EditorProject,
+  ExportResolution,
+  OpticalFlowSettings,
+} from '@/types/editor';
 
 export interface ExportRequest {
   project: EditorProject;
@@ -12,6 +22,11 @@ export interface ExportRequest {
   blurSettings: BlurSettings;
   opticalFlowSettings: OpticalFlowSettings;
   resolution: ExportResolution;
+  /** Optional — omitted/disabled means no crop or color-grading filter is applied. */
+  cropSettings?: CropSettings;
+  colorSettings?: ColorSettings;
+  captionSettings?: CaptionSettings;
+  captionCues?: CaptionCue[];
 }
 
 export type ExportPhase =

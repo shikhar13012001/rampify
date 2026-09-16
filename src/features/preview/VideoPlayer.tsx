@@ -176,6 +176,28 @@ export function VideoPlayer() {
     [isPro, ofSettings.enabled, project],
   );
 
+  // Crop guide: shows what export will actually keep, mirroring the same
+  // centered crop-to-fill math as videoFilters.ts's buildCropFilter (ffmpeg's
+  // crop filter centers by default: x=(in_w-out_w)/2, y=(in_h-out_h)/2) — so
+  // this overlay is a faithful preview, not a rough approximation. Without
+  // this, enabling crop exported blind: the user had no idea what was about
+  // to be cut off until after downloading the file.
+  const cropSettings = useEditorStore((s) => s.cropSettings);
+  const cropGuide = useMemo(() => {
+    if (!cropSettings.enabled || cropSettings.preset === 'original' || !project) return null;
+    const [arW, arH] = cropSettings.preset.split(':').map(Number);
+    const sourceAR = project.file.width / project.file.height;
+    const targetAR = arW / arH;
+    const widthFrac  = sourceAR > targetAR ? targetAR / sourceAR : 1;
+    const heightFrac = sourceAR > targetAR ? 1 : sourceAR / targetAR;
+    return {
+      leftPct: ((1 - widthFrac) / 2) * 100,
+      topPct: ((1 - heightFrac) / 2) * 100,
+      widthPct: widthFrac * 100,
+      heightPct: heightFrac * 100,
+    };
+  }, [cropSettings.enabled, cropSettings.preset, project]);
+
   if (!project) return null;
 
   const progress = Number.isFinite(duration) && duration > 0 ? playheadTime / duration : 0;
@@ -183,19 +205,48 @@ export function VideoPlayer() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', backgroundColor: '#000' }}>
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <video
-          ref={videoRef}
-          src={project.file.url}
+        {/* Sized to the video's own intrinsic aspect ratio via CSS aspect-ratio,
+            so the crop guide below (an absolutely-positioned sibling) can align
+            to the video's actual rendered box without a JS layout measurement. */}
+        <div
           style={{
+            position: 'relative',
             maxWidth: '100%',
             maxHeight: '100%',
-            display: 'block',
-            // CSS blur simulates the motion blur the user gets on Pro export
-            filter: blurPx > 0.15 ? `blur(${blurPx.toFixed(1)}px)` : undefined,
-            transition: 'filter 0.08s linear',
+            aspectRatio: `${project.file.width} / ${project.file.height}`,
           }}
-          onClick={togglePlay}
-        />
+        >
+          <video
+            ref={videoRef}
+            src={project.file.url}
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'block',
+              // CSS blur simulates the motion blur the user gets on Pro export
+              filter: blurPx > 0.15 ? `blur(${blurPx.toFixed(1)}px)` : undefined,
+              transition: 'filter 0.08s linear',
+            }}
+            onClick={togglePlay}
+          />
+
+          {cropGuide && (
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: `${cropGuide.leftPct}%`,
+                top: `${cropGuide.topPct}%`,
+                width: `${cropGuide.widthPct}%`,
+                height: `${cropGuide.heightPct}%`,
+                boxSizing: 'border-box',
+                border: '2px dashed rgba(255,255,255,0.85)',
+                boxShadow: '0 0 0 2000px rgba(0,0,0,0.45)',
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+        </div>
 
         {/* Play button overlay */}
         {!isPlaying && (

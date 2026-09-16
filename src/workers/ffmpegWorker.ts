@@ -42,6 +42,21 @@ interface StartMsg {
   framerate?: number;
   // 'buffer' returns { type:'done', buffer: ArrayBuffer } via transfer instead of a blob URL.
   returnMode?: 'url' | 'buffer';
+  // Pre-built ffmpeg filter fragments (no leading/trailing comma) — computed
+  // by ffmpegBridge.ts's videoFilters.ts helpers, kept as plain strings here
+  // so this worker stays filter-preset-agnostic. Applied in a fixed order —
+  // color grading, then crop/scale, then subtitle burn-in — across all three
+  // export paths (simple / blur-overlay / OF image2), via
+  // buildPostFilterChain() below.
+  colorFilter?: string;
+  cropFilter?: string;
+  // SRT content (already timed to OUTPUT/remapped seconds by ffmpegBridge.ts)
+  // written to this worker's virtual FS as 'captions.srt' before encoding.
+  // subtitlesFilter is the matching `subtitles=captions.srt:force_style=...`
+  // fragment — kept separate from captionsSrt (the DATA) so this worker
+  // still doesn't need to know anything about caption styling presets.
+  captionsSrt?: string;
+  subtitlesFilter?: string;
 }
 
 interface CancelMsg { type: 'cancel' }
@@ -146,6 +161,23 @@ function buildChipmunkFilters(avgSpeed: number, sampleRateHz: number): string[] 
   return [`asetrate=${Math.round(sampleRateHz * clamped)}`, `aresample=${sampleRateHz}`];
 }
 
+/**
+ * Combines the optional cross-cutting filters (color grading, then crop —
+ * crop must come LAST: it operates on the already-composited/graded frame,
+ * which matters specifically for the blur path where cropping first would
+ * desync the blur-overlay's coordinate space from the cropped base) into one
+ * comma-joined fragment, or null if neither is set. Shared by all three
+ * export paths below so a new cross-cutting filter only needs to be added
+ * once, here — the missing-in-one-path `-shortest` bug (see git history) is
+ * exactly the class of mistake this centralizes against.
+ */
+function buildPostFilterChain(msg: StartMsg): string | null {
+  // Subtitle burn-in is LAST: caption position should be relative to the
+  // final (cropped, graded) frame, not a pre-crop/pre-grade one.
+  const parts = [msg.colorFilter, msg.cropFilter, msg.subtitlesFilter].filter((f): f is string => !!f);
+  return parts.length > 0 ? parts.join(',') : null;
+}
+
 self.onmessage = async (e: MessageEvent<InboundMsg>) => {
   const msg = e.data;
 
@@ -224,6 +256,16 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
         writtenFiles.push(ff.name);
       }
 
+      // Write the caption SRT (already timed to output/remapped seconds by
+      // ffmpegBridge.ts) so the subtitles filter (in postFilterChain) can
+      // read it. libass — the subtitles filter's backing library — reads
+      // this file path relative to the current working directory, which for
+      // ffmpeg.wasm's virtual FS is the root where writeFile places it.
+      if (msg.captionsSrt) {
+        await ffmpeg.writeFile('captions.srt', new TextEncoder().encode(msg.captionsSrt));
+        writtenFiles.push('captions.srt');
+      }
+
       let af: string | null;
       if (Math.abs(msg.avgSpeed - 1) < 0.02) {
         // No meaningful speed change — skip the audio filter (and the probe
@@ -243,6 +285,9 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
 
       recentLogs.length = 0;
 
+      const postFilterChain = buildPostFilterChain(msg);
+      console.debug('[ffmpeg] post filter chain (color/crop):', postFilterChain ?? '(none)');
+
       let args: string[];
 
       if (frameFiles.length > 0) {
@@ -260,6 +305,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
           '-map', '1:a:0?',
         ];
 
+        if (postFilterChain) args.push('-vf', postFilterChain);
         if (af !== null) args.push('-af', af);
 
         args.push(
@@ -300,6 +346,14 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
           );
         });
 
+        // Color/crop apply to the fully-composited frame, not the pre-overlay
+        // base — cropping before the overlay would desync the overlay's
+        // x=0:y=0 coordinate space from the (now smaller) cropped frame.
+        const videoOutLabel = postFilterChain ? 'vfinal' : 'vout';
+        if (postFilterChain) {
+          filterParts.push(`[vout]${postFilterChain}[vfinal]`);
+        }
+
         const filterComplex = filterParts.join(';');
 
         args = ['-i', 'input.mp4'];
@@ -311,7 +365,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
 
         args.push(
           '-filter_complex', filterComplex,
-          '-map', '[vout]',
+          '-map', `[${videoOutLabel}]`,
           '-map', '0:a:0?',
           // Each blur-frame input above is `-loop 1` — an infinitely-looping
           // still image, needed so its overlay can sit through its
@@ -325,10 +379,10 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
           '-shortest',
         );
       } else {
-        // ── Simple path: unchanged from original ─────────────────────────────
+        // ── Simple path ───────────────────────────────────────────────────────
         args = [
           '-i', 'input.mp4',
-          '-vf', msg.setptsFilter,
+          '-vf', postFilterChain ? `${msg.setptsFilter},${postFilterChain}` : msg.setptsFilter,
           '-map', '0:v:0',
           '-map', '0:a:0?',
         ];

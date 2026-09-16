@@ -18,7 +18,7 @@
  * rules, plus the capability limit that no tier can override.
  */
 
-import type { BlurIntensity, BlurSettings, ExportResolution, OpticalFlowSettings } from '@/types/editor';
+import type { BlurIntensity, BlurSettings, CaptionSettings, ExportResolution, OpticalFlowSettings } from '@/types/editor';
 
 export type PlanTier = 'guest' | 'free' | 'pro';
 
@@ -86,6 +86,13 @@ export function canUseOpticalFlow(tier: PlanTier): boolean {
   return tier === 'pro';
 }
 
+/** Auto-captions (Whisper transcription + burned-in subtitles) — Pro only.
+ *  Unlike crop/color grading, this has a real per-export cost (running a
+ *  ~39MB speech model) and a genuine retention feature worth reserving. */
+export function canUseCaptions(tier: PlanTier): boolean {
+  return tier === 'pro';
+}
+
 export function canUseResolution(resolution: ExportResolution, tier: PlanTier): boolean {
   if (tier === 'pro') return true;
   if (tier === 'free') return resolution === FREE_EXPORT_RESOLUTION;
@@ -96,6 +103,7 @@ export interface ExportEntitlementContext {
   blurSettings: BlurSettings;
   opticalFlowSettings: OpticalFlowSettings;
   resolution: ExportResolution;
+  captionSettings?: CaptionSettings;
 }
 
 /**
@@ -115,6 +123,11 @@ export function exportBlockedReason(tier: PlanTier, ctx: ExportEntitlementContex
     return tier === 'guest'
       ? 'AI frame interpolation requires an account and Pro.'
       : 'AI frame interpolation requires Pro.';
+  }
+  if (ctx.captionSettings?.enabled && !canUseCaptions(tier)) {
+    return tier === 'guest'
+      ? 'Auto-captions require an account and Pro.'
+      : 'Auto-captions require Pro.';
   }
   if (!canUseResolution(ctx.resolution, tier)) {
     if (tier === 'guest') return `Guest exports are limited to ${GUEST_EXPERIMENT.resolution}. Sign in for more.`;

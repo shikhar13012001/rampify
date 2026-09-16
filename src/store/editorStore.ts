@@ -3,6 +3,12 @@ import type {
   AudioSettings,
   BlurIntensity,
   BlurSettings,
+  CaptionCue,
+  CaptionSettings,
+  ColorPreset,
+  ColorSettings,
+  CropPreset,
+  CropSettings,
   EditorProject,
   ExportResolution,
   OpticalFlowQuality,
@@ -12,7 +18,10 @@ import type {
 } from '@/types/editor';
 import { interpolateSpeed } from '@/lib/curveMath';
 
-export type { AudioSettings, BlurIntensity, BlurSettings, ExportResolution, OpticalFlowQuality, OpticalFlowSettings };
+export type {
+  AudioSettings, BlurIntensity, BlurSettings, CaptionCue, CaptionSettings, ColorPreset, ColorSettings,
+  CropPreset, CropSettings, ExportResolution, OpticalFlowQuality, OpticalFlowSettings,
+};
 
 function hasValidProjectFile(project: EditorProject | null): project is EditorProject {
   if (!project) return false;
@@ -60,10 +69,16 @@ interface EditorState {
   isPro: boolean;
   blurSettings: BlurSettings;
   opticalFlowSettings: OpticalFlowSettings;
+  cropSettings: CropSettings;
+  colorSettings: ColorSettings;
   audioSettings: AudioSettings;
   exportResolution: ExportResolution;
   // Beat-sync: absolute seconds in the source video
   beatMarkers: number[];
+  // Auto-captions: absolute seconds in the source video (same convention as
+  // beatMarkers), remapped through the segment's curve at export time.
+  captionCues: CaptionCue[];
+  captionSettings: CaptionSettings;
   // Auth
   user: AuthUser | null;
   isAuthLoading: boolean;
@@ -97,6 +112,12 @@ interface EditorActions {
   setBlurIntensity: (intensity: BlurIntensity) => void;
   setOpticalFlowEnabled: (enabled: boolean) => void;
   setOpticalFlowQuality: (quality: OpticalFlowQuality) => void;
+  setCropEnabled: (enabled: boolean) => void;
+  setCropPreset: (preset: CropPreset) => void;
+  setColorEnabled: (enabled: boolean) => void;
+  setColorPreset: (preset: ColorPreset) => void;
+  setCaptionCues: (cues: CaptionCue[]) => void;
+  setCaptionEnabled: (enabled: boolean) => void;
   setPreservePitch: (preservePitch: boolean) => void;
   setExportResolution: (resolution: ExportResolution) => void;
   setBeatMarkers: (markers: number[]) => void;
@@ -126,6 +147,10 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   isPro: false,
   blurSettings: { enabled: false, intensity: 'balanced' },
   opticalFlowSettings: { enabled: false, quality: 'quality' },
+  cropSettings: { enabled: false, preset: 'original' },
+  colorSettings: { enabled: false, preset: 'none' },
+  captionCues: [],
+  captionSettings: { enabled: false },
   audioSettings: { preservePitch: true },
   exportResolution: '1080p',
   beatMarkers: [],
@@ -394,6 +419,12 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
     set((s) => ({ opticalFlowSettings: { ...s.opticalFlowSettings, enabled } })),
   setOpticalFlowQuality: (quality) =>
     set((s) => ({ opticalFlowSettings: { ...s.opticalFlowSettings, quality } })),
+  setCropEnabled: (enabled) => set((s) => ({ cropSettings: { ...s.cropSettings, enabled } })),
+  setCropPreset: (preset) => set((s) => ({ cropSettings: { ...s.cropSettings, preset } })),
+  setColorEnabled: (enabled) => set((s) => ({ colorSettings: { ...s.colorSettings, enabled } })),
+  setColorPreset: (preset) => set((s) => ({ colorSettings: { ...s.colorSettings, preset } })),
+  setCaptionCues: (captionCues) => set({ captionCues }),
+  setCaptionEnabled: (enabled) => set((s) => ({ captionSettings: { ...s.captionSettings, enabled } })),
   setPreservePitch: (preservePitch) =>
     set((s) => ({ audioSettings: { ...s.audioSettings, preservePitch } })),
   setExportResolution: (exportResolution) => set({ exportResolution }),
@@ -412,6 +443,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
           // visually after sign-out.
           blurSettings: { ...state.blurSettings, enabled: false },
           opticalFlowSettings: { ...state.opticalFlowSettings, enabled: false },
+          captionSettings: { ...state.captionSettings, enabled: false },
         };
       }
       return { user };
@@ -424,6 +456,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
           isPro,
           blurSettings: { ...state.blurSettings, enabled: false },
           opticalFlowSettings: { ...state.opticalFlowSettings, enabled: false },
+          captionSettings: { ...state.captionSettings, enabled: false },
         };
       }
       return { isPro };

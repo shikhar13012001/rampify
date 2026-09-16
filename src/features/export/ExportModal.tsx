@@ -83,6 +83,10 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const setExporting = useEditorStore((state) => state.setExporting);
   const blurSettings = useEditorStore((state) => state.blurSettings);
   const ofSettings   = useEditorStore((state) => state.opticalFlowSettings);
+  const cropSettings = useEditorStore((state) => state.cropSettings);
+  const colorSettings = useEditorStore((state) => state.colorSettings);
+  const captionSettings = useEditorStore((state) => state.captionSettings);
+  const captionCues = useEditorStore((state) => state.captionCues);
   const audioSettings = useEditorStore((state) => state.audioSettings);
   const exportResolution = useEditorStore((state) => state.exportResolution);
   const setExportResolution = useEditorStore((state) => state.setExportResolution);
@@ -157,8 +161,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
   // only when Start export is clicked, so a blocked configuration is visible
   // before the user commits to waiting on anything.
   const entitlementCtx = useMemo(
-    () => ({ blurSettings, opticalFlowSettings: ofSettings, resolution: exportResolution }),
-    [blurSettings, ofSettings, exportResolution],
+    () => ({ blurSettings, opticalFlowSettings: ofSettings, resolution: exportResolution, captionSettings }),
+    [blurSettings, ofSettings, exportResolution, captionSettings],
   );
   const blockedReason = useMemo(() => exportBlockedReason(tier, entitlementCtx), [tier, entitlementCtx]);
   // Capability limit (not a plan gate) — no tier can render this combination
@@ -274,7 +278,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
             },
             onDone: handleDone,
             onError: handleError,
-          }),
+          }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues),
         );
       } else if (blurSettings.enabled) {
         // ── Blur export path ────────────────────────────────────────────────
@@ -287,7 +291,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
             },
             onDone: handleDone,
             onError: handleError,
-          }),
+          }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues),
         );
       } else {
         // ── Standard export path ────────────────────────────────────────────
@@ -306,7 +310,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
             trackRenderCompleted(url, exportStartTime);
           },
           onError: handleError,
-        });
+        }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues);
       }
     } finally {
       // Safe to release re-entrancy right away even though the export itself
@@ -317,7 +321,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       // an export is genuinely in flight.
       startInFlightRef.current = false;
     }
-  }, [project, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, audioSettings, useOFPipeline, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
+  }, [project, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, cropSettings, colorSettings, captionSettings, captionCues, exportResolution, audioSettings, useOFPipeline, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
 
   const cancel = useCallback(() => {
     // Only an actually-in-flight export (bridgeRef set by startExport, not

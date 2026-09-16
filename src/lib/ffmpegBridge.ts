@@ -1,14 +1,105 @@
+import { stringifySync } from 'subtitle';
 import { curveToFFmpegFilter, getSpeedAtTime, interpolateSpeed, remapTime } from './curveMath';
 import { extractFrames } from './frameExtractor';
 import { getBlurIntensity, getTransitionFrameCount } from './blurMath';
 import { processSlowSegment } from './slowMotionPipeline';
-import type { AudioSettings, BlurSettings, EditorProject, OpticalFlowQuality, OpticalFlowSettings, Segment } from '@/types/editor';
+import { buildColorFilter, buildCropFilter, buildSubtitlesFilter } from './videoFilters';
+import type {
+  AudioSettings,
+  BlurSettings,
+  CaptionCue,
+  CaptionSettings,
+  ColorSettings,
+  CropSettings,
+  EditorProject,
+  ExportResolution,
+  OpticalFlowQuality,
+  OpticalFlowSettings,
+  Segment,
+} from '@/types/editor';
 import type { BlurFrame, FrameFile } from '@/workers/ffmpegWorker';
 import FfmpegWorkerCtor from '../workers/ffmpegWorker.ts?worker';
 import MotionBlurWorkerCtor from '../workers/motionBlurWorker.ts?worker';
 
 export type { AudioSettings, BlurSettings, OpticalFlowQuality, OpticalFlowSettings };
 export { getSpeedAtTime, interpolateSpeed };
+
+/**
+ * Shared by all three export methods below: computes the color/crop filter
+ * fragments (or undefined) from the optional cross-cutting settings every
+ * export path now accepts. Centralized so a new cross-cutting setting only
+ * needs a call site added here, not duplicated three times.
+ */
+function resolvePostFilters(
+  colorSettings?: ColorSettings,
+  cropSettings?: CropSettings,
+  resolution: ExportResolution = '1080p',
+): { colorFilter?: string; cropFilter?: string } {
+  const colorFilter = colorSettings?.enabled ? buildColorFilter(colorSettings.preset) ?? undefined : undefined;
+  const cropFilter  = cropSettings?.enabled ? buildCropFilter(cropSettings.preset, resolution) ?? undefined : undefined;
+  return { colorFilter, cropFilter };
+}
+
+/**
+ * True when a segment has at least one speed-transition steeper than the
+ * same threshold motion blur uses (SPEED_DELTA_THRESHOLD, defined below).
+ * Reused here as the "strong ramp" signal for captions: this app's audio is
+ * time-stretched by a single AVERAGE speed per segment (buildAtempoFilters),
+ * while video follows the variable curve — on a strongly-ramped segment, a
+ * caption timed via the same remapTime() used for video will be accurate to
+ * the VIDEO but visibly drift from the (uniformly stretched) speech audio.
+ * Exported so CaptionsPanel.tsx can warn the user before export, not just
+ * silently degrade.
+ */
+export function hasStrongSpeedRamp(segment: Segment): boolean {
+  return findTransitionPoints([segment], SPEED_DELTA_THRESHOLD).length > 0;
+}
+
+/**
+ * Builds a burn-in-ready SRT string from caption cues (absolute seconds in
+ * the INPUT/source video, same convention as beatMarkers), remapping each
+ * cue's start/end through the segment's speed curve so caption timing
+ * matches the OUTPUT (speed-ramped) video, exactly like findTransitionPoints
+ * does for blur. Returns null when there's nothing to burn in.
+ *
+ * Cues outside [0, duration] (stale cues from a previously-loaded, longer
+ * clip) are dropped rather than clamped — a clamped cue would collapse to a
+ * zero-or-negative-duration subtitle at the boundary, which some libass
+ * builds render as a flash rather than skipping cleanly.
+ */
+export function buildCaptionSrt(cues: CaptionCue[], segment: Segment, duration: number): string | null {
+  if (cues.length === 0 || duration <= 0) return null;
+
+  const nodeList = cues
+    .filter((c) => c.start >= 0 && c.end <= duration && c.end > c.start)
+    .map((c) => ({
+      type: 'cue' as const,
+      data: {
+        start: Math.round(remapTime(segment.curve, c.start, duration) * 1000),
+        end: Math.round(remapTime(segment.curve, c.end, duration) * 1000),
+        text: c.text,
+      },
+    }))
+    .filter((n) => n.data.end > n.data.start);
+
+  if (nodeList.length === 0) return null;
+
+  return stringifySync(nodeList, { format: 'SRT' });
+}
+
+/** Shared by all three export methods: resolves caption settings into a
+ *  ready-to-send SRT string + the matching subtitles filter fragment. */
+function resolveCaptions(
+  captionSettings: CaptionSettings | undefined,
+  captionCues: CaptionCue[] | undefined,
+  segment: Segment | undefined,
+  duration: number,
+): { captionsSrt?: string; subtitlesFilter?: string } {
+  if (!captionSettings?.enabled || !segment || !captionCues || captionCues.length === 0) return {};
+  const srt = buildCaptionSrt(captionCues, segment, duration);
+  if (!srt) return {};
+  return { captionsSrt: srt, subtitlesFilter: buildSubtitlesFilter() };
+}
 
 // ─── Optical flow types ───────────────────────────────────────────────────────
 
@@ -250,7 +341,16 @@ export class FFmpegBridge {
 
   // ── Standard export (no blur) ───────────────────────────────────────────────
 
-  startProcessing(project: EditorProject, audioSettings: AudioSettings, callbacks: ExportCallbacks): void {
+  startProcessing(
+    project: EditorProject,
+    audioSettings: AudioSettings,
+    callbacks: ExportCallbacks,
+    colorSettings?: ColorSettings,
+    cropSettings?: CropSettings,
+    resolution?: ExportResolution,
+    captionSettings?: CaptionSettings,
+    captionCues?: CaptionCue[],
+  ): void {
     this.callbacks = callbacks;
 
     const { file, segments } = project;
@@ -259,13 +359,16 @@ export class FFmpegBridge {
     // at least documents it inline); ExportModal.tsx now warns the user
     // upfront when segments.length > 1 rather than leaving this silent.
     const segment = segments[0];
+    const segmentDuration = segment ? segment.endTime - segment.startTime : 0;
     const setptsFilter = segment
-      ? curveToFFmpegFilter(segment.curve, segment.endTime - segment.startTime)
+      ? curveToFFmpegFilter(segment.curve, segmentDuration)
       : 'setpts=PTS-STARTPTS';
 
     const avgSpeed = segment ? avgSegmentSpeed(segment) : 1;
 
     const atempoFilters = buildAtempoFilters(avgSpeed);
+    const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution);
+    const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, segment, segmentDuration);
 
     this.worker.onmessage = (event) => this.handleMessage(event.data);
     this.worker.onerror = (event) => {
@@ -281,6 +384,10 @@ export class FFmpegBridge {
       avgSpeed,
       preservePitch: audioSettings.preservePitch,
       outputName: 'output.mp4',
+      colorFilter,
+      cropFilter,
+      captionsSrt,
+      subtitlesFilter,
     });
   }
 
@@ -327,6 +434,11 @@ export class FFmpegBridge {
     ofSettings: OpticalFlowSettings,
     audioSettings: AudioSettings,
     callbacks: OFExportCallbacks,
+    colorSettings?: ColorSettings,
+    cropSettings?: CropSettings,
+    resolution?: ExportResolution,
+    captionSettings?: CaptionSettings,
+    captionCues?: CaptionCue[],
   ): Promise<void> {
     const { file, segments } = project;
 
@@ -392,6 +504,8 @@ export class FFmpegBridge {
 
       // Slow the audio to match the stretched video duration.
       const atempoFilters = buildAtempoFilters(segAvgSpeed);
+      const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution);
+      const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, seg, seg.endTime - seg.startTime);
 
       this.ofFfmpegWorker = createWorker();
       const worker = this.ofFfmpegWorker;
@@ -425,6 +539,10 @@ export class FFmpegBridge {
             frameFiles,
             framerate,
             returnMode: 'buffer',
+            colorFilter,
+            cropFilter,
+            captionsSrt,
+            subtitlesFilter,
           },
           transferables,
         );
@@ -455,12 +573,18 @@ export class FFmpegBridge {
     blurSettings: BlurSettings,
     audioSettings: AudioSettings,
     callbacks: BlurExportCallbacks,
+    colorSettings?: ColorSettings,
+    cropSettings?: CropSettings,
+    resolution?: ExportResolution,
+    captionSettings?: CaptionSettings,
+    captionCues?: CaptionCue[],
   ): Promise<void> {
     const { file, segments } = project;
     const segment = segments[0]; // see startProcessing's note — same limitation here
 
+    const segmentDuration = segment ? segment.endTime - segment.startTime : 0;
     const setptsFilter = segment
-      ? curveToFFmpegFilter(segment.curve, segment.endTime - segment.startTime)
+      ? curveToFFmpegFilter(segment.curve, segmentDuration)
       : 'setpts=PTS-STARTPTS';
     const avgSpeed = segment ? avgSegmentSpeed(segment) : 1;
     const atempoFilters = buildAtempoFilters(avgSpeed);
@@ -548,6 +672,9 @@ export class FFmpegBridge {
 
     // ── Phase 2: ffmpeg encode ───────────────────────────────────────────────
 
+    const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution);
+    const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, segment, segmentDuration);
+
     this.blurExportWorker = createWorker();
     const worker = this.blurExportWorker;
 
@@ -590,6 +717,10 @@ export class FFmpegBridge {
           outputName: 'output.mp4',
           blurFrames,
           returnMode: 'buffer',
+          colorFilter,
+          cropFilter,
+          captionsSrt,
+          subtitlesFilter,
         },
         transferables,
       );

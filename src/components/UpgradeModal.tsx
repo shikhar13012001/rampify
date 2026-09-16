@@ -20,6 +20,7 @@ const FEATURES = [
   { icon: '✦', label: 'AI frame interpolation', desc: 'Smooth slow motion at any frame rate' },
   { icon: '♪', label: 'Beat sync', desc: 'Auto velocity edits locked to the music' },
   { icon: '⬛', label: '4K export', desc: 'Full resolution output, no watermark' },
+  { icon: '✎', label: 'Auto-captions', desc: 'Transcribe and burn in captions — no upload, ever' },
   { icon: '∞', label: 'Unlimited exports', desc: 'No monthly cap, ever' },
 ];
 

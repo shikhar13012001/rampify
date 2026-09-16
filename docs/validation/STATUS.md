@@ -1786,3 +1786,238 @@ be added as a follow-up note.
 prior entries. Given every single Pro customer who ever enables Frame
 interpolation hits this immediately, this is the highest-priority thing to
 ship of everything in this file.
+
+## Two more real production bugs found and fixed: infinite motion-blur export hang + inverted blur frames (2026-09-16)
+
+**Bug 1 — motion-blur export hangs forever on "Encoding…", never completes.**
+Root cause: `ffmpegWorker.ts`'s blur `filter_complex` path feeds each blur
+overlay as a `-loop 1` (infinitely-looping) still image, needed so its
+`overlay=...:enable='between(t,...)'` window can sit through its active
+range. `overlay`'s own `shortest` option defaults to `0` — it stops only
+when the LONGEST input ends, and a looped image never ends on its own. The
+optical-flow path already had `-shortest` for the equivalent reason; the
+blur path was simply missing it. **Fix**: added `-shortest` to the blur
+path's args, bounding output by the finite audio track (same fix already
+present in the OF path).
+
+**Bug 2 — motion blur renders upside-down at transition points, with no
+visible blur trail.** Root cause: `motionBlurWorker.ts` uploads captured
+frames to WebGL textures via `texImage2D` with no `UNPACK_FLIP_Y_WEBGL`
+correction, and its vertex shader does no compensating Y-flip either —
+the classic "WebGL texture appears vertically flipped" mistake (image data's
+row 0 is conventionally the top of the image; WebGL's texture v=0 is
+conventionally the bottom, so uploading rows as-is without a flip inverts
+the sampled image). Since the flipped result is a single wrong-orientation
+static frame rather than a proper directional blend, it reads as "no motion
+blur, just an inverted frame" — matching exactly what was reported. **Fix**:
+`gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)` once at context setup.
+
+Both verified by direct code-path reasoning (the classic, well-documented
+failure mode for each), not yet re-tested against a live browser export in
+this sandboxed environment — flagged for the user to confirm on next deploy.
+
+## Bounce-rate diagnosis + phased feature roadmap, then Phases 1–4 implemented and verified (2026-09-16)
+
+User reported a ~90% bounce rate in the US traffic segment and asked for
+(1) trusted-library recommendations to replace hand-rolled pipeline code,
+(2) competitive differentiator features, and (3) an actual phased
+implementation plan. Two research passes (a codebase Explore pass + a real
+web-research pass on named competitors — CapCut, VN, InShot, Kapwing,
+Veed.io, Descript/Clipchamp/Adobe Express) fed a 5-phase plan, approved by
+the user, then largely implemented and verified in the same session. Full
+plan: `C:\Users\ishgu\.claude\plans\effervescent-floating-puppy.md` (local
+to the operator's machine, not part of this repo).
+
+**Key research finding**: the bounce-rate problem is very likely NOT a
+missing-feature problem. This app hard-requires WebGL2 + SharedArrayBuffer +
+`crossOriginIsolated`, but its actual audience (TikTok/Reels/Shorts
+creators) overwhelmingly arrives via an in-app webview (Instagram/TikTok/
+Facebook), where SharedArrayBuffer is confirmed unreliable — a silent,
+invisible failure with zero error shown, plausibly the single largest
+contributor to a 90% number. Also confirmed: none of the 6 researched
+competitors auto-generate a speed curve from detected beats (all require
+manual keyframe placement) — `BeatSyncPanel.tsx`'s "Apply to clip" already
+does exactly this in one click, re-verified end-to-end this session
+(`mapBeatsToKeypoints()` → `updateSegmentCurve()`) — a genuine, already-built
+differentiator that mostly needed better landing-page visibility, not new
+engineering.
+
+### Phase 1 — bounce-rate fixes (shipped)
+
+- **In-app-browser detection + escape hatch** (new): `browserCapabilities.ts`
+  gained `detectInAppBrowser()` (UA-sniffs Instagram/Facebook/TikTok/
+  Snapchat/LINE — standard, best-effort practice, not a security check).
+  New `UnsupportedEnvironmentGate.tsx`, mounted at the App root: a hard
+  full-screen block with "Open in Chrome/Safari" + copy-link when
+  `checkExportCapabilities()` genuinely fails; a soft dismissible banner
+  when only an in-app browser is detected but capabilities actually pass
+  (some webviews do support SAB — no need to scare those users). 9 new
+  tests in `browserCapabilities.test.ts`.
+- **Fixed a real, live production bug found while doing this**: the
+  homepage's "Try a demo clip" sample (`public/demo/sample-clip.mp4`) still
+  said **"RAMPIFY SAMPLE"** — stale pre-rebrand branding baked into the
+  actual video frames, even though `scripts/generate-demo-clip.sh` (the
+  generator) already said "RAMPCUT SAMPLE". The committed binary had never
+  been regenerated after the rebrand. Regenerated from the (already-correct)
+  script.
+- **Real before/after demo, not a placeholder**: `BeforeAfterDemo.tsx` had
+  been deliberately left `available: false` in an earlier sprint (no real
+  export asset existed, and fabricating one was explicitly out of bounds).
+  This session produced a REAL one: computed the exact `curveToFFmpegFilter`
+  + `buildAtempoFilters` output for the real "Hero Moment" preset
+  (`src/content/curves.mjs`) against the real (regenerated, fully synthetic
+  — no rights issue) demo clip, via a scratch Node script copying the exact
+  pure-math functions verbatim, then ran it through a real system `ffmpeg`
+  CLI (this environment has no real browser to drive the actual
+  ffmpeg.wasm path) using the identical filter chain and libx264/aac encode
+  settings `ffmpegWorker.ts`'s simple path uses. Verified: correct 8.02s
+  output duration (matches `remapTime` prediction exactly), clean decode,
+  visually correct content (screenshotted). Wired into
+  `BEFORE_AFTER_ASSET` with `available: true`.
+- **Removed fabricated testimonials** (a previously-known, previously
+  UN-fixed issue — tracked since finding H6a in an earlier sprint, left
+  intentionally untouched pending a product decision). Three invented
+  named quotes with fake follower counts ("Marcus Chen, 180k YouTube" etc.)
+  on a zero-user pre-launch product is a real trust liability (FTC
+  endorsement guidance treats this as deceptive) and directly undermines
+  the "visible proof" goal this whole phase is chasing. Replaced with
+  three honest, verifiable trust points ("verify it yourself via the
+  Network tab," "built solo, in the open," "no black box"). Landing.tsx's
+  beat-sync feature-card copy also strengthened to state the verified
+  differentiator explicitly.
+
+### Phase 2 — shared ffmpeg filter-chain refactor (shipped)
+
+`ffmpegWorker.ts` built its `-vf`/`-filter_complex` string three separate
+times (simple / blur-overlay / OF image2 paths) — exactly the kind of
+duplication that produced the missing-`-shortest` bug above. Added one
+shared `buildPostFilterChain()` applying new cross-cutting filters in a
+fixed, correctness-driven order (color grading → crop/scale → subtitle
+burn-in) across all three paths, and widened `FFmpegBridge`'s three public
+methods + `ExportEngine`/`LocalWasmEngine`/`batchStore`'s
+`BatchExportSettings` to accept the new optional settings so batch export
+can't silently drop them.
+
+### Phase 3 — shipped editing features
+
+- **3a/3c — crop/aspect-ratio presets (9:16, 1:1, 4:5, 16:9) and color
+  presets (warm/cool/vintage/punchy/bw)**: zero new dependencies — pure
+  `crop`/`scale`/`curves`/`eq` ffmpeg filters, all confirmed already
+  compiled into this app's `@ffmpeg/core` build. New `videoFilters.ts`
+  (unit-tested) + every filter string verified against a REAL `ffmpeg` CLI
+  run against the real demo clip (not just eyeballed) — including the
+  combined setpts+color+crop chain together, screenshotted for visual
+  confirmation. New `CropControl`/`ColorControl` in `Sidebar.tsx`,
+  deliberately **ungated for every tier** (crop/color cost no extra encode
+  time, and gating them would cost activation right when Phase 1 is trying
+  to fix exactly that). Added a live crop-guide overlay to
+  `VideoPlayer.tsx` (dashed border showing what export will keep) so this
+  doesn't export blind.
+- **3b — auto-captions (Whisper transcription + burned-in subtitles),
+  Pro-gated**: new `@huggingface/transformers` + `subtitle` npm deps.
+  **Empirically verified, not assumed**: `npm ls onnxruntime-web` confirms
+  transformers.js pins its own onnxruntime-web copy
+  (`1.26.0-dev.20260416-b7804b056c`) that does NOT dedupe with the app's
+  existing RIFE dependency (`1.26.0` release) — two separate ORT WASM
+  runtimes now ship (confirmed via a real production build:
+  `ort-wasm-simd-threaded.asyncify-*.wasm` at 23.5MB alongside RIFE's
+  existing 26.2MB one), each lazy-loaded only when its specific feature is
+  actually used (same architecture as the existing RIFE worker), so the
+  real cost is only paid by a user who uses BOTH features in one session.
+  Forcing a single ORT version via `package.json overrides` was considered
+  and rejected — transformers.js's compiled graphs are tested against its
+  own shipped ORT version, and forcing a different one risks silently
+  breaking ops rather than a visible failure. Model size **measured
+  directly against huggingface.co's CDN** (not assumed): `whisper-tiny.en`
+  q8-quantized is **~39MB** (encoder 9.7MB + decoder 29.3MB), documented
+  everywhere instead of a guess. New `captionWorker.ts` (mirrors
+  `opticalFlowWorker.ts`'s lifecycle), new `audioDecode.ts` (extracted
+  from, and now shared with, `BeatSyncPanel.tsx` — a real dedup, not just
+  new code) with a `resampleMono()` using `OfflineAudioContext` to hit
+  Whisper's required 16kHz. New `CaptionsPanel.tsx` mirrors
+  `BeatSyncPanel.tsx`'s pattern. SRT generation (`buildCaptionSrt` in
+  `ffmpegBridge.ts`, unit-tested) remaps cue timestamps through the
+  segment's curve via the existing `remapTime()`, and a real,
+  **non-theoretical sync-accuracy risk is surfaced to the user, not just
+  silently accepted**: this app's audio is time-stretched by one AVERAGE
+  speed per segment while video follows the variable curve — on a strongly
+  ramped segment, captions timed to match the video will visibly drift
+  from the (uniformly stretched) audio. `hasStrongSpeedRamp()` (reusing the
+  same transition-detection threshold as motion blur) drives a visible
+  warning in `CaptionsPanel.tsx` rather than silently shipping
+  visibly-wrong timing on the app's signature use case. The `subtitles`
+  burn-in filter + generated SRT were verified against a real `ffmpeg` CLI
+  run (screenshotted: "Hello world" rendered correctly, readable, styled).
+  A full production build was run specifically to confirm the new
+  dependency bundles correctly for the browser (it does — no accidental
+  pull-in of the Node-only `onnxruntime-node` backend into the client
+  bundle).
+
+### Phase 4 — evaluation spikes (benchmarked, no shipped feature — as designed)
+
+- **(a) `minterpolate` vs. RIFE for a faster CPU-only Draft-quality
+  alternative — NOT recommended.** Real measurement: native `ffmpeg
+  -vf minterpolate=mi_mode=mci:mc_mode=aobmc:vsbmc=1` for a 4x frame-rate
+  expansion (30→120fps) on the 6s demo clip took ~23s single-threaded
+  (comparable to the WASM build's forced single-thread constraint). RIFE's
+  own existing CPU-fallback estimate for the equivalent job (depth=2,
+  `estimateOFSeconds`) is ~43s — so minterpolate is *plausibly* faster on
+  raw CPU, BUT this was measured with NATIVE ffmpeg, not the actual
+  ffmpeg.wasm build; WASM execution overhead would likely erode or reverse
+  that gap, and — the more important point — `minterpolate` is a
+  software-only filter with categorically no GPU acceleration path, while
+  RIFE gets dramatically faster with WebGL (this app's actual common case
+  on a real GPU). The test clip (a continuously zooming fractal) is also a
+  favorable, low-occlusion case for classical motion compensation, likely
+  understating minterpolate's known real-world artifact risk on complex
+  motion. **Conclusion: do not replace RIFE.**
+- **(b) WebCodecs `VideoDecoder` as a `frameExtractor.ts` replacement —
+  plausible, not verified this session.** Could not be tested: WebCodecs
+  is browser-only with no Node equivalent, and this environment has no
+  real browser to drive. Recommendation stands as written in the plan
+  (feature-detected, with the existing seek-based path kept as permanent
+  fallback; needs pairing with a demuxer like `mp4box.js` since
+  `VideoDecoder` alone doesn't parse containers) but is explicitly
+  unverified — flagged rather than claimed.
+- **(c) Essentia.js vs. the custom STFT beat detector — not recommended as
+  a replacement.** Real measured npm package size: `essentia.js` is
+  ~10.1MB unpacked (about half of RIFE's model, still a substantial WASM
+  addition) to upgrade already-working beat detection (this session's
+  earlier synthetic click-track test already confirmed the existing
+  detector hits the exact ground-truth BPM). The benefit would be narrow
+  (non-4/4 time-signature accuracy, `CLAUDE.md`'s documented limitation
+  #2). Lighter pure-JS alternatives exist and cost nothing in bundle size:
+  `realtime-bpm-analyzer` (~156KB, Web Audio API based) and `music-tempo`.
+  If non-4/4 accuracy is ever prioritized, try one of these first.
+
+### Phase 5 — multi-clip/multi-segment timeline: NOT attempted this session
+
+This is the one phase deliberately left undone, and it's worth being
+explicit about why rather than either skipping silently or shipping
+something unverified. The plan's own recommended migration path
+("`EditorProject.clips: Clip[]` replacing today's flat `{file, segments}`,"
+with every mutation action re-resolved via a new `activeClipId`) is NOT the
+isolated, low-risk change its own "zero call-site changes elsewhere"
+framing suggested once you look past the store's internal actions:
+`project.file`/`project.segments` are read directly by a large number of
+components across the app (`Timeline.tsx`, `useTimeline.ts`,
+`CurveEditor.tsx`, `useCurveEditor.ts`, `VideoPlayer.tsx`, `DropZone.tsx`,
+`ffmpegBridge.ts`, `exportLimits.ts`, curve-link sharing, session
+persistence, `ExportModal.tsx`, `Sidebar.tsx`, and more) — a real,
+sweeping breaking change to the app's core data model, not a small
+additive feature like crop/color/captions above (each of which defaults to
+disabled and degrades gracefully if wrong). This environment has no real
+browser to click through the live editor and confirm nothing broke.
+Shipping an unverified rewrite of the core data model at this blast radius
+is a different risk category than everything else in this entry, and was
+judged not worth taking without the ability to actually test it. Left
+entirely undone (no partial/half-migrated state either) rather than risk a
+silent regression — this needs its own session with real browser
+verification available.
+
+**Deployment status**: none of the above (this entry or the two bugs above
+it) is deployed — same "local working tree only" status as every other
+entry in this file. Full verification run each phase: `tsc -b --noEmit`,
+the full Vitest suite (322 tests, up from 308 at the start of this entry),
+and a full production `vite build` (confirms bundling, not just
+type-checking) — all clean as of this entry.

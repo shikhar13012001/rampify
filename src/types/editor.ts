@@ -52,6 +52,34 @@ export interface AudioSettings {
 
 export type ExportResolution = '1080p' | '4k';
 
+/** 'original' applies no crop filter at all — output keeps the source AR. */
+export type CropPreset = 'original' | '16:9' | '9:16' | '1:1' | '4:5';
+
+export interface CropSettings {
+  enabled: boolean;
+  preset: CropPreset;
+}
+
+export type ColorPreset = 'none' | 'warm' | 'cool' | 'vintage' | 'punchy' | 'bw';
+
+export interface ColorSettings {
+  enabled: boolean;
+  preset: ColorPreset;
+}
+
+/** start/end are in SECONDS, in the INPUT (source) video's timeline — same
+ *  convention as beatMarkers — and are remapped through the segment's curve
+ *  (curveMath.ts's remapTime) to output time right before export. */
+export interface CaptionCue {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface CaptionSettings {
+  enabled: boolean;
+}
+
 export type ClipStatus = 'queued' | 'processing' | 'done' | 'error';
 
 /**

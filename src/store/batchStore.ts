@@ -13,6 +13,10 @@ import type { ExportRequest } from '@/lib/ExportEngine';
 import type {
   AudioSettings,
   BlurSettings,
+  CaptionCue,
+  CaptionSettings,
+  ColorSettings,
+  CropSettings,
   ExportResolution,
   OpticalFlowSettings,
   Segment,
@@ -26,6 +30,10 @@ export interface BatchExportSettings {
   blurSettings: BlurSettings;
   opticalFlowSettings: OpticalFlowSettings;
   resolution: ExportResolution;
+  cropSettings?: CropSettings;
+  colorSettings?: ColorSettings;
+  captionSettings?: CaptionSettings;
+  captionCues?: CaptionCue[];
 }
 
 interface BatchState {

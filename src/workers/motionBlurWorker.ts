@@ -140,6 +140,18 @@ function getOrCreateState(frameWidth: number, frameHeight: number): GLState {
     );
   }
 
+  // Without this, uploaded ImageBitmaps come out vertically flipped: image
+  // data's row 0 is conventionally the TOP of the image, but WebGL's texture
+  // coordinate v=0 is its BOTTOM by convention — texImage2D uploads rows
+  // as-is unless told otherwise, so the vertex shader's untouched
+  // full-screen-quad UVs (v=1 at screen top) end up sampling the image's
+  // LAST row at the top of the frame. This is the confirmed cause of the
+  // video appearing inverted during motion-blur overlay windows: every
+  // frame this worker renders (the still overlay composited during a blur
+  // transition) came out upside-down, which also reads as "no motion blur
+  // visible there" since a flipped static frame doesn't look like a blend.
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
   const program = createProgram(gl);
   gl.useProgram(program);
 

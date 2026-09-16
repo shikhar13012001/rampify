@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { UnsupportedEnvironmentGate } from '@/components/UnsupportedEnvironmentGate';
 import { Landing } from '@/pages/Landing';
 import { Pricing } from '@/pages/Pricing';
 import { Changelog } from '@/pages/Changelog';
@@ -142,6 +143,7 @@ function App() {
 
   return (
     <>
+      <UnsupportedEnvironmentGate />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/pricing" element={<Pricing />} />

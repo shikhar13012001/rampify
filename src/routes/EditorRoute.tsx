@@ -7,6 +7,7 @@ import { SidebarDrawer } from '@/components/SidebarDrawer';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { KeyboardHints } from '@/components/KeyboardHints';
 import { BeatSyncPanel } from '@/features/beatSync/BeatSyncPanel';
+import { CaptionsPanel } from '@/features/captions/CaptionsPanel';
 import { BatchPanel } from '@/features/batch/BatchPanel';
 import { CurveEditor } from '@/features/curve/CurveEditor';
 import { ExportModal } from '@/features/export/ExportModal';
@@ -278,6 +279,13 @@ export default function EditorRoute() {
                 }}
               >
                 <BeatSyncPanel />
+              </section>
+            </ErrorBoundary>
+
+            {/* Captions panel */}
+            <ErrorBoundary>
+              <section style={{ backgroundColor: 'var(--color-curve-bg)', overflowY: 'auto' }}>
+                <CaptionsPanel />
               </section>
             </ErrorBoundary>
 

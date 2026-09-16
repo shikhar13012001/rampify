@@ -6,6 +6,7 @@ import {
   validateBeatPattern,
   type BeatPattern,
 } from '@/lib/beatMapper';
+import { decodeToMonoPCM } from '@/lib/audioDecode';
 import BeatDetectionWorkerCtor from '../../workers/beatDetectionWorker.ts?worker';
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -58,35 +59,11 @@ export function BeatSyncPanel() {
 
     workerRef.current?.terminate();
 
-    let rawBuffer: ArrayBuffer;
-    try {
-      rawBuffer = await file.arrayBuffer();
-    } catch (err) {
-      setAnalyzeState('error');
-      setErrorMsg(`Could not read file: ${String(err)}`);
-      return;
-    }
-
     // Decode audio in the main thread so the worker receives raw PCM.
     let mono: Float32Array;
     let sampleRate: number;
     try {
-      const audioCtx = new AudioContext();
-      const decoded  = await audioCtx.decodeAudioData(rawBuffer);
-      await audioCtx.close();
-
-      sampleRate = decoded.sampleRate;
-      const len  = decoded.length;
-      const nCh  = decoded.numberOfChannels;
-      mono       = new Float32Array(len);
-
-      for (let ch = 0; ch < nCh; ch++) {
-        const ch_data = decoded.getChannelData(ch);
-        for (let i = 0; i < len; i++) mono[i] += ch_data[i];
-      }
-      if (nCh > 1) {
-        for (let i = 0; i < len; i++) mono[i] /= nCh;
-      }
+      ({ mono, sampleRate } = await decodeToMonoPCM(file));
     } catch (err) {
       setAnalyzeState('error');
       setErrorMsg(`Could not decode audio: ${String(err)}`);

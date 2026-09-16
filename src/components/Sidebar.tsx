@@ -9,7 +9,7 @@ import { planTierFor } from '@/lib/exportLimits';
 import { canUseBlurIntensity, canUseOpticalFlow, type PlanTier } from '@/lib/planConfig';
 import { buildCurveLinkUrl } from '@/lib/curveLink';
 import { trackEvent } from '@/lib/analytics';
-import type { BlurIntensity, OpticalFlowQuality, Segment } from '@/types/editor';
+import type { BlurIntensity, ColorPreset, CropPreset, OpticalFlowQuality, Segment } from '@/types/editor';
 
 function fmtDuration(s: number): string {
   if (!Number.isFinite(s) || s <= 0) return '-';
@@ -45,6 +45,12 @@ export function Sidebar() {
   const ofSettings         = useEditorStore((state) => state.opticalFlowSettings);
   const setOFEnabled       = useEditorStore((state) => state.setOpticalFlowEnabled);
   const setOFQuality       = useEditorStore((state) => state.setOpticalFlowQuality);
+  const cropSettings       = useEditorStore((state) => state.cropSettings);
+  const setCropEnabled     = useEditorStore((state) => state.setCropEnabled);
+  const setCropPreset      = useEditorStore((state) => state.setCropPreset);
+  const colorSettings      = useEditorStore((state) => state.colorSettings);
+  const setColorEnabled    = useEditorStore((state) => state.setColorEnabled);
+  const setColorPreset     = useEditorStore((state) => state.setColorPreset);
   const setUpgradeModalOpen = useEditorStore((state) => state.setUpgradeModalOpen);
   const preservePitch      = useEditorStore((state) => state.audioSettings.preservePitch);
   const setPreservePitch   = useEditorStore((state) => state.setPreservePitch);
@@ -230,6 +236,18 @@ export function Sidebar() {
             onToggle={setOFEnabled}
             onQualityChange={setOFQuality}
             onUpgrade={() => setUpgradeModalOpen(true)}
+          />
+          <CropControl
+            enabled={cropSettings.enabled}
+            preset={cropSettings.preset}
+            onToggle={setCropEnabled}
+            onPresetChange={setCropPreset}
+          />
+          <ColorControl
+            enabled={colorSettings.enabled}
+            preset={colorSettings.preset}
+            onToggle={setColorEnabled}
+            onPresetChange={setColorPreset}
           />
         </div>
       </SectionCard>
@@ -916,6 +934,168 @@ function OpticalFlowControl({
               Add a &lt;0.6× segment to activate
             </p>
           ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Crop / aspect ratio + color grading ────────────────────────────────────────
+//
+// Deliberately ungated for every tier (guest/free/pro): unlike blur/optical
+// flow, cropping and color grading cost no extra encode time and are
+// table-stakes for the vertical-video audience this app targets — gating
+// them would cost activation right when the bounce-rate work elsewhere is
+// trying to fix exactly that. See docs/validation plan: "Tier gating is a
+// pricing decision, not an engineering one — start ungated."
+
+const CROP_LABELS: { value: CropPreset; label: string }[] = [
+  { value: 'original', label: 'Original' },
+  { value: '9:16',     label: '9:16' },
+  { value: '1:1',      label: '1:1' },
+  { value: '4:5',      label: '4:5' },
+  { value: '16:9',     label: '16:9' },
+];
+
+function CropControl({
+  enabled,
+  preset,
+  onToggle,
+  onPresetChange,
+}: {
+  enabled: boolean;
+  preset: CropPreset;
+  onToggle: (v: boolean) => void;
+  onPresetChange: (v: CropPreset) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          fontSize: 12, color: enabled ? '#4a4a4a' : 'var(--color-text-muted)',
+          padding: '6px 2px', cursor: 'pointer', transition: 'color 0.12s',
+        }}
+      >
+        <span>Crop / aspect ratio</span>
+        <button
+          type="button"
+          onClick={() => onToggle(!enabled)}
+          style={{
+            width: 38, height: 22, borderRadius: 999,
+            border: `1px solid ${enabled ? 'rgba(184, 164, 237, 0.5)' : 'rgba(10,10,10,0.08)'}`,
+            backgroundColor: enabled ? '#0a0a0a' : 'rgba(10,10,10,0.04)',
+            padding: 2, cursor: 'pointer', position: 'relative',
+            transition: 'background-color 0.2s, border-color 0.2s', flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              display: 'block', width: 16, height: 16, borderRadius: '50%',
+              backgroundColor: enabled ? '#fff' : '#44446A',
+              transform: enabled ? 'translateX(16px)' : 'translateX(0)',
+              transition: 'transform 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s',
+            }}
+          />
+        </button>
+      </label>
+
+      {enabled && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 3, padding: '0 2px 4px' }}>
+          {CROP_LABELS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onPresetChange(value)}
+              style={{
+                padding: '5px 0', borderRadius: 7,
+                border: `1px solid ${preset === value ? 'rgba(184, 164, 237, 0.45)' : 'var(--color-border)'}`,
+                background: preset === value ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
+                color: preset === value ? '#b8a4ed' : 'var(--color-text-subtle)',
+                fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '-0.01em',
+                transition: 'background 0.12s, border-color 0.12s, color 0.12s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const COLOR_LABELS: { value: ColorPreset; label: string }[] = [
+  { value: 'none',    label: 'None' },
+  { value: 'warm',    label: 'Warm' },
+  { value: 'cool',    label: 'Cool' },
+  { value: 'vintage', label: 'Vintage' },
+  { value: 'punchy',  label: 'Punchy' },
+  { value: 'bw',      label: 'B&W' },
+];
+
+function ColorControl({
+  enabled,
+  preset,
+  onToggle,
+  onPresetChange,
+}: {
+  enabled: boolean;
+  preset: ColorPreset;
+  onToggle: (v: boolean) => void;
+  onPresetChange: (v: ColorPreset) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          fontSize: 12, color: enabled ? '#4a4a4a' : 'var(--color-text-muted)',
+          padding: '6px 2px', cursor: 'pointer', transition: 'color 0.12s',
+        }}
+      >
+        <span>Color grading</span>
+        <button
+          type="button"
+          onClick={() => onToggle(!enabled)}
+          style={{
+            width: 38, height: 22, borderRadius: 999,
+            border: `1px solid ${enabled ? 'rgba(184, 164, 237, 0.5)' : 'rgba(10,10,10,0.08)'}`,
+            backgroundColor: enabled ? '#0a0a0a' : 'rgba(10,10,10,0.04)',
+            padding: 2, cursor: 'pointer', position: 'relative',
+            transition: 'background-color 0.2s, border-color 0.2s', flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              display: 'block', width: 16, height: 16, borderRadius: '50%',
+              backgroundColor: enabled ? '#fff' : '#44446A',
+              transform: enabled ? 'translateX(16px)' : 'translateX(0)',
+              transition: 'transform 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s',
+            }}
+          />
+        </button>
+      </label>
+
+      {enabled && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3, padding: '0 2px 4px' }}>
+          {COLOR_LABELS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onPresetChange(value)}
+              style={{
+                padding: '5px 0', borderRadius: 7,
+                border: `1px solid ${preset === value ? 'rgba(184, 164, 237, 0.45)' : 'var(--color-border)'}`,
+                background: preset === value ? 'rgba(184, 164, 237, 0.14)' : 'transparent',
+                color: preset === value ? '#b8a4ed' : 'var(--color-text-subtle)',
+                fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '-0.01em',
+                transition: 'background 0.12s, border-color 0.12s, color 0.12s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       )}
     </div>

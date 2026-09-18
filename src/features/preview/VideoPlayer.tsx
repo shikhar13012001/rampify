@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { interpolateSpeed } from '@/lib/curveMath';
 import { ASSUMED_FPS, findTransitionPoints, hasSlowSegments, INTENSITY_NUM } from '@/lib/ffmpegBridge';
 import { getBlurIntensity, getTransitionFrameCount } from '@/lib/blurMath';
+import { buildCssColorFilter } from '@/lib/videoFilters';
 import { planTierFor } from '@/lib/exportLimits';
 import { canUseBlurIntensity } from '@/lib/planConfig';
 import { useEditorStore } from '@/store/editorStore';
@@ -182,6 +183,16 @@ export function VideoPlayer() {
   // this overlay is a faithful preview, not a rough approximation. Without
   // this, enabling crop exported blind: the user had no idea what was about
   // to be cut off until after downloading the file.
+  // Color grading preview — was previously wired into export only
+  // (ffmpegBridge.ts/videoFilters.ts's buildColorFilter), never shown here,
+  // so toggling a preset had no visible effect until export. buildCssColorFilter
+  // is a CSS-filter approximation of the same preset (not pixel-identical —
+  // CSS has no equivalent to ffmpeg's arbitrary tone curves — but a real,
+  // visible preview instead of none), same honesty pattern as blur's CSS
+  // blur() approximation below.
+  const colorSettings = useEditorStore((s) => s.colorSettings);
+  const cssColorFilter = colorSettings.enabled ? buildCssColorFilter(colorSettings.preset) : null;
+
   const cropSettings = useEditorStore((s) => s.cropSettings);
   const cropGuide = useMemo(() => {
     if (!cropSettings.enabled || cropSettings.preset === 'original' || !project) return null;
@@ -223,8 +234,14 @@ export function VideoPlayer() {
               width: '100%',
               height: '100%',
               display: 'block',
-              // CSS blur simulates the motion blur the user gets on Pro export
-              filter: blurPx > 0.15 ? `blur(${blurPx.toFixed(1)}px)` : undefined,
+              // CSS blur simulates the motion blur the user gets on Pro export;
+              // cssColorFilter simulates the selected color-grading preset.
+              // CSS's `filter` property takes a single space-separated function
+              // list, so both must be combined into one string, not set twice.
+              filter: [
+                blurPx > 0.15 ? `blur(${blurPx.toFixed(1)}px)` : null,
+                cssColorFilter,
+              ].filter(Boolean).join(' ') || undefined,
               transition: 'filter 0.08s linear',
             }}
             onClick={togglePlay}

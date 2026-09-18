@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildColorFilter, buildCropFilter, buildSubtitlesFilter } from './videoFilters';
+import { buildColorFilter, buildCropFilter, buildCssColorFilter, buildSubtitlesFilter } from './videoFilters';
 import type { ColorPreset, CropPreset } from '@/types/editor';
 
 describe('buildCropFilter', () => {
@@ -46,6 +46,25 @@ describe('buildColorFilter', () => {
       expect(filter).toBeTruthy();
       expect(filter!.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('buildCssColorFilter', () => {
+  it('returns null for "none"', () => {
+    expect(buildCssColorFilter('none')).toBeNull();
+  });
+
+  it('returns a non-empty CSS filter string for every real preset', () => {
+    const presets: Exclude<ColorPreset, 'none'>[] = ['warm', 'cool', 'vintage', 'punchy', 'bw'];
+    for (const preset of presets) {
+      const filter = buildCssColorFilter(preset);
+      expect(filter).toBeTruthy();
+      expect(filter!.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('bw is an exact grayscale match to the ffmpeg eq=saturation=0 filter', () => {
+    expect(buildCssColorFilter('bw')).toBe('grayscale(1)');
   });
 });
 

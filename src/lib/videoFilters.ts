@@ -68,6 +68,28 @@ export function buildColorFilter(preset: ColorPreset): string | null {
   return COLOR_FILTERS[preset] ?? null;
 }
 
+/**
+ * CSS `filter` approximation of each preset above, for VideoPlayer.tsx's
+ * live preview. NOT the same math as the real ffmpeg `curves`/`eq` filters —
+ * CSS has no equivalent to an arbitrary tone curve, so this is a visual
+ * approximation using CSS's own filter primitives (contrast/saturate/
+ * sepia/hue-rotate), same "preview approximates, exact result renders at
+ * export" honesty already established for motion blur's CSS blur() preview.
+ * `bw` is the one exact match — grayscale(1) === eq=saturation=0.
+ */
+const CSS_COLOR_PRESETS: Record<Exclude<ColorPreset, 'none'>, string> = {
+  warm:    'contrast(1.05) saturate(1.15) sepia(0.15)',
+  cool:    'contrast(1.05) saturate(1.08) hue-rotate(-8deg)',
+  vintage: 'sepia(0.25) contrast(0.92) saturate(0.85) brightness(1.05)',
+  punchy:  'contrast(1.18) saturate(1.3) brightness(1.03)',
+  bw:      'grayscale(1)',
+};
+
+export function buildCssColorFilter(preset: ColorPreset): string | null {
+  if (preset === 'none') return null;
+  return CSS_COLOR_PRESETS[preset] ?? null;
+}
+
 // ─── Captions (subtitle burn-in) ────────────────────────────────────────────────
 
 /**

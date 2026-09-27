@@ -3,29 +3,34 @@ import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { Seo } from '@/components/Seo';
+import { SUPPORT_EMAIL } from '@/config/brand.mjs';
 
+// One real inbox behind every category for now (see brand.mjs's
+// SUPPORT_EMAIL doc comment) — kept as separate categories since the
+// distinctions are still meaningful to a visitor even though they all land
+// in the same place today.
 const CHANNELS = [
   {
     title: 'General inquiries',
-    email: 'hello@rampcut.com',
+    email: SUPPORT_EMAIL,
     description: 'Questions, feedback, partnership ideas, or just saying hi.',
     color: 'var(--color-clay-pink)',
   },
   {
     title: 'Support',
-    email: 'support@rampcut.com',
+    email: SUPPORT_EMAIL,
     description: 'Bugs, billing issues, or trouble with an export. Pro subscribers get priority.',
     color: 'var(--color-clay-teal-bright)',
   },
   {
     title: 'Privacy & legal',
-    email: 'privacy@rampcut.com',
+    email: SUPPORT_EMAIL,
     description: 'Data requests, GDPR questions, or terms-of-service clarifications.',
     color: 'var(--color-clay-lavender)',
   },
   {
     title: 'Education',
-    email: 'education@rampcut.com',
+    email: SUPPORT_EMAIL,
     description: '50% off Pro for verified students and educators. Send your .edu email or proof of enrollment.',
     color: 'var(--color-clay-ochre)',
   },
@@ -42,7 +47,7 @@ export function Contact() {
     // Open the user's mail client with a pre-filled message.
     const subject = encodeURIComponent(`Rampcut contact from ${name || 'a visitor'}`);
     const body = encodeURIComponent(`${message}\n\n— ${name}\n${email}`);
-    window.location.href = `mailto:hello@rampcut.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
     setSent(true);
   };
 
@@ -50,7 +55,7 @@ export function Contact() {
     <div className="clay-page">
       <Seo
         title="Contact — Rampcut Support & Inquiries"
-        description="Contact the Rampcut team: general inquiries at hello@rampcut.com, bug reports, partnership ideas, or feedback. We email you back, no ticketing system."
+        description={`Contact the Rampcut team: general inquiries at ${SUPPORT_EMAIL}, bug reports, partnership ideas, or feedback. We email you back, no ticketing system.`}
         path="/contact"
       />
       <ClayNav ctaLabel="Open editor" />
@@ -182,8 +187,8 @@ export function Contact() {
               </h3>
               <p className="clay-body" style={{ margin: '0 0 20px', fontSize: 13, lineHeight: 1.6 }}>
                 If nothing happened, email us directly at{' '}
-                <a href="mailto:hello@rampcut.com" style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}>
-                  hello@rampcut.com
+                <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}>
+                  {SUPPORT_EMAIL}
                 </a>
                 .
               </p>

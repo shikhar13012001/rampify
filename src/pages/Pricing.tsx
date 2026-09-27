@@ -2,6 +2,7 @@ import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { PricingTable } from '@/components/marketing/PricingTable';
 import { Seo } from '@/components/Seo';
+import { SUPPORT_EMAIL } from '@/config/brand.mjs';
 
 export function Pricing() {
   return (
@@ -117,6 +118,6 @@ const BILLING_FAQS = [
   },
   {
     q: 'Is there an educational discount?',
-    a: 'Yes — 50% off Pro for verified students and educators. Contact us at hello@rampcut.com with your .edu email or proof of enrollment.',
+    a: `Yes — 50% off Pro for verified students and educators. Contact us at ${SUPPORT_EMAIL} with your .edu email or proof of enrollment.`,
   },
 ];

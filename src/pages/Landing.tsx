@@ -7,6 +7,7 @@ import { BeforeAfterDemo } from '@/components/marketing/BeforeAfterDemo';
 import { Seo } from '@/components/Seo';
 import { trackEvent } from '@/lib/analytics';
 import { SIGNED_IN_FREE_LIMIT } from '@/lib/planConfig';
+import { SUPPORT_EMAIL } from '@/config/brand.mjs';
 
 export function Landing() {
   useEffect(() => {
@@ -1021,7 +1022,7 @@ const FAQS = [
   },
   {
     q: 'Is there a team plan?',
-    a: 'Studio is coming soon — it will include 5 seats, a shared preset library, batch processing API, and 8K export. Email hello@rampcut.com to join the waitlist and get notified when it launches.',
+    a: `Studio is coming soon — it will include 5 seats, a shared preset library, batch processing API, and 8K export. Email ${SUPPORT_EMAIL} to join the waitlist and get notified when it launches.`,
   },
 ];
 

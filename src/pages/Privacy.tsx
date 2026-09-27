@@ -1,6 +1,7 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { Seo } from '@/components/Seo';
+import { SUPPORT_EMAIL } from '@/config/brand.mjs';
 
 const SECTIONS = [
   {
@@ -48,7 +49,7 @@ const SECTIONS = [
   {
     title: 'Data retention',
     body: [
-      'Account data is retained until you request deletion. Email hello@rampcut.com to delete your account.',
+      `Account data is retained until you request deletion. Email ${SUPPORT_EMAIL} to delete your account.`,
       'Export logs are retained indefinitely as an anonymous count — they contain no file content or metadata.',
       'Dodo Payments customer records are retained per Dodo Payments\' own retention policy, independent of Rampcut.',
     ],
@@ -57,7 +58,7 @@ const SECTIONS = [
     title: 'Your rights',
     body: [
       'You can export your account data (email, subscription status, export count) at any time by request.',
-      'You can delete your account and all associated data by emailing hello@rampcut.com.',
+      `You can delete your account and all associated data by emailing ${SUPPORT_EMAIL}.`,
       'You can cancel your subscription at any time from the editor — no retention emails, no friction.',
       'EU residents have GDPR rights including access, rectification, and erasure. Email us to exercise them.',
     ],
@@ -144,10 +145,10 @@ export function Privacy() {
           <p className="clay-body" style={{ margin: '40px 0 0', fontSize: 13, color: 'var(--color-clay-ink-muted)' }}>
             Questions about your data? Email{' '}
             <a
-              href="mailto:privacy@rampcut.com"
+              href={`mailto:${SUPPORT_EMAIL}`}
               style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}
             >
-              privacy@rampcut.com
+              {SUPPORT_EMAIL}
             </a>
             .
           </p>

@@ -26,7 +26,14 @@ export const BRAND_LOWER = 'rampcut';
  *  attached to the Vercel project; every other host 308-redirects here
  *  (see vercel.json "redirects"). */
 export const SITE_URL = 'https://rampcut.astralbuild.dev';
-export const SUPPORT_EMAIL = 'hello@rampcut.com';
+/** hello@/support@/privacy@/legal@/education@rampcut.com all pointed at a
+ *  domain never actually set up to receive mail — a real trust/legal defect
+ *  (Privacy/Terms promise account-deletion and refund requests by email).
+ *  Set to the owner's real, monitored inbox 2026-09-27 until a dedicated
+ *  address is set up. This constant was already the documented single
+ *  source of truth (see the file header) but was never actually imported
+ *  anywhere — every page hardcoded its own duplicate literal instead. */
+export const SUPPORT_EMAIL = 'ishgupta2015@gmail.com';
 export const TAGLINE = 'Speed ramp videos in your browser — no installs, no uploads.';
 /** Hosts that used to serve the product; kept only for redirects/docs. */
 export const LEGACY_HOSTS = ['rampify.astralbuild.dev', 'rampify-eight.vercel.app'];

@@ -1,6 +1,7 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { Seo } from '@/components/Seo';
+import { SUPPORT_EMAIL } from '@/config/brand.mjs';
 
 const SECTIONS = [
   {
@@ -31,7 +32,7 @@ const SECTIONS = [
       'Rampcut offers a Free plan (3 exports per month, 720p) and a Pro plan (unlimited exports, 4K, AI interpolation, beat sync). Pro is available monthly at $12/month or annually at $96/year.',
       'Payment is processed by Dodo Payments, our Merchant of Record. We never see or store your card details.',
       'You can cancel at any time from the editor. Cancellation takes effect at the end of your billing period — you keep Pro access until then.',
-      'If you\'re not satisfied within 14 days of your first Pro payment, contact hello@rampcut.com for a full refund. After 14 days, you can cancel future billing but past payments are non-refundable.',
+      `If you're not satisfied within 14 days of your first Pro payment, contact ${SUPPORT_EMAIL} for a full refund. After 14 days, you can cancel future billing but past payments are non-refundable.`,
       'We may change prices with at least 30 days\' notice. Existing subscribers keep their current price until the next renewal.',
     ],
   },
@@ -61,7 +62,7 @@ const SECTIONS = [
   {
     title: '8. Termination',
     body: [
-      'You can stop using Rampcut at any time. You can delete your account by emailing hello@rampcut.com.',
+      `You can stop using Rampcut at any time. You can delete your account by emailing ${SUPPORT_EMAIL}.`,
       'We may suspend or terminate your account if you violate these terms, abuse the service, or engage in fraudulent billing.',
     ],
   },
@@ -147,10 +148,10 @@ export function Terms() {
           <p className="clay-body" style={{ margin: '40px 0 0', fontSize: 13, color: 'var(--color-clay-ink-muted)' }}>
             Questions about these terms? Email{' '}
             <a
-              href="mailto:legal@rampcut.com"
+              href={`mailto:${SUPPORT_EMAIL}`}
               style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}
             >
-              legal@rampcut.com
+              {SUPPORT_EMAIL}
             </a>
             .
           </p>

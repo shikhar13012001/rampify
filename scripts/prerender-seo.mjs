@@ -33,7 +33,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { CURVES, curveSvg, curveTableRows, curveRange } from '../src/content/curves.mjs';
-import { SITE_URL } from '../src/config/brand.mjs';
+import { SITE_URL, SUPPORT_EMAIL } from '../src/config/brand.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
@@ -402,10 +402,10 @@ const ROUTES = [
     outFile: 'contact/index.html',
     title: 'Contact — Rampcut Support & Inquiries',
     description:
-      'Contact the Rampcut team: general inquiries at hello@rampcut.com, bug reports, partnership ideas, or feedback. We email you back, no ticketing system.',
+      `Contact the Rampcut team: general inquiries at ${SUPPORT_EMAIL}, bug reports, partnership ideas, or feedback. We email you back, no ticketing system.`,
     h1: 'Say hello',
     intro:
-      'Contact the Rampcut team: general inquiries at hello@rampcut.com, bug reports, partnership ideas, or feedback. We email you back, no ticketing system.',
+      `Contact the Rampcut team: general inquiries at ${SUPPORT_EMAIL}, bug reports, partnership ideas, or feedback. We email you back, no ticketing system.`,
     breadcrumb: [
       { name: 'Home', item: SITE_URL },
       { name: 'Contact', item: `${SITE_URL}/contact` },

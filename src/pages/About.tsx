@@ -1,6 +1,7 @@
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { Seo } from '@/components/Seo';
+import { SUPPORT_EMAIL } from '@/config/brand.mjs';
 
 const VALUES = [
   {
@@ -176,10 +177,10 @@ export function About() {
           <p className="clay-body" style={{ margin: '24px auto 0', fontSize: 14, color: 'var(--color-clay-ink-muted)' }}>
             Questions? Email{' '}
             <a
-              href="mailto:hello@rampcut.com"
+              href={`mailto:${SUPPORT_EMAIL}`}
               style={{ color: 'var(--color-clay-ink)', fontWeight: 600, textDecoration: 'none' }}
             >
-              hello@rampcut.com
+              {SUPPORT_EMAIL}
             </a>
           </p>
         </div>

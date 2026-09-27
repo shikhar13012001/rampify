@@ -4,6 +4,7 @@ import { useEditorStore } from '@/store/editorStore';
 import { getPreferredBillingPeriod, setPreferredBillingPeriod, type BillingPeriod } from '@/lib/billingPreference';
 import { FOUNDER_PRICE_USD, FREE_EXPORT_RESOLUTION, PRO_ANNUAL_USD, PRO_MONTHLY_USD, SIGNED_IN_FREE_LIMIT } from '@/lib/planConfig';
 import { fetchFounderSeats, OPTIMISTIC_FOUNDER_SEATS, type FounderSeats } from '@/lib/founderSeats';
+import { SUPPORT_EMAIL } from '@/config/brand.mjs';
 
 /**
  * Simplified around Free and Pro (this task) — was previously 4 competing
@@ -321,7 +322,7 @@ function StudioFootnote() {
       }}
     >
       Building for a team or high-volume production? A Studio plan is in development —{' '}
-      <a href="mailto:hello@rampcut.com" style={{ color: 'inherit', textDecoration: 'underline' }}>
+      <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: 'inherit', textDecoration: 'underline' }}>
         contact us
       </a>{' '}
       for early access. Not launched yet — no pricing, features, or timeline are final.

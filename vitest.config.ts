@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
@@ -11,6 +11,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    // Keep real FFmpeg subprocesses and SEO builds from competing with dozens
+    // of forked test workers on the desktop validation machine.
+    maxWorkers: 2,
+    exclude: [...configDefaults.exclude, '.claude/**', '.build/**', '.audit-build/**', 'temp/**'],
   },
   resolve: {
     alias: {

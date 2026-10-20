@@ -1,3 +1,24 @@
+## Reproducing the expanded real-browser checks (2026-10-18)
+
+The canonical `npm run test:ui:export` runner now compiles a disposable bundled editor in `temp/browser/ui-dist`, previews it on5173, and connects actual API handlers to the named Auth/Firestore emulators. Its test-only config retains the existing DEV plus explicit-window-flag emulator hook for real sign-in and trim setup; the normal production build removes that hook. Never deploy ui-dist. This replaces the unreliable dev-module worker path in this runner. The earlier failed dev hydration/download runs remain recorded.
+
+The actual media-engine corpus uses a separate bundle. With existing dependencies and native FFmpeg installed, run these commands sequentially:
+
+```powershell
+node node_modules/vite/bin/vite.js build --config test/browser/vite.media.config.ts
+node test/browser/media-fixtures.mjs
+node node_modules/vite/bin/vite.js preview --config test/browser/vite.media.config.ts
+# In another terminal after preview is ready:
+node test/browser/media.mjs
+node test/browser/media.mjs --edge
+```
+
+`--case=NAME` selects one declared case; `--additional` selects the five input-format cases. Default now runs all29 cases/browser. Source fixtures, binaries and result JSON go to ignored temp/browser and test/skyvern/artifacts; scripts/configs are tracked. This is real LocalWasmEngine/worker/ONNX export proof, separate from authenticated UI proof. Do not rebuild a bundle while its preview/corpus is running.
+
+After a normal root build, with no concurrent root-dist build, `node test/browser/pwa.mjs` owns5178 and tests actual waiting-worker activation across two tabs, active export survival, save/relink recovery and cached offline shell. `test/browser/jobs.mjs` accepts RAMPCUT_BASE_URL and tests real variant queue/download/recovery/preset UI against an already running bundled app. `test/browser/speech.mjs` uses the separate speech config/preview and a local synthetic speech fixture; see the script for expected paths. No footage is sent to a cloud processor.
+
+---
+
 # Local UI testing with Skyvern and Ollama
 
 This harness exercises Rampify in a real Chromium browser through Skyvern. It
@@ -125,3 +146,44 @@ trailing-slash support. `npm run lint`'s `react-hooks/set-state-in-effect`
 error at `DropZone.tsx:44` is also fixed — the saved-filename read moved from
 an effect + `setState` to a lazy `useState` initializer.
 
+
+## Export harness repair (2026-10-18)
+
+`npm run test:ui:export` now uses the PowerShell entry point as a thin wrapper for
+`test/browser/run.mjs`. The older Python export script is retained for reference;
+the broken `.venv-skyvern/Scripts/python.exe` is no longer required by this command.
+The Node runner reuses the installed official Playwright driver package under the
+existing venv, or an installed `playwright` package. Set `RAMPCUT_PLAYWRIGHT_MODULE`
+to another already installed Playwright package if needed. No LLM service or new
+browser-testing dependency is required. `--headed` is forwarded by the existing
+headed npm command.
+
+Prerequisites: installed npm dependencies, Chromium for the reused Playwright
+runtime, ffmpeg/ffprobe on PATH, and the existing portable JDK21 under
+`.jdk-emulator/jdk-21.0.12.1+1/bin`. The runner starts only the named disposable
+`demo-rampcut-test` Firebase Auth/Firestore emulators on loopback9099/8085,
+a local adapter for the actual API handlers on3001, and Vite on5173. It refuses
+occupied ports instead of reusing an unknown backend. Dodo values are inert test
+placeholders: no checkout, provider request, payment or production Firestore write
+is part of this suite. Test configuration/logs/PIDs go in ignored `temp/browser/`.
+
+The suite exercises a guest export, real emulator email/password sign-in with a
+basic export, and an edit retaining1–3s at2x plus4–6s at0.5x. Each case saves a new
+MP4, probes streams/duration, and fully decodes it. Expected durations are6s,6s,5s.
+Accounting checks exercise the real HTTP handler: concurrent last-slot requests,
+retry at cap, immutable timestamps, prior-month dedupe, invalid IDs, and a denied
+direct authenticated Firestore write. These checks are not payment-provider proof.
+
+For a production-build guest check, run `npm run build`, start preview on4187,
+then `node test/browser/export.mjs`. `RAMPCUT_BASE_URL` overrides the browser target.
+`node test/browser/recovery.mjs` checks that a seeded two-clip recovery can be opened
+from an empty editor without importing another video. Both scripts require an
+already running target. Outputs live in ignored `test/skyvern/artifacts/`.
+
+On this Windows host, restricted process-tree termination failed during an early
+run; the verified test-owned processes were cleaned up using host permissions.
+The final canonical run used host process permissions and exited0 after cleanup.
+An earlier dev guest run had refused/aborted worker requests and failed; it remains
+a recorded failure, not a passing corpus attempt. The later canonical run passed
+all three cases. One machine and a few smoke cases do not satisfy the40-attempt,
+multiple-browser/device capacity gate in the production-readiness plan.

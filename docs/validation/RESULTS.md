@@ -1,3 +1,31 @@
+## Final local verification — 2026-10-19
+
+Fresh full suite: **49 files /398 tests passed, zero failed or skipped**. `npm run lint` passed. The SEO suite executed `npm run build` twice with NODE_ENV=production (ordinary and VERCEL_ENV=production), including application/API types, bundling and SEO output assertions. The added regression requires service-worker registration and excludes emulator hooks from the actual production scripts.
+
+`npm run test:ui:export` passed end to end: real guest6s, isolated emulator sign-in6s, retained-span5s, explicit9:16/1:1 batch downloads, saved-look reload/apply, normal clip-tab clicks at desktop/mobile viewport widths, original-file relink of two clips and a new fully decoded8s combined export. `node test/browser/pwa.mjs` passed against the final production bundle, including zero unhandled page errors. These are local proofs; the remaining qualification gates are in tasks/todo.md and STATUS.md.
+
+The two-clip workflow exposed a real five-row/seven-section layout bug that covered clip tabs with the curve canvas; seven desktop/mobile rows and scrolling fixed it. The test dismisses the existing keyboard-help overlay through its normal Dismiss keyboard shortcuts control. Earlier wrong-source relink rejection was correct app behavior, corrected in the test setup. An intermediate PWA rerun exposed NODE_ENV=test inheritance in the SEO build subprocess; explicit production NODE_ENV now tests the actual shipping path. The local static PWA server now returns404 for absent scripts rather than serving executable SPA HTML. These failures are retained in ignored logs rather than counted as successes.
+
+---
+
+## 2026-10-18 implementation verification (latest; older entries below are historical)
+
+The local renderer now uses one source/output time map across retained spans, inverse sampling, audio, captions and soundtrack alignment. All export entry points use the same plan preflight/coordinator. Real billing handlers are tested against isolated Firebase emulators; no provider purchase or production rollout is claimed.
+
+Observed real media corpus: **58/58 post-fix exports**,29 each on Chromium151.0.7922.34 and installed Edge155.0.4283.62, Windows desktop with15.6GiB usable RAM. Each downloaded MP4 passed ffprobe stream/duration/dimension assertions and a complete native FFmpeg decode. Cases cover linear/Bezier ramps, trims/retained colored frame order, variable audio markers in both pitch modes, unlocked/muted audio, silent blur, crop/color, captions with packaged fonts, final-output soundtrack trim/offset, multi-clip and AI retained spans/multi-clip/effects. Additional standard cases cover24/60fps, VFR, portrait, odd sizes and mixed dimensions. This does not establish AI accuracy for VFR material or every possible effect combination.
+
+Measured case wall times (nearest-rank statistics over29 successful attempts/browser): Chromium p50 **10.633s**, p95 **83.249s**; Edge p50 **13.970s**, p95 **59.931s**. These mix cold/warm resources and different workloads under shared-machine contention; they are **not** separate cold/warm benchmarks or maximum supported capacity measurements. Per-case elapsedMs and browser versions are in ignored `test/skyvern/artifacts/media/*-all-results.json`, `*-additional-results.json`, `*-audio-markers-*-results.json`. There were genuine pre-fix app failures: worker cleanup raced the next standard clip; offscreen frame capture stalled the second AI clip; soundtrack prepended silence lost timestamps. Their logs remain; the58 successful attempts are the fresh post-fix validation set, not a historical success-rate claim.
+
+Real Whisper tiny English inference also passed on synthetic5.93s speech, producing timed words (75.496s cold run). The installed q8 decoder first failed in ORT graph optimization; using its supported basic optimizer fixed the observed failure. Actual caption pixels were inspected. Missing/uncached AI assets and offline entitlement checks remain explicit failures, never silent reduced-effect exports.
+
+PWA lifecycle proof passed against the real app bundle: tabA exported while tabB activated a waiting worker; tabA was not forced to reload; explicit Save and reload preserved fingerprint/segments for relink; a new offline tab opened the cached editor. Evidence: `test/skyvern/artifacts/pwa/lifecycle.json` and active-export.mp4.
+
+Billing evidence: `node test/browser/run-billing.mjs` passed real Firestore transaction replay, payment/revenue dedupe,25-seat reservation contention/retry, conservative uncertain checkout holds, signed webhook lifecycle/refund/cancellation, forged signature rejection and durable event-budget checks. Canonical accounting checks also passed last-slot concurrency, immutable timestamps, previous-month retry and denied direct client writes. Provider network/session-expiry behavior, live configuration and legacy inventory reconciliation are separate release gates.
+
+Final full-suite/build/lint and editor workflow results are recorded in the latest STATUS entry. An earlier full run timed out in the120s SEO build hook; another concurrent run hit two5s test deadlines and was stopped. Neither is counted as passing. SEO subprocesses now have a bounded300s deadline; local Vitest forks are capped at2. All original assertions remain required.
+
+---
+
 # Rampify — Export Pipeline Reliability: RESULTS
 
 > Companion to `STATUS.md` / `WORKING_AGREEMENT.md`. Scope: "make the basic

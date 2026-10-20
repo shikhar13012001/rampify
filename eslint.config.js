@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', '.venv-skyvern', 'test/skyvern/artifacts', 'temp']),
+  globalIgnores(['.claude/**', '.build/**', '.audit-build/**', 'dist', '.venv-skyvern', 'test/skyvern/artifacts', 'temp']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

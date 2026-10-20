@@ -1,0 +1,26 @@
+/*
+!api
+!src
+!public
+!scripts
+!package.json
+!package-lock.json
+!tsconfig*.json
+!vite.config.ts
+!vitest.config.ts
+!index.html
+!vercel.json
+!firebase.json
+!firestore.rules
+!eslint.config.js
+# Never include local credentials or generated state inside allowed directories.
+api/keys/
+**/.env*
+**/*.pem
+**/*.key
+**/*service-account*.json
+**/*serviceAccount*.json
+**/*.log
+**/*.local
+**/*.tsbuildinfo
+**/*.test.ts

@@ -1,3 +1,28 @@
+## Deployment executed — 2026-10-20
+
+At the user's explicit request, the local implementation was deployed to the existing Vercel production project and its tested Firestore policy was published. Live URL: https://rampcut.astralbuild.dev. Release dpl_DfhdgUj9DVN8KHogfpXKQq12ekbJ is Ready; public module hash matches the candidate. Actual live6s guest export downloaded and fully decoded; isolation, service-worker activation, font loading, telemetry opt-out and invalid/auth API rejection checks passed. Founder checkout remains unavailable until verified inventory reconciliation.
+
+Full deployment evidence, open dependency audit findings and safe rollback are in the2026-10-20 STATUS entry. Previous Vercel release dpl_7DWdcXpb6RQocHeTDovj948BXg5R is retained. Keep hardened Firestore rules during any app rollback; the previous deployed policy was an expired test rule. No customer-data migration, real payment/refund, provider price/config change, shared CI change or Git commit/push occurred. Earlier proposed-rollout text below is historical and its unperformed qualification items remain open.
+
+---
+
+## Proposed engineering rollout and rollback — 2026-10-18 (not executed)
+
+Implementation is local and uncommitted. No shared CI, rules deployment, provider settings, production data, price, experiment flag, outreach or deployment changed in this task. The cloud export class remains an inactive stub; supported jobs select the local engine and footage stays local. Studio/team seats/shared libraries/API/8K remain future product work, not implemented services.
+
+Before an authorized staging rollout:
+
+1. Require fresh `npm run test`, `npm run lint`, `npm run build`, isolated authenticated UI exports, real browser media corpus and PWA lifecycle checks. A proposed CI job should run those commands serially where they share dist, retain sanitized artifacts and fail on skipped required cases. This is a proposal; shared CI was not edited.
+2. Review a read-only billing snapshot with `scripts/audit-billing-snapshot.ts`. Reconcile legacy paid founders/reservations against actual provider facts before initializing environment-scoped verified inventory. Missing metadata intentionally makes Founder checkout unavailable. Unknown provider outcomes stay held; never expire a potentially paid reservation by a guessed timer. Settle partial/unmapped refund policy and provider session-expiry reconciliation with evidence. Any production migration needs its own approved dry-run, backup and rollback artifact.
+3. Verify the checked-in RIFE ONNX file's original source, redistribution/commercial license and hash. Its actual tensors/inference were verified; its provenance was not. Do not assume a guessed upstream license covers this binary.
+4. Qualify lower/midrange devices, max-source/multi-job capacity, cold/warm performance, memory and AI/VFR accuracy before widening supported claims. Keep AI+blur/4K blocks until their combinations pass.
+5. On an authorized staging host verify actual COOP/COEP, Firebase redirect domains, signed Dodo test-mode delivery, entitlement expiry and quota recovery, analytics opt-out, missing-model/font errors, deep-link routing and update/relink behavior. Emulator signatures and synthetic provider fixtures do not replace a real provider test transaction.
+6. Only after independent editor sessions and verified later-day paid reuse, decide whether to expand rollout. Task19 remains unrun; no customer/payment evidence was fabricated.
+
+Rollback is reviewable code restoration of this task's file groups, followed by test/build/browser checks; preserve user edits and both project storage versions. Do not delete worktrees or production records. An eventual PWA rollback must ship a compatible worker/app pair and preserve explicit save/relink behavior. Keep legacy billing reads until an approved migration is proven reversible. Unknown checkout outcomes require reconciliation rather than automatic release. No rollback or production mutation was executed here.
+
+---
+
 # Rampcut — Distribution Kit & Fix Log
 
 > Companion to `STATUS.md` / `WORKING_AGREEMENT.md` / `RESEARCH.md`. A kit of

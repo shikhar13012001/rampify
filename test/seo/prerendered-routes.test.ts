@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 // Imported rather than hardcoded a second time in this file — this is
 // exactly how the domain drifted to a stale value once already (see
@@ -39,14 +39,24 @@ function extractTag(html: string, pattern: RegExp, label: string): string {
 }
 
 beforeAll(() => {
+  // Vitest sets NODE_ENV=test; force production for actual shipping code paths.
   // A real production build — the same command CI/deployment runs — not a
-  // dev-server snapshot. Slow-ish (~2-4s given the ffmpeg/ONNX wasm assets)
-  // but deterministic and honest: this test fails loudly if the build itself
+  // dev-server snapshot. Type checking and bundling large WASM assets can take
+  // over two minutes on the Windows validation machine. The subprocess is
+  // bounded to five minutes; all output assertions remain mandatory. This
+  // test fails loudly if the build itself
   // is broken, rather than silently testing stale output.
-  execSync('npm run build', { cwd: root, stdio: 'pipe' });
-}, 120_000);
+  execSync('npm run build', { cwd: root, stdio: 'pipe', timeout: 300_000, env: { ...process.env, NODE_ENV: 'production' } });
+}, 330_000);
 
 describe('production build — prerendered marketing routes', () => {
+  it('builds real production scripts with PWA registration and without emulator hooks', () => {
+    const scripts = readdirSync(join(distDir, 'assets')).filter(file => file.endsWith('.js')).map(file => readDist('assets/' + file)).join('\n');
+    expect(scripts).not.toContain('__rampcutTestSignIn');
+    expect(scripts).not.toContain('__rampcutStore');
+    expect(scripts).toContain('/sw.js');
+  });
+
   const routes = [
     { file: 'index.html', path: '/', h1: 'Make a clip worth watching twice — no upload, ever.' },
     { file: 'pricing/index.html', path: '/pricing', h1: 'Start free. Upgrade when you ship.' },
@@ -290,9 +300,10 @@ describe('production build with VERCEL_ENV=production', () => {
     execSync('npm run build', {
       cwd: root,
       stdio: 'pipe',
-      env: { ...process.env, VERCEL_ENV: 'production' },
+      timeout: 300_000,
+      env: { ...process.env, NODE_ENV: 'production', VERCEL_ENV: 'production' },
     });
-  }, 120_000);
+  }, 330_000);
 
   it('prerendered routes are indexable (no noindex meta)', () => {
     for (const file of ['index.html', 'pricing/index.html', 'features/speed-ramp/index.html']) {

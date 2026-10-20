@@ -2149,3 +2149,785 @@ for catching browser-only runtime errors from a dependency's internals.
 Full suite after this fix: `tsc -b --noEmit` clean, all 330 tests still
 passing, production build clean, and — new — zero console errors on a real
 headless-Chromium load of the editor.
+
+## Repository and commercial-readiness audit (2026-10-14; consolidated 2026-10-17)
+
+Scope: requested repository scan, mock/service inventory, competitor comparison,
+and recommendations for a production product customers could pay for. No product
+code, billing configuration, production data, deployment, or outreach was changed.
+This section records source findings and the checks actually run; it does not
+replace live customer research or certify production rendering/billing.
+
+### Assessment
+
+The core is a substantive local video-processing implementation, with Firebase
+authentication, Dodo checkout/webhooks/customer portal, ffmpeg workers, beat
+detection, an approximately 21 MB RIFE model present on disk, and a Whisper
+caption worker. It is not a mostly mocked frontend. The main commercial risk is
+that the editor exposes more control than its export pipelines faithfully honor.
+Reliable, repeatable delivery should precede expanding the advertised toolset.
+
+### Actual mocks, stubs, and deliberate limits
+
+- **Cosmetic audio controls:** `src/components/Sidebar.tsx` keeps `lockAudio`
+  and `muteDuringRamp` only in component-local `useState`; their setters are
+  only connected to their toggle rows. They do not configure preview or export.
+  `preservePitch`, by contrast, is stored and passed to encoding.
+- **Synthetic waveform:** `src/features/timeline/useTimeline.ts:57` computes
+  bar heights with a sine formula; the drawing loop at line 255 does not read
+  decoded audio. Beat detection itself is real and separate from this display.
+- **Unbuilt cloud service:** `src/lib/CloudAPIEngine.ts` specifies presign,
+  create-job, and status endpoints that are absent from `api/`. It has no active
+  caller. The main export modal uses FFmpegBridge directly and blocks 4K + AI
+  through `isUnsupportedCombination`; it does not currently upload footage to
+  that stub. Several engine comments incorrectly describe older routing.
+- **Studio/team/API/8K:** promises on Roadmap and the Studio pricing footnote
+  are future work, not implemented services. Current resolution types are
+  1080p and 4K. Do not count the local batch queue as a batch-processing API.
+- **Contact:** a real `mailto:` handoff, not a message-delivery backend. Its
+  success view says the mail app should be open; delivery is not confirmed.
+- **Preview approximations:** native video playbackRate drives speed preview;
+  CSS approximates blur and color grading. This is not a rendered preview of
+  RIFE interpolation or the exact encoded result.
+
+### Highest-priority source-confirmed production gaps
+
+1. **Timeline/export disagreement.** `ffmpegBridge.ts:382,604` uses only
+   `segments[0]` for the standard/blur speed filter. The worker receives the
+   source file rather than a complete trimmed-segment render plan. Therefore
+   later segment edits are not faithfully serialized; do not interpret the
+   source comment as proof that standard export literally trims to segment 1.
+   Optical flow at line 496 explicitly renders only `slowSegments[0]`.
+   The modal warns about splits, but a warning does not complete timeline export.
+   Multi-clip export is implemented, but delegates to these single-clip paths.
+2. **AI output does not follow the full variable curve.** Optical-flow frames
+   are sampled uniformly at a hardcoded 30 fps (`slowMotionPipeline.ts:190`),
+   expanded uniformly, then encoded at one framerate from segment average
+   speed (`ffmpegBridge.ts:521-524`). This preserves an aggregate duration,
+   not the local timing of an arbitrary ramp. The OF branch also takes
+   precedence over blur; enabling both does not compose both effects.
+3. **Audio/caption timing disagreement.** Video follows a variable curve while
+   audio uses one average tempo (`ffmpegBridge.ts:390,527,611`). Matching overall
+   duration does not guarantee intermediate sync. The existing strong-ramp
+   caption warning acknowledges this. Fix audio timing before selling accurate
+   speech captions on strongly ramped clips.
+4. **Beat-sync workflow is incomplete.** BeatSyncPanel decodes an uploaded
+   music file, stores markers, and changes curve points, but does not retain
+   that music as an output audio track. Export uses the original video audio.
+   A finished music-synced reel needs an explicit output music track, trim,
+   offset, mix policy, and synchronization against output time.
+5. **Batch bypasses the main gate.** `batchStore.ts:88` starts LocalWasmEngine
+   without the main modal's entitlement, quota, capability, and unsupported-
+   combination checks. It also omits export recording. BatchPanel's settings
+   payload at line 210 excludes crop, color, and captions. Reuse one export
+   coordinator across single, multi-clip, and batch paths before charging for
+   consistent plan behavior. Result blobs remain in memory, and download links
+   create object URLs during rendering without matching revocation.
+6. **Resolution labels are not independently enforced.** `resolvePostFilters`
+   only builds a scale through an enabled crop preset; disabled crop or the
+   `original` preset produces no scale filter. Selecting 1080p/4K alone does
+   not impose that output ceiling. Validate encoded dimensions for landscape,
+   portrait, source-above-limit, and source-below-limit cases.
+7. **Recovery is partial.** projectPersistence stores one active clip's curves
+   and selected settings under one localStorage key, not source media or the
+   full multi-clip project. Crop/color/audio/caption state is omitted. Undo is
+   cleared on clip switches. Add a versioned local project manifest, per-clip
+   state, explicit media relinking, and recoverable batch progress.
+8. **Billing needs a ledger and integration tests.** The Dodo handler checks
+   event existence, changes entitlements/counters, then records the event in
+   separate writes. Concurrent delivery and retries can duplicate founder-seat
+   increments; stale grant/revoke events have no ordering guard. Cancellation
+   and failed-payment events immediately clear access rather than reconciling
+   the specific purchase and paid-through period. payment.succeeded plus
+   subscription.active also produces two payment analytics events for an
+   initial subscription if both arrive. Add transactional event processing,
+   provider payment/subscription identity, entitlement reconciliation, and
+   test-mode purchase/renewal/cancel/refund/replay tests. Existing webhook
+   regression tests inspect source strings, not actual handler effects.
+9. **Quota accounting is advisory, not render authorization.** The main modal
+   initiates download before recordExport, whose failures are only logged.
+   record-export counts and writes outside a transaction, checks the cap
+   before recognizing a retry, and overwrites a retried export timestamp.
+   Firestore rules still permit an owner's direct export-log create, contrary
+   to the Admin-only comments. A downloadable local renderer cannot make
+   client-only premium switches tamperproof; sell workflow value and make the
+   legitimate accounting consistent rather than claiming server-enforced DRM.
+10. **Operational evidence is incomplete.** No tracked GitHub CI workflow was
+    found. The anonymous analytics ingestion route writes to Firestore without
+    an application-level rate limit in the repository. Analytics collects more
+    journey/session data than the privacy page's email/subscription/export-count
+    summary describes. Add bounded ingestion, retention/deletion procedures,
+    accurate disclosures, error diagnostics, and automatic export smoke gates.
+    No production abuse, data leak, or customer incident was established here.
+
+The older BILLING/DECISION documents are historical: a later STATUS entry on
+2026-09-15 records a live-mode switch and the owner's correction of the annual
+interval. This audit did not access payment-provider configuration, so the old
+annual-overcharge warning and old zero-customer counts are not asserted current.
+`validation-data/` currently contains only README.md; this establishes absence
+of local customer-metric exports, not absence of users or revenue.
+
+### Competition and the commercial implication
+
+Official public pages consulted during this audit:
+
+- [CapCut speed curves](https://www.capcut.com/es-es/tools/speed-ramp): custom
+  curves, presets, and a broader multi-track editing workflow. Speed curves
+  alone offer little differentiation.
+- [Adobe time remapping and optical flow](https://helpx.adobe.com/ee/premiere-pro/how-to/slow-down-video.html):
+  established variable-speed and interpolation tooling. A RIFE toggle is not,
+  by itself, evidence of a better editing result.
+- [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve):
+  the free version advertises Ultra HD up to 60 fps, editing/color/audio tools,
+  and collaboration; Studio is listed at USD 295. Charging primarily for 4K
+  competes against a strong free alternative.
+- [Kapwing pricing](https://www.kapwing.com/pricing): Pro lists 4K, brand kit,
+  shared workspaces, and cloud storage. [VEED's brand-kit documentation](https://support.veed.io/en/articles/9616498-how-to-create-and-manage-brand-kits)
+  describes shared reusable assets. These show the repeatable production and
+  team workflows business buyers can already purchase.
+
+Positioning recommendation (a hypothesis to validate): **a private, fast batch
+finishing tool for freelance editors and small studios producing short action,
+automotive, sports, or product B-roll**. The offer should be a repeatable outcome:
+apply a known look to a set of clips, inspect the result, export required social
+variants, and reopen the job for revisions. Local footage handling is a useful
+benefit, but privacy alone does not establish willingness to pay. There is no
+customer evidence here proving this segment or pricing is right.
+
+Keep the existing React/Vite/Firebase/Dodo/worker stack. Start with desktop
+Chrome/Edge and measured clip/resolution limits. Reuse normalized curve math to
+derive one source-to-output time map shared by video, audio, captions, and beat
+placement. Use one export coordinator for gates, cancellation, progress, output
+validation, analytics, and quota across all UI paths. Preserve local processing;
+adding cloud rendering would require a separate product/privacy decision.
+
+### Recommended sequence and proposed acceptance gates
+
+These are proposed targets, not observed product metrics or delivery estimates.
+
+1. **Complete the output contract:** all segments in order; correct variable
+   retiming; piecewise audio timing; output dimensions; working or removed audio
+   toggles; real waveform; coherent caption/music timing. Prove with synthetic
+   timestamp/click-track fixtures and complete output decoding. If the paid
+   scope is initially single-clip, disable unsupported actions explicitly.
+2. **Make repeat jobs safe:** full local project manifest and media relinking;
+   preset bundles; per-clip settings; a bounded, cancellable batch with retry;
+   consistent export checks and billing ledger. Start with basic exports and
+   expand supported effects only after their test matrix passes.
+3. **Prove production behavior:** establish a corpus including 24/30/60 fps,
+   variable-frame-rate phone clips, mixed dimensions/audio layouts, silent and
+   corrupted inputs, strong ramps, long batches, and reload/cancel scenarios.
+   Target >=95% completion on a clearly declared supported corpus as an initial
+   release gate, plus <=1-frame marker error for timing fixtures and no missing
+   segments. Measure cold versus warm export time and peak memory on at least
+   a low-end and a midrange target device. Investigate WebGPU with a measured
+   fallback; do not promise a speedup before benchmarking. [ONNX Runtime's
+   current guide](https://onnxruntime.ai/docs/get-started/with-javascript/web.html)
+   recommends WebGPU over its maintenance-mode WebGL provider.
+4. **Validate payment for a recurring job:** observe five target editors on
+   their own clips, then run a small paid pilot. Compare task time and output
+   quality against their current editor. Keep the existing USD 12/month price
+   as one hypothesis; test a clearly scoped paid pilot or local license for
+   occasional users. Do not assume subscriptions fit infrequent speed ramping.
+   A possible continuation gate is three independent paying users who return
+   for another real job; this is an experiment criterion, not a demand forecast.
+
+Defer Studio seats, a cloud/batch API, 8K, broad generative AI, and a full editor
+replacement until a repeatable paid workflow is demonstrated. Useful first
+commercial improvements are reliable batches, reusable complete presets, project
+recovery, and aspect-ratio variants with subject positioning.
+
+### Checks actually performed and limitations
+
+- `npm run test`: discovery included an existing untracked `.claude/worktrees/`
+  checkout and reported a failure from that other checkout. Stopped the broad
+  run rather than attributing that failure to this source tree.
+- `npm run test -- --exclude "**/.claude/**"`: **26 files, 333 tests passed**.
+- `npm run lint`: broad discovery was stopped; scoped follow-up
+  `npm run lint -- --ignore-pattern ".claude/**"` failed with **2 errors**:
+  UnsupportedEnvironmentGate.tsx:27 (set-state-in-effect) and
+  VideoPlayer.tsx:135 (preserve-manual-memoization).
+- `npm run build`: type-checking reached the Vite phase, but the build failed
+  with EPERM cleaning the existing dist/models directory. This is a local
+  output-directory permission failure, not evidence of a TypeScript failure.
+- `node_modules\\.bin\\vite.cmd build --outDir .audit-build`: **passed**, 130
+  modules transformed, including workers and PWA generation. This alternative
+  bundling check did **not** run the normal postbuild SEO prerender step.
+- `node_modules\\.bin\\vite.cmd preview --outDir .audit-build --host 127.0.0.1 --port 4187`:
+  served the build. In-app browser loaded the demo editor and the guest export
+  modal. The Start export automation call timed out and reset the browser tool;
+  no newly downloaded output or complete decode was observed. Do not infer
+  either an application export failure or successful export from that timeout.
+- The existing Skyvern virtual environment launcher could not find its original
+  Python 3.12 executable. No runtime was installed or repaired for this audit.
+- No new live payment, refund, authentication, RIFE completion, caption export,
+  multi-clip concat, or batch export was verified in this audit. Existing test
+  artifacts and earlier STATUS claims are historical evidence only.
+
+Remaining manual/integration verification: decode the completed output end to
+end and inspect segment order, internal timing, audio/captions/music alignment,
+dimensions and frame rate; run a real browser batch through cancel/retry/reload;
+run payment lifecycle/replay scenarios in the provider's test mode; measure
+customer usefulness and repeat use with real participants.
+
+Changed tracked file: only this appended STATUS section. Rollback: remove the
+section beginning "Repository and commercial-readiness audit". No product-code
+rollback, deployment rollback, or production-data restore is required.
+
+## Production-readiness implementation plan (2026-10-17)
+
+The requested remediation plan is saved in
+`docs/superpowers/plans/2026-10-17-production-readiness.md`, indexed by
+`tasks/plan.md`, with execution status in `tasks/todo.md`. It specifies20 parent
+tasks, focused substeps, shared interfaces, dependencies, behavioral regressions,
+runtime output proof, rollback and explicit release/commercial gates.
+
+The plan prioritizes baseline/browser proof, shared timing and complete timeline
+exports, functional audio/resolution, consistent single/multi/batch handling,
+advanced media correctness, full job recovery/presets, billing/accounting integrity,
+and operational/repeat-use evidence. Bezier preview uses spline interpolation
+while current remapTime/curveToFFmpegFilter use linear control-point spans; this
+additional source finding is explicitly covered by Task01.
+
+Proposed product defaults/capacity bounds, partial-refund policy, founder session
+expiry handling and rollout choices are identified as proposals or unresolved
+external decisions. No approval is inferred for production changes. The current
+plan does not delete/complete the cloud stub or expand Studio/8K/general AI.
+
+Changed files in this planning task: this appended section, the dated plan,
+`tasks/plan.md` and `tasks/todo.md`. The earlier audit section remains intact.
+Verification: plan structure, task references, existing file ownership and
+`git diff --check` were checked locally; no application tests/build/browser exports
+were rerun for these documentation-only changes. Prior audit results remain
+historical. No product fix is claimed complete.
+
+Next execution step, if requested: Task00, then Task17. Manual review: inspect
+proposed defaults, checkpoint gates and the scope of the three workstreams.
+Rollback: remove the three new planning files and only this appended STATUS entry;
+preserve the earlier audit entry and all unrelated work.
+
+
+## Local repair phase (2026-10-18)
+
+The audit and ordered implementation plan are complete. The subsequent local repair
+phase below is implemented and verified; it is **not completion of the entire
+20-task production-readiness plan**. Execution status remains in `tasks/todo.md`.
+The release is not ready to be described as a proven paid production SaaS.
+
+### Implemented behavior
+
+- Standard local export compiles every retained segment, trims source offsets,
+  and concatenates clips on a normalized output canvas. Bezier timing uses an
+  adaptive common map, and output dimensions are enforced independently of crop.
+- Audio controls are stored and passed through. Constant tempo stays in one
+  interval; variable tempo follows bounded mapping intervals with short boundary
+  fades. Silent inputs get finite48kHz stereo audio. Unlocked audio stays1x with
+  trim/pad; ramp muting uses output-time windows in both locked/unlocked modes.
+  The unlocked preview approximation is visible in the UI.
+- A shared local coordinator snapshots settings, preflights job limits/features,
+  accepts one render, and settles cancellation even during preflight. Main,
+  multi-clip and batch entry points use it. Cancelled blur continuations cannot
+  create another encoder; cancelled model/inference waiters reject before reuse.
+- Batch keeps one completed blob and pauses for Download/Discard. Usage sync
+  precedes continuation. Downloaded bytes are released; accounting retry stores
+  IDs rather than re-downloading. Other clips' captions are not copied into batch.
+- Timeline waveform is derived from decoded PCM instead of synthetic bars.
+- V2 project JSON/autosave retains all clips, curves, job settings, captions and
+  per-clip undo. Open/Recover is reachable from the empty editor. Media URLs/auth
+  are excluded; sources must be relinked, with full-file SHA-256 identity for newly
+  imported sources. Import/export remains local. Autosave failure is visible.
+- Local named looks can be saved/applied/imported/exported/deleted. Caption text
+  can be corrected; output-timed SRT intersects cues with retained source spans.
+  These do not establish complete branded variants or verified subtitle burn-in.
+- Export records are immutable and transactional: dedupe precedes the cap,
+  monthly usage is updated atomically, legacy counting is bounded, direct client
+  writes are denied, and pending accounting IDs can retry after reconnect.
+
+### Actual verification
+
+| Command / case | Observed result |
+|---|---|
+| `npm run test` after review fixes | PASS:37 files,369 tests;63.19s. Includes SEO's own build. |
+| `npm run lint` | PASS, exit0; no rule suppressions added. |
+| `npm run build` | PASS, TypeScript app/node/API, Vite/PWA and SEO postbuild. |
+| `npm run test:ui:export` (host process permissions for cleanup) | PASS, exit0: real guest6s, emulator signed-in6s, retained1–3s@2x +4–6s@0.5x =>5s. Each newly downloaded MP4 probed and fully decoded. |
+| `RAMPCUT_BASE_URL=http://127.0.0.1:4187 node test/browser/export.mjs` | PASS on production preview: fresh6s guest MP4, full decode, no page exceptions. Preview-only analytics/API502/404 were observed and are not represented as backend proof. |
+| Same production target, `node test/browser/recovery.mjs` | RED before empty-editor controls; GREEN after: recover saved two-clip project without loading another video, original snapshot unchanged before recovery. |
+| `GCLOUD_PROJECT=demo-rampcut-test FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 node test/browser/accounting.mjs` | PASS against actual HTTP handlers and real emulator rules: concurrent final slot200/403, retry at cap200, immutable timestamp, prior-month dedupe/current count, invalid ID400, direct client write403. Also included in final canonical suite. |
+| `npx vitest run test/lib/renderOutput.test.ts` | Native FFmpeg proofs pass: retained spans5s/full decode; beginning/middle/end audio markers within1/30s for both pitch modes; finite silent blur with looped still; unlocked muting leaves1x tone audible and ramped output silent. |
+| Focused coordinator/batch/time-map/recovery/preset/waveform tests | PASS; included in the369-test final run. Fake-engine lifecycle tests are not rendering or billing proof. |
+
+Final artifact files (ignored, local):
+`test/skyvern/artifacts/guest-baseline.mp4`, `signed-in-baseline.mp4`,
+`signed-in-trimmed.mp4`, their JSON probes/screenshots, and native outputs under
+`temp/render-proof/`. The trimmed browser JSON records Chromium151.0.7922.34,
+cross-origin isolation=true, source script URLs and execution time. The earlier
+production guest artifact was followed by a canonical dev guest run using the
+same filename; that overwrite does not change which target each logged command
+actually used.
+
+The final fresh review found five Important issues. Failing regressions were
+observed before their fixes: blur continuations after metadata/JPEG cancellation,
+model waiters surviving disposal, unsafe multi-clip AI, empty-editor recovery,
+and unlocked ramp muting. All are addressed by the tested lifecycle fixes,
+recovery controls, mapped mute filters or explicit AI capability blocks. A second
+inference-ownership test proves a disposed worker cannot satisfy the next job.
+
+### Failed / inconclusive attempts retained
+
+An early full test run overlapped a separate build and failed with dist EBUSY;
+subsequent full runs were serialized and passed. One canonical dev guest run
+failed after worker/server requests were aborted/refused; it is not a successful
+export. A later unchanged-target canonical run passed all three cases. Earlier
+restricted Windows process cleanup did not complete; only the verified test-owned
+process tree was terminated with host permission. Final canonical cleanup exited0.
+These observations are insufficient for reliability/capacity percentages and do
+not satisfy the>=40-attempt, multi-browser/device release gate.
+
+### Remaining release blockers and next work
+
+1. Task13/14: deterministic provider billing facts, lifecycle ordering/refunds,
+   atomic webhook/revenue ledger, founder reservations and safe reconciliation.
+   Existing legacy entitlement read behavior is preserved by the quota repair;
+   accounting tests are not payment-provider lifecycle tests. Partial-refund and
+   provider session-expiry decisions still need evidence/policy resolution.
+2. Task07/08/10: full inverse-map AI rendering, bounded frame streaming, actual
+   model shape/padding/inference verification, effect composition and subtitle
+   font/burn-in proof. Preflight explicitly blocks4K+AI, AI+blur, multi-clip AI,
+   and trimmed/variable slow AI jobs. Single constant-speed AI remains a legacy
+   path requiring real-model validation; unit tests do not certify it.
+3. Task09b/11/12: exported soundtrack mixing/beat mapping, complete per-clip effect
+   settings/migration/relink round trips, explicit aspect-ratio variant jobs.
+   V2 recovery and named local looks are a foundation, not all of those workflows.
+4. Task16/18: payment-event integrity/storage budgets/privacy disclosures, safe
+   PWA updates/offline handling, VFR/mixed-dimension/advanced-effect/10-clip batch
+   corpus, cancellation/reload/capacity measurements on supported Chrome/Edge
+   devices. Current job caps are guards, not measured capacity claims.
+5. Task19: five observed editor sessions and three independently paying repeat
+   users. No observations or payments are fabricated. Recruiting/outreach,
+   provider changes, staging/deployment, production data/rules migration and shared
+   CI changes require their separately scoped authorization under the working
+   agreement. This local work did not perform those operations.
+
+### Decisions, deferred minor findings, and rollback
+
+Rulings made: use the supplied checkout because branch creation is restricted
+(cost if wrong: shared edits need careful isolation); run SEO/build verification
+serially (cost: slower checks); require the original file for v1 migration because
+v1 lacks complete media metadata (cost: manual relinking); reject unsafe AI shape
+combinations and multi-clip AI until their rewrite passes (cost: temporarily fewer
+AI export options; users can disable AI or export clips separately).
+
+Deferred reviewer minors: dense formatting in new persistence/policy/filter/preset
+modules; the batch accounting-failure test title says "preserves finished bytes"
+while its correct assertions release the downloaded blob. Neither is counted as
+an additional behavior fix.
+
+Manual checks before any release: compare source/output markers and speech on
+real customer clips; reopen/relink every clip and undo after switching; download/
+discard/cancel/retry a full batch; verify real model and subtitle assets; replay
+billing lifecycles with provider test-mode fixtures; exercise safe PWA updates and
+offline behavior. Do not infer these passed from a green build.
+
+Rollback: review and reverse only this local repair phase's code/test diff; retain
+the pre-existing audit, canonical plan and unrelated `.claude/worktrees/`. Do not
+reset the whole checkout. No production data/provider migration has occurred.
+The v1 storage key remains; preserve v2 project backups before changing recovery
+code. No commit or branch was created by this phase.
+
+### Changed-file inventory
+
+Includes the preserved earlier audit/plan artifacts, plus this local repair phase.
+Ignored runtime outputs are listed above; unrelated `.claude/worktrees/` are excluded.
+
+- `api/_adminInit.ts`
+- `api/check-subscription.ts`
+- `api/record-export.ts`
+- `docs/superpowers/plans/2026-10-17-production-readiness.md`
+- `docs/validation/SKYVERN_UI_TESTING.md`
+- `docs/validation/STATUS.md`
+- `eslint.config.js`
+- `firestore.rules`
+- `src/App.tsx`
+- `src/components/DropZone.tsx`
+- `src/components/JobPresetTools.tsx`
+- `src/components/ProjectTools.tsx`
+- `src/components/Sidebar.tsx`
+- `src/components/UnsupportedEnvironmentGate.tsx`
+- `src/features/batch/BatchPanel.tsx`
+- `src/features/captions/CaptionsPanel.tsx`
+- `src/features/export/ExportModal.tsx`
+- `src/features/preview/VideoPlayer.tsx`
+- `src/features/timeline/ClipTabs.tsx`
+- `src/features/timeline/Timeline.tsx`
+- `src/features/timeline/useTimeline.ts`
+- `src/lib/ExportEngine.ts`
+- `src/lib/LocalWasmEngine.ts`
+- `src/lib/abortable.ts`
+- `src/lib/audioTimeline.test.ts`
+- `src/lib/audioTimeline.ts`
+- `src/lib/curveMath.ts`
+- `src/lib/downloadText.ts`
+- `src/lib/exportCoordinator.test.ts`
+- `src/lib/exportCoordinator.ts`
+- `src/lib/exportLimits.ts`
+- `src/lib/exportPolicy.test.ts`
+- `src/lib/exportPolicy.ts`
+- `src/lib/ffmpegBridge.lifecycle.test.ts`
+- `src/lib/ffmpegBridge.test.ts`
+- `src/lib/ffmpegBridge.ts`
+- `src/lib/jobPresets.test.ts`
+- `src/lib/jobPresets.ts`
+- `src/lib/projectManifest.ts`
+- `src/lib/projectPersistence.test.ts`
+- `src/lib/projectPersistence.ts`
+- `src/lib/renderFilters.test.ts`
+- `src/lib/renderFilters.ts`
+- `src/lib/renderPlan.test.ts`
+- `src/lib/renderPlan.ts`
+- `src/lib/slowMotionPipeline.test.ts`
+- `src/lib/slowMotionPipeline.ts`
+- `src/lib/videoFilters.test.ts`
+- `src/lib/videoFilters.ts`
+- `src/lib/videoMetadata.ts`
+- `src/routes/EditorRoute.tsx`
+- `src/store/batchStore.test.ts`
+- `src/store/batchStore.ts`
+- `src/store/editorStore.test.ts`
+- `src/store/editorStore.ts`
+- `src/types/editor.ts`
+- `src/workers/ffmpegWorker.ts`
+- `tasks/plan.md`
+- `tasks/progress.md`
+- `tasks/todo.md`
+- `test/browser/accounting.mjs`
+- `test/browser/api.ts`
+- `test/browser/export.mjs`
+- `test/browser/recovery.mjs`
+- `test/browser/run.mjs`
+- `test/lib/renderOutput.test.ts`
+- `test/skyvern/run_export_test.ps1`
+- `vitest.config.ts`
+
+
+## 2026-10-19 local implementation handoff
+
+The local production-readiness repairs are implemented and verified for the fixture scope below. The full release/commercial qualification plan remains open: see tasks/todo.md. Earlier sections in this append-only evidence file are historical and do not override this entry.
+
+### Resulting behavior
+
+- One normalized time map/inverse drives retained spans, piecewise audio, captions and output-sampled AI; multi-clip outputs normalize dimensions/audio and render every retained span. AI encodes bounded acknowledged frame chunks; cancellation/model/worker cleanup settles explicitly. Silent blur is finite; AI+blur/4K remain blocked.
+- Real PCM waveform, retained/relinkable music and output-time trim/offset/headroom mixing, solved beat curves, per-clip editable captions/SRT, packaged licensed subtitle font, English Whisper inference and cancellation are wired to actual local processing.
+- Main/multi/batch share immutable-job preflight/coordinator/entitlement checks. Batch retains one downloadable blob, synchronizes original-account usage and resumes sequentially. Source/music URLs have explicit editor/queue/render ownership. Actual aspect variants remain independent of the saved look/edit.
+- Project v2 saves all clips/settings/cues/history/export choice/music identity and excludes auth/runtime URLs. Original media fingerprints must match on relink; v1 data remains intact and malformed legacy curves/spans are rejected. Full/denied storage offers a project-file backup path. Saved looks support save/apply/rename/delete/import/export.
+- Signed billing facts reduce independent grants by environment and paid-through dates. A single transaction applies immutable webhook inbox, projection, mapping, founder inventory and actual-payment revenue dedupe. Founder checkout reserves before provider creation, reuses held attempts and conservatively retains uncertain outcomes; missing verified inventory fails closed. A read-only offline migration audit exists, with no automatic production migration.
+- Export logs/counters are atomic and immutable with UTC-month dedupe, direct-client-write rules and original-owner pending retries. Public telemetry cannot manufacture revenue or overwrite IDs; bounded properties/payloads, accepted-event budgets, test/live separation, opt-out/DNT behavior and bounded diagnostics match the updated disclosures.
+- PWA updates require explicit save/reload, protect active jobs across tabs and preserve recovery/relink semantics. The editor layout now allocates seven rows for seven sections, with scrolling on short screens; curve canvases no longer cover clip tabs.
+
+### Fresh commands and observed results
+
+| Command | Result |
+| --- | --- |
+| `npm run test` (final log temp/browser/final-suite-layout.log) | exit0;49files/398tests passed, zero failed/skipped,51.07s |
+| `npm run build` executed in both SEO hooks with NODE_ENV=production | exit0 twice; application/API types, normal/production SEO output and routing assertions passed |
+| `npm run lint` (temp/browser/final-lint-layout.log) | exit0 |
+| `npm run test:ui:export` (temp/browser/final-ui-verified.log) | exit0; actual guest6s, real emulator signed-in6s, trimmed5s,9:16/1:1 variant downloads and recovered two-clip8s export; every downloaded MP4 probed and fully decoded |
+| `node test/browser/run-billing.mjs` and canonical runner billing/accounting | isolated real Firestore/Auth/HTTP signed-fixture replay, payment dedupe,25-seat contention/idempotent retry, conservative uncertain hold, cancellation/full refund, signature rejection, event budget, final-slot concurrency, immutable timestamp, prior-month retry and denied direct writes passed |
+| `node test/browser/media.mjs` / additional / marker cases, with and without --edge |58/58 post-fix real media-engine exports completed; ffprobe/full decode plus duration/dimension and applicable frame/audio assertions passed |
+| `node test/browser/speech.mjs` against its isolated bundle/fixture | real5.93s synthetic speech inference passed;75.496s observed cold run; timed words returned |
+| `node test/browser/pwa.mjs` (temp/browser/final-pwa-layout.log) | exit0; actual final production bundle, active export survives other-tab activation, explicit save/reload/relink, cached offline editor, zero unhandled page errors |
+| `git diff --check` | exit0 |
+
+Media artifacts: ignored test/skyvern/artifacts/media/{chromium,edge}-all-results.json (22cases each at execution), *-additional-results.json (5each), and *-audio-markers-{pitch,shift}-results.json (2each). Current default matrix contains all29 cases. Browser versions: Chromium151.0.7922.34, Edge155.0.4283.62. Case-time nearest-rank p50/p95: Chromium10.633s/83.249s, Edge13.970s/59.931s. These combine different workloads and cold/warm resources; they are not device capacity or separate cold/warm benchmarks. Usable memory measured15.6GiB on this desktop.
+
+UI artifacts: ignored guest-baseline.mp4/.json, signed-in-baseline.mp4/.json, signed-in-trimmed.mp4/.json, jobs/{9x16,1x1,recovered}.mp4 and jobs/workflow.json. The real signed-in job consumed the normal free allowance; no fake Pro state was injected. Desktop1440px and mobile390px viewport tab switching used normal clicks. PWA artifacts: pwa/lifecycle.json and active-export.mp4. Caption pixels and generated speech proof are retained locally. Execution JSON stores UTC timestamps; the final handoff date uses the client Asia/Calcutta date.
+
+### Failures and repairs retained in the evidence
+
+Pre-fix standard multi-clip replied before worker cleanup (Already running); AI multi-clip waited for an offscreen compositor frame; trimmed soundtrack silence carried invalid timestamps; installed Whisper q8 extended optimization failed Missing required scale. All have observed failing runs followed by actual successful output/inference. None of these failed attempts is silently reclassified as a successful corpus attempt.
+
+Two earlier full suites were not passes: one hit the120s SEO build hook; another hit two5s test deadlines under concurrent workloads and was stopped after failures. Local forks are now bounded to2, SEO build subprocesses to300s/hooks330s, with every assertion retained. A later production PWA check revealed inherited NODE_ENV=test in the SEO subprocess, which removed registration; both hooks now explicitly build production scripts and a regression checks PWA inclusion/emulator-hook exclusion. A static-server HTML fallback also caused a spurious script parse error; absent script URLs now return404 and the PWA test requires zero page errors.
+
+Earlier dev-only UI hydration/worker runs timed out. The canonical runner now compiles a disposable bundle under temp/browser/ui-dist, retaining the existing dev-only editor setup hook and explicit-window-flag emulator sign-in hook; normal production builds remove it. That test bundle is never a deployment artifact. A two-clip relink test first supplied the wrong saved clip's file and was correctly rejected. Its corrected setup then exposed the genuine grid/canvas interception bug; seven rows fixed it. The mobile test dismisses the keyboard-help overlay through the normal Dismiss keyboard shortcuts button before editing; no force-click/state-auth bypass is used.
+
+### Remaining blockers and manual release checks
+
+1. Real Dodo test-mode purchase/session-expiry reconciliation, reviewed legacy user/Founder inventory initialization and partial/unmapped refund policy remain unexecuted. Unknown provider outcomes stay held; no guessed timeout frees a potentially paid seat. No live/provider/database migration occurred.
+2. The checked-in RIFE binary's original provenance and commercial redistribution license remain unverified. Runtime tensor shapes/inference are proved, licensing is not. Unverified old download instructions were removed from its README.
+3. Lower/midrange physical devices, max-size/10-clip jobs, long-session memory/worker retention and separate cold/warm profiling are unmeasured. Safety limits are not validated maximum-capacity promises. Additional AI/VFR source timestamp/motion accuracy and separated stage timings, strong-ramp real speech/caption drift, visible music/metronome alignment and three-client-clip/later-day saved-look reuse remain explicit qualification tasks.
+4. Authorized staging must verify actual COOP/COEP, auth redirects, real provider callbacks/expiry, deployed rules, missing cached assets, observability and rollback. Retention/TTL/WAF/CI documents are proposals; infrastructure and flags were not changed.
+5. Task19 editor sessions and three independent paying repeat customers remain unrun. Existing prices were not changed; no outreach, payment or invented observations occurred.
+
+For human verification, use own local footage, inspect strong ramps and subtitles by ear/frame, save/reopen/relink a client project with missing music, test a network drop during accounting, and inspect perceptual AI/crop quality. Run the expanded corpus on the intended hardware before widening claims. The cloud API class remains an inactive stub; Studio/team seats/shared libraries/API/8K remain future work. No footage-upload service was introduced.
+
+### Preservation and rollback
+
+No commit, branch, push, deployment, shared CI change, provider write, production data/rules mutation or feature-flag flip was performed. The unrelated .claude/worktrees/ checkout was not edited/deleted. Existing stack/dependencies and original v1 storage are preserved. Test-owned media/speech/dev servers were stopped; canonical emulator/preview and PWA servers clean up their own processes. The pre-existing preview on4187 was left alone.
+
+Review/restore code by the functional groups above, preserving any user edits; rerun suite/build/browser proof after a rollback. Do not use deletion-based rollback against worktrees, media, v1 backups or production records. Future production billing/PWA data changes need their own reviewed migration/rollback artifact. tsconfig.api.tsbuildinfo is generated build state, included in the inventory rather than treated as a hand edit.
+
+### Complete changed/new file inventory for this task
+
+The list includes prior local phases of this implementation and the final continuation; it excludes the unrelated .claude worktree and ignored test outputs. No package/dependency lockfile was changed.
+
+- `api/_adminInit.ts`
+- `api/_analyticsBudget.ts`
+- `api/_analyticsEvents.test.ts`
+- `api/_analyticsEvents.ts`
+- `api/_billingAudit.test.ts`
+- `api/_billingAudit.ts`
+- `api/_billingLedger.ts`
+- `api/_billingState.test.ts`
+- `api/_billingState.ts`
+- `api/_founderInventory.ts`
+- `api/check-subscription.ts`
+- `api/create-checkout-session.ts`
+- `api/founder-seats.ts`
+- `api/record-export.ts`
+- `api/track-event.ts`
+- `api/webhooks/dodo.ts`
+- `docs/superpowers/plans/2026-10-17-production-readiness.md`
+- `docs/validation/BILLING.md`
+- `docs/validation/LAUNCH.md`
+- `docs/validation/METRICS.md`
+- `docs/validation/PRELAUNCH_TEST_PROFILE.md`
+- `docs/validation/RESULTS.md`
+- `docs/validation/SKYVERN_UI_TESTING.md`
+- `docs/validation/STATUS.md`
+- `eslint.config.js`
+- `firestore.rules`
+- `public/fonts/NotoSans-Regular.ttf`
+- `public/fonts/OFL.txt`
+- `public/fonts/README.md`
+- `public/models/README.md`
+- `scripts/audit-billing-snapshot.ts`
+- `src/App.tsx`
+- `src/components/AppUpdateNotice.tsx`
+- `src/components/DropZone.tsx`
+- `src/components/ErrorBoundary.tsx`
+- `src/components/FormatVariantsTools.tsx`
+- `src/components/JobPresetTools.tsx`
+- `src/components/ProjectTools.tsx`
+- `src/components/Sidebar.tsx`
+- `src/components/UnsupportedEnvironmentGate.tsx`
+- `src/components/UpgradeModal.tsx`
+- `src/features/batch/BatchPanel.tsx`
+- `src/features/beatSync/BeatSyncPanel.tsx`
+- `src/features/captions/CaptionsPanel.tsx`
+- `src/features/export/ExportModal.tsx`
+- `src/features/preview/VideoPlayer.tsx`
+- `src/features/timeline/ClipTabs.tsx`
+- `src/features/timeline/Timeline.tsx`
+- `src/features/timeline/useTimeline.ts`
+- `src/lib/ExportEngine.ts`
+- `src/lib/LocalWasmEngine.ts`
+- `src/lib/abortable.ts`
+- `src/lib/analytics.ts`
+- `src/lib/audioTimeline.test.ts`
+- `src/lib/audioTimeline.ts`
+- `src/lib/beatMapper.test.ts`
+- `src/lib/beatMapper.ts`
+- `src/lib/curveMath.ts`
+- `src/lib/diagnostics.test.ts`
+- `src/lib/diagnostics.ts`
+- `src/lib/downloadText.ts`
+- `src/lib/exportCoordinator.test.ts`
+- `src/lib/exportCoordinator.ts`
+- `src/lib/exportLimits.test.ts`
+- `src/lib/exportLimits.ts`
+- `src/lib/exportPolicy.test.ts`
+- `src/lib/exportPolicy.ts`
+- `src/lib/ffmpegBridge.lifecycle.test.ts`
+- `src/lib/ffmpegBridge.test.ts`
+- `src/lib/ffmpegBridge.ts`
+- `src/lib/formatVariants.test.ts`
+- `src/lib/formatVariants.ts`
+- `src/lib/founderSeats.ts`
+- `src/lib/frameExtractor.test.ts`
+- `src/lib/frameExtractor.ts`
+- `src/lib/googleAnalytics.ts`
+- `src/lib/jobPresets.test.ts`
+- `src/lib/jobPresets.ts`
+- `src/lib/mediaResources.test.ts`
+- `src/lib/mediaResources.ts`
+- `src/lib/outputFrames.test.ts`
+- `src/lib/outputFrames.ts`
+- `src/lib/previewAudio.test.ts`
+- `src/lib/previewAudio.ts`
+- `src/lib/projectLegacy.test.ts`
+- `src/lib/projectManifest.ts`
+- `src/lib/projectPersistence.test.ts`
+- `src/lib/projectPersistence.ts`
+- `src/lib/pwa.ts`
+- `src/lib/pwaPolicy.test.ts`
+- `src/lib/pwaPolicy.ts`
+- `src/lib/renderFilters.test.ts`
+- `src/lib/renderFilters.ts`
+- `src/lib/renderPlan.test.ts`
+- `src/lib/renderPlan.ts`
+- `src/lib/slowMotionPipeline.test.ts`
+- `src/lib/slowMotionPipeline.ts`
+- `src/lib/soundtrack.test.ts`
+- `src/lib/soundtrack.ts`
+- `src/lib/videoFilters.test.ts`
+- `src/lib/videoFilters.ts`
+- `src/lib/videoMetadata.ts`
+- `src/main.tsx`
+- `src/pages/Privacy.tsx`
+- `src/routes/EditorRoute.tsx`
+- `src/store/batchStore.test.ts`
+- `src/store/batchStore.ts`
+- `src/store/editorStore.test.ts`
+- `src/store/editorStore.ts`
+- `src/styles/globals.css`
+- `src/types/editor.ts`
+- `src/workers/captionWorker.ts`
+- `src/workers/ffmpegWorker.ts`
+- `src/workers/opticalFlowWorker.ts`
+- `tasks/plan.md`
+- `tasks/progress.md`
+- `tasks/todo.md`
+- `test/billing/founder-plan.test.ts`
+- `test/billing/webhook-audit.test.ts`
+- `test/browser/accounting.mjs`
+- `test/browser/api.ts`
+- `test/browser/auth.mjs`
+- `test/browser/billing.ts`
+- `test/browser/export.mjs`
+- `test/browser/jobs.mjs`
+- `test/browser/media-fixtures.mjs`
+- `test/browser/media.html`
+- `test/browser/media.mjs`
+- `test/browser/mediaEntry.ts`
+- `test/browser/pwa.mjs`
+- `test/browser/recovery.mjs`
+- `test/browser/run-billing.mjs`
+- `test/browser/run.mjs`
+- `test/browser/speech.html`
+- `test/browser/speech.mjs`
+- `test/browser/speechEntry.ts`
+- `test/browser/vite.app.config.ts`
+- `test/browser/vite.media.config.ts`
+- `test/browser/vite.speech.config.ts`
+- `test/lib/opticalFlowWorkerVersion.test.ts`
+- `test/lib/renderOutput.test.ts`
+- `test/reporting/analytics-budget.test.ts`
+- `test/seo/prerendered-routes.test.ts`
+- `test/skyvern/run_export_test.ps1`
+- `tsconfig.api.tsbuildinfo`
+- `vite.config.ts`
+- `vitest.config.ts`
+
+
+## 2026-10-20 authorized production deployment
+
+User explicitly requested "deploy them" after the implementation handoff. This authorizes this code/rules deployment; no Git commit/push, customer-data migration, payment-provider setting/product/price change, real purchase/refund, outreach, shared CI/WAF/TTL change or experiment-flag change was performed.
+
+### Published release and scope
+
+- Public production URL: https://rampcut.astralbuild.dev
+- Vercel project rampify, existing project prj_6UssxoNINy7FndywyY7bEp3X0FAF, owner shikhar13012001s-projects.
+- Final deployment: dpl_DfhdgUj9DVN8KHogfpXKQq12ekbJ / https://rampify-47lm59o3n-shikhar13012001s-projects.vercel.app. Created with `vercel deploy --prod --skip-domain --yes`, then explicitly promoted after protected candidate HTTP/API verification. `vercel inspect rampcut.astralbuild.dev` resolves to this Ready deployment. Public editor module `/assets/index-BobvC0qH.js` matches the protected candidate exactly.
+- Previous production retained: dpl_7DWdcXpb6RQocHeTDovj948BXg5R / https://rampify-a5c6h9bva-shikhar13012001s-projects.vercel.app.
+- Firestore project rampify-720b4: old deployed policy was an expired blanket test rule (expiry2026-07-20), rather than the repository's documented policy. It was backed up read-only before mutation. New owner-read/server-write policy published as projects/rampify-720b4/rulesets/78b3f63b-b676-4073-85fb-dc5a15c6ceba; read-back content equals firestore.rules exactly. Previous ruleset16e8128a-afc6-4b2a-b8ea-05c69740db4b and source are preserved in ignored temp/browser/deploy-firestore-backup.json.
+- Missing verified Founder inventory intentionally produces available=false, remaining=0, reconciliationRequired=true. No inventory or paid-user records were initialized/rewritten. Existing legacy grant compatibility remains. Monthly/annual checkout configuration was not changed or exercised with a real charge.
+
+### Files changed during deployment preparation
+
+1. `.vercelignore` (new): default-deny root allowlist for api/src/public/scripts plus required package/build/config files; explicit credential/private-key/API-key/test/generated-state exclusions. Dry input listing verified173 files/25,515,460 bytes, required modules/fonts/scripts present, no local .env/api keys/worktree/test outputs. An initial allowlist directory-pattern dry run excluded required directories; fixed before upload. No unrelated files were uploaded.
+2. `api/track-event.ts`: `parsed.ok === false` makes discriminant narrowing work in Vercel's non-strict API compiler as well as local strict compilation; runtime rejection behavior is preserved. The initial candidate build reported TS2339, so it was not promoted. Reproduced locally with strictNullChecks=false (RED); explicit false comparison is GREEN in both modes and in the final hosted build.
+3. `test/browser/deployment.mjs` (new local test, excluded from uploads): real public deployment smoke, telemetry opt-out before app load, no production user creation or successful analytics/export-log/payment write.
+4. `tasks/todo.md`, `tasks/progress.md`, this STATUS entry and LAUNCH.md: deployment/verification/rollback evidence. Changes remain uncommitted in the workspace.
+
+### Commands and actual results
+
+- Fresh `npm run test`: exit0,49files/398tests, zero failed/skipped,109.45s (temp/browser/deploy-suite.log), before the hosted-compiler compatibility fix.
+- `npm run lint`: exit0 (temp/browser/deploy-lint.log). Final changed API file eslint check exit0 (deploy-final-lint.log).
+- Vercel hosted `npm run build`: final candidate exit0, application/API compilation, production Vite/SEO/PWA output; no TS diagnostic in the final candidate log. Build49s. Existing Active CPU memory-setting warning and dependency install-script warnings are retained; no false claim of warning-free build.
+- Explicit TypeScript strictNullChecks=false API compile reproduced TS2339, then passed after the one-line fix; `tsc -p tsconfig.api.json` also passed. Focused analytics schema/budget tests15/15 passed (deploy-api-regressions.log).
+- Candidate authenticated CLI HTTP checks: editor200; unauthenticated check-subscription401; Founder JSON confirms fail-closed reconciliation. Vercel CLI automatically generated a project deployment-protection bypass token for candidate access; the token was never printed, placed in source, or used to disable protection. Production itself remains publicly accessible at its existing domain.
+- `firebase deploy --only firestore:rules --project rampify-720b4 --non-interactive` stalled without issuing output; the owned CLI process was stopped before using the already-installed official Firebase CLI Rules API implementation. The release pointer was re-read and required to match the backed-up state; policy compilation passed, new ruleset was created, existing cloud.firestore release updated, and source equality was verified by reading it back. Evidence: deploy-firestore-result.json/final.log. No user/export/billing documents were written.
+- `vercel promote <final candidate> --yes`: exit0. Domain inspection Ready and asset-hash equality passed.
+- `RAMPCUT_DEPLOYMENT_URL=https://rampcut.astralbuild.dev node test/browser/deployment.mjs`: exit0. Actual live6s guest MP4 downloaded, ffprobe assertions and full FFmpeg decode passed. Chromium151.0.7922.34; crossOriginIsolated=true; production dev hooks absent; zero page errors; active service worker at /sw.js; local subtitle font200; analytics opt-out caused zero /api/track-event browser requests. Malformed/unauthorized API probes returned check-subscription401, record-export401, track-event400, webhook400, before any data write. Founder checkout unavailable as intended. Artifacts: ignored test/skyvern/artifacts/deployment/production-smoke.json/.png and production-guest.mp4.
+- Public homepage/editor/pricing/privacy/robots all200 with COOP=same-origin and COEP=credentialless. No authenticated production account or real provider transaction was created for verification.
+- `git diff --check`: exit0.
+
+### Known open security/qualification items
+
+`npm audit --omit=dev --json` is NOT clean:38 advisories (1critical,25high,12moderate), retained in ignored temp/browser/deploy-audit.json. These are pre-existing locked dependency findings; this deployment did not change package.json/package-lock.json or add/update packages. The critical tar finding is in the installed dependency graph; several high findings involve build/install tooling, Node ONNX dependencies and router SSR/RSC paths. The app uses local browser inference and BrowserRouter rather than those SSR paths, but a complete reachability review/remediation was not performed and no blanket "unreachable" exemption is claimed. Dependency remediation remains open, alongside the earlier RIFE provenance/license, capacity/device/media accuracy, actual provider reconciliation and customer-validation gates. This release is not a security certification or completed paid-customer qualification.
+
+### Rollback and preservation
+
+For an application rollback, promote the retained previous Ready deployment with the installed Vercel CLI, then verify the public domain and a guest export again. Do not blindly restore the old expired default Firestore policy: retain the hardened owner-read/server-write rules unless a reviewed replacement is necessary. Previous rules source/ruleset are backed up for audit, not a recommendation to reopen access. No database migration needs reversal because none was performed. Candidate1 with TS diagnostic remains an unpromoted diagnostic deployment, not the production rollback target. The unrelated .claude worktree and all original media remain untouched. No deployment background servers remain from this smoke.
+
+## 2026-10-20 export orientation repair and editor polish
+
+User scope: fix the alternating vertical flip in Downloads/test_rampified.mp4 and style the editor shown in the attached screenshot. The user confirmed the warm light theme and the proposed control polish. Earlier deployment authorization was used for this related repair. No commit/push, provider configuration, Firestore rule/data, feature-flag, or dependency change is part of this repair.
+
+### Cause and implementation
+
+The WebGL blur worker uploaded ImageBitmaps and relied on UNPACK_FLIP_Y_WEBGL, which WebGL ignores for that input type. The old shader sampled inverted texture Y, so only frames inside blur overlay windows were flipped. Explicit shader UV inversion fixes the responsible layer; ineffective pixelStorei and its misleading comment were removed. Primary reference: https://registry.khronos.org/webgl/specs/latest/2.0/ (ImageBitmap upload rules).
+
+The new project, saved-look, format, soundtrack and transcript tools had functional markup but no shared control styling. Added scoped controls aligned to the existing Clay tokens: bordered fields/buttons, selected aspect-ratio tiles, compact music trim/level controls, truncated filenames, readable transcript editing and visible keyboard focus. Kept the confirmed warm theme. Mobile header controls were overlapping; compact, labeled auth controls and responsive sizing make the panel toggle clickable. Peer review then found the signed-in dropdown could extend60px beyond the320px viewport. It now uses viewport-bounded placement and wraps long account emails.
+
+### Changed-file inventory for this repair
+
+- src/workers/motionBlurWorker.ts
+- src/styles/globals.css, src/styles/editorTools.css (new)
+- src/components/ProjectTools.tsx, JobPresetTools.tsx, FormatVariantsTools.tsx, TopBar.tsx
+- src/features/beatSync/BeatSyncPanel.tsx, src/features/captions/CaptionsPanel.tsx
+- src/lib/auth.tsx
+- PRODUCT.md (new context from the existing product/docs and confirmed design direction); .impeccable/live/config.json (new local skill configuration, no script injection/CSP change). Existing DESIGN.md remains intact; its dark-theme inventory is historical, current CSS/Clay tokens govern this repair.
+- test/browser/mediaEntry.ts, media-fixtures.mjs, media.mjs, jobs.mjs, run.mjs
+- test/browser/blur-orientation.mjs, editor-polish.mjs (new)
+- docs/validation/STATUS.md, tasks/progress.md, tasks/todo.md
+- New local output C:/Users/ishgu/Downloads/test_rampified_fixed.mp4. Original media preserved. Ignored diagnostic code/logs and contact sheets are under temp/flip-debug and test/skyvern/artifacts; none are uploaded.
+
+### Actual verification
+
+- RED before shader fix: `node test/browser/blur-orientation.mjs` and the same command with `--edge` failed all four real-worker corner checks. Static errors255 RGB units; moving/resized errors208.48. Original239 source frames were upright; the supplied84-frame export contained50 vertically inverted frames. These failures were observed, not inferred from source strings.
+- GREEN after shader fix: rebuild using `node node_modules/vite/bin/vite.js build --config test/browser/vite.media.config.ts`, then both orientation-worker commands passed cold/static, reused/static, moving two-frame blend and resized eight-frame blend. Maximum error0 for static,0.482 for moving blends.
+- `node test/browser/media-fixtures.mjs`; `node test/browser/media.mjs --case=blur-orientation` and `--case=blur-orientation --edge`: actual worker/FFmpeg MP4 exports, native ffprobe and full decode passed. Every one of55 exported frames in each browser had all four asymmetric quadrants in the correct place. Earlier solid-color media fixtures could not establish orientation; this test closes that gap.
+- `node temp/flip-debug/reexport-source.mjs`: the related local Downloads/test.mp4 source was exported with a custom multi-transition curve and balanced blur in Chromium. All84 output frames were upright, full decode passed, duration2.814s. These were diagnostic settings, not a reconstruction of the user's unknown original edit settings. Footage remained local.
+- One-off supplied-export repair: native FFmpeg conditional vflip corrected the proven50 inverted frames in a NEW file, CRF16 video re-encode and AAC stream copy. All84 frames verified upright;2.800s duration,1280x960, video/audio retained, full decode passed. Encoded AAC SHA256 matched the original exactly. Contact sheet visually inspected. The content-specific orientation diagnostic is not a production heuristic.
+- Final `npm run test`:49 files/398 tests PASS,87.99s, including production typecheck/bundle/SEO assertions. `npm run lint` PASS; standalone `npm run build` PASS. Logs final-tests.log/final-lint.log/final-build.log. The later menu-placement class/CSS change receives the targeted signed-in browser proof and hosted build below.
+- `node test/browser/run.mjs`: actual isolated Auth/Firestore/API checks and real UI exports PASS: guest6s, authenticated6s, trimmed5s,9:16/1:1 variants and recovered/relinked two-clip8s export. Each MP4 fully decoded. This first pass preceded the account-menu correction; a fresh pass including opened signed-in menus is recorded below.
+- `RAMPCUT_BASE_URL=http://127.0.0.1:5175 RAMPCUT_POLISH_SOURCE=C:/Users/ishgu/Downloads/test_rampified_fixed.mp4 node test/browser/editor-polish.mjs` and the same with `--edge`: PASS at320/390/768/1024/1440px. No horizontal document/mixer overflow; preset save/apply, music trim/gain editing, mobile panel/format interaction and keyboard focus passed. A genuine project-file import supplied two caption fixtures; editing and downloaded output-timed SRT were verified. This is transcript-control proof, not a claim of model transcription or Pro entitlement. Zero page errors. Screenshots/JSON: test/skyvern/artifacts/editor-polish/{after-desktop,after-mobile-panels,after-mobile-mixer,after-captions}.png, after.json and edge-prefixed equivalents.
+- A first styling test ran before its preview was ready and got connection refused. A subsequent run reproduced the real mobile header interception and failed normally; the same script passed after responsive control sizing. No force-click workaround was used.
+- `node test/browser/pwa.mjs`: PASS actual cross-tab active export, explicit update/save/reload, recovery/relink and cached offline shell. Mock offline API503/missing asset404 console responses are expected; zero unhandled page exceptions.
+- Peer review was read-only. Its one concrete mobile menu finding is addressed; targeted real signed-in regression passed at320/390px with a long account email. Physical mobile devices/Safari/other GPU drivers were not qualified by viewport checks.
+
+### Deployment, manual checks and rollback
+
+Candidate1 dpl_BpobhuLt2NGSR8kr6JaqwZmjhmVX (rampify-jhcvbenav) built Ready but was NOT promoted after review found the mobile account-menu edge case. Its protected editor200, Founder fail-closed200 and subscription401 checks passed. Final candidate dpl_GpbJVzDKKmH2oNQT1No1DmWnToZ6 (https://rampify-pfsf90d10-shikhar13012001s-projects.vercel.app) built Ready and was promoted successfully to https://rampcut.astralbuild.dev. Upload dry listing174 files excludes all user footage, credentials, tests, local artifacts and unrelated worktrees. No broader commercial/readiness gates from the prior report are being claimed closed.
+
+Manual check: refresh the editor; open the supplied repaired video or re-export the original edit with motion blur. Watch all speed transitions for orientation; check saved looks/format selection, soundtrack trim/levels and transcript editing. On a phone-width screen, open panels and the signed-in account menu. Existing installed PWAs should use their normal save/update prompt and relink original media after reload.
+
+Rollback: retain hardened Firebase rules/data as-is. Re-promote previous Ready app deployment dpl_DfhdgUj9DVN8KHogfpXKQq12ekbJ (https://rampify-47lm59o3n-shikhar13012001s-projects.vercel.app), then verify domain and a guest export. For local code rollback, revert only the scoped shader/control changes above using the task diff, preserving the earlier uncommitted implementation and unrelated worktree. Do not delete original/repaired media or reset the whole checkout. The previous app includes the blur defect; consider disabling blur in the edit if a rollback is needed.
+
+
+### Final verification and production handoff
+
+- After the menu correction, one complete canonical run reached an export error during recovered-project rendering. The original harness waited for download and did not capture collapsed technical details, so that attempt's cause was not established. It is retained as a failure in temp/flip-debug/final-ui-workflow.log and jobs/failure.png. No speculative engine fix was made or claimed.
+- Enhanced test-only diagnostics now log browser errors and race the recovered download against the real error heading/technical details. Added `node test/browser/run.mjs --jobs-only` to run the same real emulator/app/jobs workflow independently. That focused rerun passed (recovery-debug.log), then a fresh full `node test/browser/run.mjs` passed all billing/accounting/guest/authenticated/trim/variant/recovery stages (final-canonical-rerun.log). No export-engine source change separates the failed attempt and these passes. The isolated prior failure is not a claim of guaranteed reliability or a diagnosed defect fix.
+- Final real signed-in menus:320px bounds left28/right308;390px bounds left98/right378. Long email wraps; menu scroll width278 equals client width278. Ordinary clicks opened both the account menu and editor panels. Screenshot jobs/mobile-account-320.png visually inspected. Peer reviewer confirmed the patch addresses its finding and reported no additional concrete issue.
+- Final `npm run lint` passed after the production menu patch (review-fix-lint.log); hosted application/API TypeScript build passed without TS diagnostics. `git diff --check` passed. Earlier full398-test result remains valid for unchanged logic; actual menu layout received the real signed-in browser proof above.
+- Final `vercel deploy --dry --json`:174 files/25.5MB, required source present, user footage/credentials/tests/artifacts/worktrees excluded. `vercel deploy --prod --skip-domain --yes`: final candidate Ready, then authenticated CLI editor200/subscription401/Founder200 checks passed. Published worker bytes exactly match the worker tested by the Chromium/Edge GPU regressions.
+- `vercel promote https://rampify-pfsf90d10-shikhar13012001s-projects.vercel.app --yes`: exit0. New public assets verified: /assets/index-BUphu_Og.js, /assets/index-qNW4hxYz.css, /assets/motionBlurWorker-DtWAt97y.js. Public worker bytes match the tested candidate. Evidence final-candidate-checks.json/live-assets.json.
+- `RAMPCUT_DEPLOYMENT_URL=https://rampcut.astralbuild.dev node test/browser/deployment.mjs`: PASS actual live6s guest MP4 download and full native decode. COOP=same-origin/COEP=credentialless, crossOriginIsolated=true, production dev hooks absent, active service worker, font200, zero page errors/analytics requests. Unauthorized/malformed subscription401/export401/analytics400/webhook400 guards passed before data writes; Founder remains deliberately unavailable pending reconciliation. No authenticated production account/payment/data write was created by verification.
+- `RAMPCUT_BASE_URL=https://rampcut.astralbuild.dev RAMPCUT_POLISH_SOURCE=C:/Users/ishgu/Downloads/test_rampified_fixed.mp4 node test/browser/editor-polish.mjs`: PASS the full UI/preset/music/five-width/mobile/keyboard/imported-transcript/SRT script against the public deployment. Footage stayed local. Final screenshots are actual public UI; no fake Pro entitlement was used.
+- The repaired file was queued for preview in Codex. No commit/push was made. Earlier commercial/security/device/license gates remain as documented; this repair does not certify the whole product for paying clients. The retained previous Ready deployment above is the application rollback target.
+
+## 2026-10-21 authorized Git handoff
+
+The user explicitly requested "then commit push" for the implementation already deployed and validated above. This authorizes committing these changes and pushing the existing main branch to origin (https://github.com/shikhar13012001/rampify.git). No new application behavior, provider/data/rules deployment, dependency change, or branch rewrite is included in this Git handoff.
+
+Verification: `git fetch origin` succeeded; HEAD and origin/main were equal before committing. All173 regular application input files matched the raw SHA1 values in the final deployed input snapshot; its174th entry is a directory, not an extra source file. A filename/credential-pattern scan of155 commit candidates found no private-key material, GitHub tokens, or live provider secrets. Local footage, credentials, artifacts, the unrelated .claude/worktrees checkout, local .impeccable configuration and generated tsconfig.api.tsbuildinfo are excluded from the commits.
+
+Fresh `npm run test`:49 files/398 tests PASS,155.59s (temp/commit-tests.log), including the production typecheck/bundle/SEO assertions. `npm run lint`:PASS (temp/commit-lint.log). `git diff --cached --check` passed for each staged group. Previous actual browser/media/live deployment proofs remain recorded above; those browser runs were not repeated merely to commit byte-identical application inputs.
+
+Commit groups:2e860cd (audited billing, inventory, export/analytics accounting and corresponding tests/docs), af023be (local editing/export/recovery/media/UI workflows, fonts/PWA settings and real browser regressions), followed by this documentation/validation-tooling/upload-allowlist commit. Git commit contents provide the per-file inventory. Push targets origin/main with normal fast-forward semantics; final remote SHA is checked after push and reported to the user. No force push is authorized or needed.
+
+Manual verification: inspect the three new commits on origin/main and compare its SHA to local HEAD. The existing live deployment is https://rampcut.astralbuild.dev; this Git handoff does not claim a new manual deployment. For rollback, review and revert the relevant commit groups in reverse order rather than resetting shared history; an app rollback remains the retained Ready deployment described above. Existing intermittent-recovery, commercial/security/device/license limitations remain unchanged and documented.
+
+The final staged whitespace check caught a trailing blank line in the implementation plan; it was removed before the documentation commit. No source behavior changed.

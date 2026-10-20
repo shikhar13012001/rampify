@@ -1,3 +1,27 @@
+## Final local verification — 2026-10-19
+
+Fresh full suite: **49 files /398 tests passed, zero failed or skipped**. `npm run lint` passed. The SEO suite executed `npm run build` twice with NODE_ENV=production (ordinary and VERCEL_ENV=production), including application/API types, bundling and SEO output assertions. The added regression requires service-worker registration and excludes emulator hooks from the actual production scripts.
+
+`npm run test:ui:export` passed end to end: real guest6s, isolated emulator sign-in6s, retained-span5s, explicit9:16/1:1 batch downloads, saved-look reload/apply, normal clip-tab clicks at desktop/mobile viewport widths, original-file relink of two clips and a new fully decoded8s combined export. `node test/browser/pwa.mjs` passed against the final production bundle, including zero unhandled page errors. These are local proofs; the remaining qualification gates are in tasks/todo.md and STATUS.md.
+
+The two-clip workflow exposed a real five-row/seven-section layout bug that covered clip tabs with the curve canvas; seven desktop/mobile rows and scrolling fixed it. The test dismisses the existing keyboard-help overlay through its normal Dismiss keyboard shortcuts control. Earlier wrong-source relink rejection was correct app behavior, corrected in the test setup. An intermediate PWA rerun exposed NODE_ENV=test inheritance in the SEO build subprocess; explicit production NODE_ENV now tests the actual shipping path. The local static PWA server now returns404 for absent scripts rather than serving executable SPA HTML. These failures are retained in ignored logs rather than counted as successes.
+
+---
+
+## Current implementation profile — 2026-10-18
+
+Current measured support is this Windows desktop, Chromium151 and Edge155. The58 real media downloads and PWA lifecycle proof are described in RESULTS.md. Existing unchecked manual items below retain their original meaning; these measurements do not imply Safari/mobile or all-device support.
+
+Enforced local safety bounds: up to10 clips/job,30s and100MiB/source,500MiB aggregate sources,120s output/clip; soundtrack120s/100MiB; AI source10s and720p pixels. AI+blur and AI+4K are rejected before rendering. These are conservative code guards, **not validated maximum capacity promises**. The10-clip/maximum-size queue, lower/midrange devices, sustained memory/worker counts, separate cold/warm measurements and VFR+AI semantic accuracy still require measured qualification before broader claims. Caption generation is English-only and can require a cold model download; cancelled/timed-out generation discards late results.
+
+Automated correctness proofs cover math/inverse/audio maps, per-clip state/caption ownership, normalized curves, timeline ordering, policy parity, cancellation, pending accounting/account ownership, media URL ownership, project/preset validation, signed webhook reduction and analytics budgets. Human checks should additionally inspect real client speech at strong ramps, crop framing and perceived AI artifacts on their actual footage. Synthetic fixture correctness does not prove useful client output.
+
+Production PWA uses prompt updates. Save and reload is disabled during exports, unfinished batches and accounting sync. A worker activated by another tab cannot reload active work. Save copies edits, not original media; recovery requires original source/music relinking. Cached shell access offline passed; signed-in exports fail closed without a fresh entitlement response. An offline shell is not a guarantee of uncached models/fonts or offline signed-in exports.
+
+Run root builds and production-preview tests sequentially: the SEO suite rebuilds root dist twice. The separate media/speech/UI test bundles write ignored directories under temp/browser and cannot be deployed as the public app. The UI bundle deliberately retains only the existing explicit emulator DEV hook; normal production builds remove it.
+
+---
+
 # Pre-launch test profile
 
 The single, current, prioritized list of everything to manually verify before

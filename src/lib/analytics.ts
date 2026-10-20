@@ -33,6 +33,7 @@ export type AnalyticsEventName =
   | 'upgrade_viewed'
   | 'checkout_started'
   | 'payment_succeeded'
+  | 'ui_error'
   | 'curve_link_copied'
   | 'curve_link_opened'
   | 'pwa_installed';
@@ -357,6 +358,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
  */
 export function trackEvent(event: AnalyticsEvent): void {
   try {
+    if(event.name==='payment_succeeded')return; // Payment events are server verified only.
     if (typeof fetch !== 'function') return;
     if (!hasAnalyticsConsent()) return;
 

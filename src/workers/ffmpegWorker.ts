@@ -1,3 +1,7 @@
+import {buildSoundtrackFilter} from '@/lib/soundtrack';
+import type {Soundtrack} from '@/types/editor';
+import { buildTimelineFilters } from '@/lib/renderFilters';
+import type { Segment, AudioSettings } from '@/types/editor';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 // ?url tells Vite to emit these as same-origin assets (no CDN / no COEP issues).
@@ -22,6 +26,9 @@ export interface FrameFile {
 
 interface StartMsg {
   type: 'start';
+  segments?: Segment[];
+  audioSettings?: AudioSettings;
+  sourceFile?: {duration:number;width:number;height:number};
   videoUrl: string;
   setptsFilter: string;
   // Precomputed atempo chain, used when preservePitch is true.
@@ -73,12 +80,16 @@ interface CancelMsg { type: 'cancel' }
  */
 interface ConcatMsg {
   type: 'concat';
+  canvas?: {width:number;height:number};
   parts: { name: string; data: Uint8Array }[];
   outputName: string;
   returnMode?: 'url' | 'buffer';
 }
 
-type InboundMsg = StartMsg | CancelMsg | ConcatMsg;
+interface AiChunkMsg {type:'aiChunk';frames:FrameFile[];index:number;crf:number}
+interface AiFinishMsg {type:'aiFinish';videoUrl:string;sourceFile:{duration:number;width:number;height:number};segments:Segment[];audioSettings:AudioSettings;postFilter?:string;captionsSrt?:string}
+interface MixMsg {type:'mix';video:Uint8Array;music:Uint8Array;track:Soundtrack;duration:number}
+type InboundMsg = StartMsg | CancelMsg | ConcatMsg | MixMsg | AiChunkMsg | AiFinishMsg;
 
 // ─── Worker ───────────────────────────────────────────────────────────────────
 
@@ -196,12 +207,70 @@ function buildPostFilterChain(msg: StartMsg): string | null {
   return parts.length > 0 ? parts.join(',') : null;
 }
 
+async function writeCaptions(srt:string){
+  await ffmpeg.createDir('fonts').catch(()=>{});
+  const response=await fetch(new URL('/fonts/NotoSans-Regular.ttf',self.location.href));
+  if(!response.ok)throw new Error('Caption font is unavailable. Reconnect and retry.');
+  await ffmpeg.writeFile('fonts/NotoSans-Regular.ttf',new Uint8Array(await response.arrayBuffer()));
+  await ffmpeg.writeFile('captions.srt',new TextEncoder().encode(srt));
+}
+const aiParts:string[]=[];
+
+let pendingResult:{message:unknown;transfer:Transferable[]}|null=null;
+function postJobResult(message:unknown,transfer:Transferable[]=[]){pendingResult={message,transfer};}
+function flushJobResult(){const result=pendingResult;pendingResult=null;if(result)(self.postMessage as (message:unknown,transfer:Transferable[])=>void)(result.message,result.transfer);}
+
 self.onmessage = async (e: MessageEvent<InboundMsg>) => {
   const msg = e.data;
 
   if (msg.type === 'cancel') {
     if (running) ffmpeg.terminate();
     running = false;
+    return;
+  }
+
+  if(msg.type==='aiChunk'||msg.type==='aiFinish'){
+    if(running){self.postMessage({type:'error',message:'An encoder job is already running.'});return;}
+    running=true;
+    try{
+      await loadFFmpeg();
+      if(msg.type==='aiChunk'){
+        if(msg.frames.length<1||msg.frames.length>30||msg.index!==aiParts.length)throw new Error('Invalid AI chunk order or size.');
+        for(const frame of msg.frames)await ffmpeg.writeFile(frame.name,frame.data);
+        const output=`chunk-${msg.index}.mp4`;
+        const code=await ffmpeg.exec(['-framerate','30','-i','of_%06d.jpg','-an','-c:v','libx264','-preset','ultrafast','-crf',String(msg.crf),'-pix_fmt','yuv420p','-y',output]);
+        if(code!==0)throw new Error('AI chunk encoding failed.');
+        for(const frame of msg.frames)await ffmpeg.deleteFile(frame.name);aiParts.push(output);
+        self.postMessage({type:'chunkDone'});
+      }else{
+        if(!aiParts.length)throw new Error('No interpolated frames were encoded.');
+        await ffmpeg.writeFile('ai-list.txt',new TextEncoder().encode(aiParts.map(name=>`file '${name}'`).join('\n')));
+        if(await ffmpeg.exec(['-f','concat','-safe','0','-i','ai-list.txt','-c','copy','-y','ai-video.mp4'])!==0)throw new Error('AI concatenation failed.');
+        await ffmpeg.writeFile('input.mp4',await fetchFile(msg.videoUrl));await probeAudioSampleRate();
+        const rendered=buildTimelineFilters({file:{...msg.sourceFile,url:msg.videoUrl,name:'input.mp4'},segments:msg.segments},msg.audioSettings,{hasAudio:/Audio:/.test(recentLogs.join('\n'))});
+        if(msg.captionsSrt)await writeCaptions(msg.captionsSrt);
+        const graph=rendered.graph+';[video]nullsink;[1:v]'+(msg.postFilter?msg.postFilter+',':'')+'setsar=1[aiVideo]';
+        const code=await ffmpeg.exec(['-i','input.mp4','-i','ai-video.mp4','-filter_complex',graph,'-map','[aiVideo]','-map','[audio]','-t',String(rendered.duration),'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-ac','2','-movflags','+faststart','-y','ai-output.mp4']);
+        if(code!==0)throw new Error('AI audio/effects composition failed.');
+        const data=await ffmpeg.readFile('ai-output.mp4'),bytes=(data as Uint8Array).slice();
+        postJobResult({type:'done',buffer:bytes.buffer},[bytes.buffer]);
+      }
+    }catch(error){postJobResult({type:'error',message:String(error)});}finally{running=false;flushJobResult();}
+    return;
+  }
+
+  if(msg.type==='mix'){
+    if(running){self.postMessage({type:'error',message:'An export is already running.'});return;}
+    running=true;
+    try{
+      await loadFFmpeg();await ffmpeg.writeFile('mix-video.mp4',msg.video);await ffmpeg.writeFile('mix-music',msg.music);
+      const code=await ffmpeg.exec(['-i','mix-video.mp4','-i','mix-music','-filter_complex',buildSoundtrackFilter(msg.track,msg.duration),'-map','0:v:0','-map','[a]','-c:v','copy','-c:a','aac','-ar','48000','-ac','2','-t',String(msg.duration),'-movflags','+faststart','-y','mix-output.mp4']);
+      if(code!==0)throw new Error('Soundtrack mixing failed.');
+      const data=await ffmpeg.readFile('mix-output.mp4');const bytes=(data as Uint8Array).slice();
+      postJobResult({type:'done',buffer:bytes.buffer},[bytes.buffer]);
+    }catch(error){postJobResult({type:'error',message:String(error)});}finally{
+      for(const name of ['mix-video.mp4','mix-music','mix-output.mp4'])await ffmpeg.deleteFile(name).catch(()=>{});running=false;flushJobResult();
+    }
     return;
   }
 
@@ -232,10 +301,13 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
       await ffmpeg.writeFile('concat_list.txt', new TextEncoder().encode(listLines.join('\n')));
       writtenFiles.push('concat_list.txt');
 
-      const exitCode = await ffmpeg.exec([
-        '-f', 'concat', '-safe', '0', '-i', 'concat_list.txt',
-        '-c', 'copy', '-y', msg.outputName,
-      ]);
+      let concatArgs:string[];
+      if(msg.canvas) {
+        const {width,height}=msg.canvas;
+        const graph=msg.parts.map((_,i)=>`[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${i}];[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}]`).join(';')+';'+msg.parts.map((_,i)=>`[v${i}][a${i}]`).join('')+`concat=n=${msg.parts.length}:v=1:a=1[v][a]`;
+        concatArgs=[...msg.parts.flatMap(p=>['-i',p.name]),'-filter_complex',graph,'-map','[v]','-map','[a]','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart','-y',msg.outputName];
+      } else concatArgs=['-f','concat','-safe','0','-i','concat_list.txt','-c','copy','-y',msg.outputName];
+      const exitCode = await ffmpeg.exec(concatArgs);
       writtenFiles.push(msg.outputName);
 
       if (exitCode !== 0) {
@@ -251,16 +323,13 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
       }
 
       if (msg.returnMode === 'buffer') {
-        (self.postMessage as (msg: unknown, transfer: Transferable[]) => void)(
-          { type: 'done', buffer: arr.buffer },
-          [arr.buffer as ArrayBuffer],
-        );
+        postJobResult({type:'done',buffer:arr.buffer},[arr.buffer as ArrayBuffer]);
       } else {
         const blob = new Blob([arr], { type: 'video/mp4' });
-        self.postMessage({ type: 'done', url: URL.createObjectURL(blob) });
+        postJobResult({ type: 'done', url: URL.createObjectURL(blob) });
       }
     } catch (err) {
-      self.postMessage({ type: 'error', message: String(err) });
+      postJobResult({ type: 'error', message: String(err) });
     } finally {
       for (const name of writtenFiles) {
         try {
@@ -269,7 +338,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
           // ignore — file may not exist if writeFile itself failed partway
         }
       }
-      running = false;
+      running = false;flushJobResult();
     }
     return;
   }
@@ -349,7 +418,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
       // this file path relative to the current working directory, which for
       // ffmpeg.wasm's virtual FS is the root where writeFile places it.
       if (msg.captionsSrt) {
-        await ffmpeg.writeFile('captions.srt', new TextEncoder().encode(msg.captionsSrt));
+        await writeCaptions(msg.captionsSrt);
         writtenFiles.push('captions.srt');
       }
 
@@ -377,7 +446,15 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
 
       let args: string[];
 
-      if (frameFiles.length > 0) {
+      if (msg.segments && msg.sourceFile && frameFiles.length===0) {
+        await probeAudioSampleRate();
+        const hasAudio=/Audio:/.test(recentLogs.join('\n'));
+        const rendered=buildTimelineFilters({file:{...msg.sourceFile,name:'input.mp4',url:msg.videoUrl},segments:msg.segments},msg.audioSettings??{preservePitch:msg.preservePitch},{hasAudio,postFilter:postFilterChain??undefined,blurFrames});
+        args=['-i','input.mp4'];
+        for(const frame of blurFrames)args.push('-loop','1','-i',frame.filename);
+        args.push('-filter_complex',rendered.graph,'-map','[video]','-map','[audio]','-t',String(rendered.duration));
+        af=null;
+      } else if (frameFiles.length > 0) {
         // ── Optical flow image-sequence path ─────────────────────────────────
         //
         // The expanded JPEG frames become the video stream; the original video
@@ -510,16 +587,13 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
 
       if (msg.returnMode === 'buffer') {
         // Transfer the ArrayBuffer so the main thread gets it without a copy.
-        (self.postMessage as (msg: unknown, transfer: Transferable[]) => void)(
-          { type: 'done', buffer: arr.buffer },
-          [arr.buffer as ArrayBuffer],
-        );
+        postJobResult({type:'done',buffer:arr.buffer},[arr.buffer as ArrayBuffer]);
       } else {
         const blob = new Blob([arr], { type: 'video/mp4' });
-        self.postMessage({ type: 'done', url: URL.createObjectURL(blob) });
+        postJobResult({ type: 'done', url: URL.createObjectURL(blob) });
       }
     } catch (err) {
-      self.postMessage({ type: 'error', message: String(err) });
+      postJobResult({ type: 'error', message: String(err) });
     } finally {
       // Best-effort cleanup — a delete failure here shouldn't mask whatever
       // the actual job result was, and one missing/already-gone file
@@ -531,7 +605,7 @@ self.onmessage = async (e: MessageEvent<InboundMsg>) => {
           // ignore — file may not exist if writeFile itself failed partway
         }
       }
-      running = false;
+      running = false;flushJobResult();
     }
   }
 };

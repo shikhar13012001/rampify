@@ -1,11 +1,13 @@
 /**
  * Abstract export engine boundary. Today only LocalWasmEngine actually runs —
- * CloudAPIEngine is a stub (see its file header) — but ExportModal talks to
- * both through this interface so swapping engines never touches call sites.
+ * CloudAPIEngine is a stub (see its file header) — and the coordinator always selects the local engine. Unsupported
+ * combinations are rejected before any rendering or upload.
  */
 
 import type {
   AudioSettings,
+  Soundtrack,
+  Clip,
   BlurSettings,
   CaptionCue,
   CaptionSettings,
@@ -18,6 +20,8 @@ import type {
 
 export interface ExportRequest {
   project: EditorProject;
+  soundtrack?:Soundtrack|null;
+  clips?: Clip[];
   audioSettings: AudioSettings;
   blurSettings: BlurSettings;
   opticalFlowSettings: OpticalFlowSettings;
@@ -61,14 +65,8 @@ export interface ExportEngine {
   cancel(): void;
 }
 
-/**
- * 4K + AI frame interpolation is the one combination the in-browser WASM
- * pipeline can't reliably handle: CLAUDE.md's "Known limitations" already
- * flags RIFE-on-CPU as 4–8× slower with multi-minute ultra-quality runs on a
- * *5-second 1080p* segment — at 4K, frame buffers alone risk exhausting the
- * WASM linear heap before encoding even starts. Route that combination to
- * the cloud engine; everything else stays local (faster, no upload, no
- * server cost).
+/** Legacy capability predicate for the inactive cloud stub.
+ * The coordinator rejects this combination; it never routes footage to cloud.
  */
 export function requiresCloudEngine(request: ExportRequest): boolean {
   return request.resolution === '4k' && request.opticalFlowSettings.enabled;

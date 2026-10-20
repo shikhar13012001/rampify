@@ -1,3 +1,5 @@
+import {decodeToMonoPCM} from '@/lib/audioDecode';
+import {audioEnvelope} from '@/lib/audioTimeline';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { useTimeline, RULER_H, TIMELINE_CSS_H } from './useTimeline';
@@ -23,6 +25,17 @@ export function Timeline() {
   const isPro           = useEditorStore((s) => s.isPro);
   const ofEnabled       = useEditorStore((s) => s.opticalFlowSettings.enabled);
 
+  const sourceFile=project?.file;
+  const [waveform,setWaveform]=useState<Float32Array>(new Float32Array(0));
+  useEffect(()=>{
+    let cancelled=false;
+    const decode=async()=>{try {
+      if(!sourceFile)return new Float32Array(0);
+      const blob=await fetch(sourceFile.url).then(r=>r.blob());
+      const {mono}=await decodeToMonoPCM(new File([blob],sourceFile.name));return audioEnvelope(mono,1024);
+    }catch{return new Float32Array(0);}};
+    void decode().then(value=>{if(!cancelled)setWaveform(value);});return()=>{cancelled=true;};
+  },[sourceFile]);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const isDragging   = useRef(false);
@@ -52,6 +65,7 @@ export function Timeline() {
     selectedSegmentId: selectedId,
     width: containerWidth,
     beatMarkers,
+    waveform,
     isPro,
     ofEnabled,
   });

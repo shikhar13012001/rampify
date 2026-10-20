@@ -294,3 +294,23 @@ export function mapBeatsToKeypoints(
 
   return { type: 'linear', points: pts };
 }
+
+/** Fit a desired output-time pattern exactly to a retained source span.
+ * For a source-linear interval dt=ds/logMean(v0,v1). Choose ds from each
+ * requested output interval, then scale every speed equally to retain length.
+ */
+export function mapOutputBeatsToCurve(beats:number[],sourceDuration:number,outputDuration:number,pattern:BeatPattern,options?:BeatMapOptions):SpeedCurve {
+ if(!Number.isFinite(sourceDuration)||sourceDuration<=0||!Number.isFinite(outputDuration)||outputDuration<=0)throw new Error('Invalid beat timeline.');
+ const target=mapBeatsToKeypoints([...new Set(beats)].filter(t=>Number.isFinite(t)&&t>0&&t<outputDuration).sort((a,b)=>a-b),outputDuration,pattern,options);
+ const distances=[0];let total=0;
+ for(let i=1;i<target.points.length;i++){
+  const a=target.points[i-1],b=target.points[i];
+  if(a.speed<=0||b.speed<=0)throw new Error('Beat speeds must be positive.');
+  const mean=Math.abs(a.speed-b.speed)<1e-8?a.speed:(b.speed-a.speed)/Math.log(b.speed/a.speed);
+  total+=(b.time-a.time)*outputDuration*mean;distances.push(total);
+ }
+ const scale=sourceDuration/total;
+ const points=target.points.map((p,i)=>({time:distances[i]/total,speed:p.speed*scale}));
+ if(points.some(p=>!Number.isFinite(p.speed)||p.speed<.1||p.speed>10))throw new Error('This pattern cannot fit the current duration within 0.1×–10×. Choose gentler speeds.');
+ return {type:'linear',points};
+}

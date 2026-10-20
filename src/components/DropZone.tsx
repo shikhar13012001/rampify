@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
-import { loadProjectState } from '@/lib/projectPersistence';
+import { loadProjectState,readProjectManifest,restoreManifest } from '@/lib/projectPersistence';
 import { readVideoMetadata, isAcceptedVideoFile, getRejectedFileMessage } from '@/lib/videoMetadata';
 import { checkExportCapabilities } from '@/lib/browserCapabilities';
 import { trackEvent } from '@/lib/analytics';
@@ -153,6 +153,10 @@ export function DropZone() {
 
       try {
         const videoFile = await readVideoMetadata(file);
+        const manifest=readProjectManifest();
+        if(manifest&&videoFile.fingerprint&&manifest.clips.some(c=>c.file.fingerprint===videoFile.fingerprint)){
+          const restored=restoreManifest(manifest,videoFile);useEditorStore.setState({...restored,isPlaying:false,playheadTime:0,isDemoProject:false});setIsLoading(false);return;
+        }
         const saved = loadProjectState(videoFile.name, videoFile.duration);
 
         if (saved) {

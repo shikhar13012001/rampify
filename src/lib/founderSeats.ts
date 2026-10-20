@@ -14,16 +14,13 @@ export interface FounderSeats {
   priceUsd: number;
 }
 
-/** What the UI assumes before/without a server answer: the offer exists and
- *  the full allocation is open. A failed fetch therefore *shows* the card;
- *  the checkout endpoint is the real gate (503 unconfigured / 409 sold out),
- *  and UpgradeModal renders those as plain messages. */
+/** A seat is available only after a verified server response. */
 export const OPTIMISTIC_FOUNDER_SEATS: FounderSeats = {
-  configured: true,
-  available: true,
+  configured: false,
+  available: false,
   total: FOUNDER_SEATS,
   sold: 0,
-  remaining: FOUNDER_SEATS,
+  remaining: 0,
   priceUsd: FOUNDER_PRICE_USD,
 };
 

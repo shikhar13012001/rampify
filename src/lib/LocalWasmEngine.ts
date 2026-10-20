@@ -1,3 +1,6 @@
+import MixWorker from '../workers/ffmpegWorker.ts?worker';
+import {abortable} from './abortable';
+import {buildTimeMap} from './renderPlan';
 /**
  * Wraps the existing FFmpegBridge (standard / blur / optical-flow pipelines)
  * behind the ExportEngine interface. This is the only engine wired up today —
@@ -13,16 +16,29 @@ export class LocalWasmEngine implements ExportEngine {
 
   private bridge: FFmpegBridge | null = null;
 
-  // ExportEngine.supports(request) — no request-specific check needed here:
-  // anything the local WASM pipeline can't handle (currently: 4K + AI
-  // interpolation) is routed to CloudAPIEngine before an engine is ever
-  // selected — see requiresCloudEngine in ExportEngine.ts. TS allows this
-  // implementation to accept fewer parameters than the interface declares.
+  // Shared preflight enforces supported combinations before creating this engine.
   supports(): boolean {
     return true;
   }
 
-  start(request: ExportRequest, onProgress: (event: ExportProgressEvent) => void): Promise<ExportResult> {
+  private mixing:Worker|null=null;
+  private lifecycle=new AbortController();
+  async start(request:ExportRequest,onProgress:(event:ExportProgressEvent)=>void):Promise<ExportResult>{
+    const result=await this.render(request,onProgress);
+    if(!request.soundtrack||!result.blob)return result;
+    const signal=this.lifecycle.signal;signal.throwIfAborted();
+    // Release the render heap before loading a mixer heap.
+    this.bridge?.cancel();this.bridge=null;
+    onProgress({phase:'encoding',percent:0,message:'Mixing soundtrack…'});
+    const [video,music]=await Promise.all([result.blob.arrayBuffer(),fetch(request.soundtrack.url,{signal}).then(r=>{if(!r.ok)throw new Error('Soundtrack is unavailable.');return r.arrayBuffer();})]);signal.throwIfAborted();
+    const worker=new MixWorker();this.mixing=worker;
+    try{return await abortable(new Promise<ExportResult>((resolve,reject)=>{
+      worker.onmessage=event=>{if(event.data.type==='done')resolve({blob:new Blob([event.data.buffer],{type:'video/mp4'})});else if(event.data.type==='error')reject(new Error(event.data.message));else if(event.data.type==='progress')onProgress({phase:'encoding',percent:event.data.progress,message:'Mixing soundtrack…'});};
+      worker.onerror=event=>reject(new Error(event.message));
+      worker.postMessage({type:'mix',video:new Uint8Array(video),music:new Uint8Array(music),track:request.soundtrack,duration:buildTimeMap(request.clips??[{id:'active',...request.project}]).duration},[video,music]);
+    }),signal);}finally{worker.terminate();this.mixing=null;}
+  }
+  private render(request: ExportRequest, onProgress: (event: ExportProgressEvent) => void): Promise<ExportResult> {
     const { project, blurSettings, opticalFlowSettings, audioSettings, colorSettings, cropSettings, resolution, captionSettings, captionCues } = request;
     const bridge = new FFmpegBridge();
     this.bridge = bridge;
@@ -32,7 +48,9 @@ export class LocalWasmEngine implements ExportEngine {
     return new Promise<ExportResult>((resolve, reject) => {
       const fail = (message: string) => reject(new Error(message));
 
-      if (useOFPipeline) {
+      if (request.clips && request.clips.length>1) {
+        FFmpegBridge.guardExport({onError:fail},()=>bridge.processMultiClip(request.clips!,blurSettings,opticalFlowSettings,audioSettings,{onProgress:(percent,message)=>onProgress({phase:'encoding',percent,message}),onDone:blob=>resolve({blob}),onError:fail},colorSettings,cropSettings,resolution,captionSettings,captionCues));
+      } else if (useOFPipeline) {
         FFmpegBridge.guardExport({ onError: fail }, () =>
           bridge.processWithOpticalFlow(project, opticalFlowSettings, audioSettings, {
             onProgress: (percent, phase) => onProgress({ phase, percent }),
@@ -52,8 +70,7 @@ export class LocalWasmEngine implements ExportEngine {
         bridge.startProcessing(project, audioSettings, {
           onProgress: (percent) => onProgress({ phase: 'encoding', percent }),
           onDone: async (url) => {
-            const blob = await fetch(url).then((r) => r.blob());
-            resolve({ blob });
+            try { const blob = await fetch(url).then((r) => r.blob()); resolve({ blob }); } catch(error) { reject(error); } finally { URL.revokeObjectURL(url); }
           },
           onError: fail,
         }, colorSettings, cropSettings, resolution, captionSettings, captionCues);
@@ -62,6 +79,7 @@ export class LocalWasmEngine implements ExportEngine {
   }
 
   cancel(): void {
+    this.lifecycle.abort();this.mixing?.terminate();this.mixing=null;
     this.bridge?.cancel();
     this.bridge = null;
   }

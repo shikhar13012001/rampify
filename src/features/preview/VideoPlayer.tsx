@@ -1,3 +1,5 @@
+import {unlockedAudioPosition} from '@/lib/previewAudio';
+import {buildTimeMap,sourceToOutput} from '@/lib/renderPlan';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { interpolateSpeed } from '@/lib/curveMath';
 import { ASSUMED_FPS, findTransitionPoints, hasSlowSegments, INTENSITY_NUM } from '@/lib/ffmpegBridge';
@@ -38,6 +40,12 @@ export function VideoPlayer() {
   const setPlayheadTime = useEditorStore((s) => s.setPlayheadTime);
   const openUpgrade     = useEditorStore((s) => s.setUpgradeModalOpen);
 
+  const sourceAudioRef=useRef<HTMLAudioElement>(null);
+  const clockRef=useRef(0);
+  const musicRef=useRef<HTMLAudioElement>(null);
+  const soundtrack=useEditorStore(s=>s.soundtrack);
+  const clips=useEditorStore(s=>s.clips);
+  const activeClipId=useEditorStore(s=>s.activeClipId);
   const videoRef      = useRef<HTMLVideoElement>(null);
   const rafRef        = useRef<number>(0);
   const fromVideoRef  = useRef(false);
@@ -60,9 +68,24 @@ export function VideoPlayer() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (isPlaying) video.play().catch(() => setPlaying(false));
+    if (isPlaying) {
+      if(project){const next=project.segments.find(s=>video.currentTime<s.endTime);if(next&&video.currentTime<next.startTime)video.currentTime=next.startTime;}
+      video.play().catch(() => setPlaying(false));
+    }
     else video.pause();
-  }, [isPlaying, setPlaying]);
+  }, [isPlaying, setPlaying, project]);
+
+  // Keep variable-speed preview and its audio clock updated on each paint.
+  useEffect(()=>{
+    if(!isPlaying||!project)return;
+    const tick=()=>{const video=videoRef.current;if(!video)return;
+      const next=project.segments.find(s=>video.currentTime<s.endTime);
+      if(!next){video.pause();setPlaying(false);return;}
+      if(video.currentTime<next.startTime)video.currentTime=next.startTime;
+      video.playbackRate=Math.max(.0625,Math.min(16,getSegmentSpeedAtTime(next,video.currentTime)));
+      fromVideoRef.current=true;setPlayheadTime(video.currentTime);clockRef.current=requestAnimationFrame(tick);
+    };clockRef.current=requestAnimationFrame(tick);return()=>cancelAnimationFrame(clockRef.current);
+  },[isPlaying,project,setPlaying,setPlayheadTime]);
 
   // ── Mirror video.currentTime → store ─────────────────────────────────────
   useEffect(() => {
@@ -72,6 +95,8 @@ export function VideoPlayer() {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         fromVideoRef.current = true;
+        const next=project?.segments.find(s=>video.currentTime<s.endTime);
+        if(isPlaying&&project){if(!next){video.pause();setPlaying(false);}else if(video.currentTime<next.startTime)video.currentTime=next.startTime;}
         setPlayheadTime(video.currentTime);
       });
     };
@@ -83,7 +108,7 @@ export function VideoPlayer() {
       video.removeEventListener('ended', onEnded);
       cancelAnimationFrame(rafRef.current);
     };
-  }, [setPlayheadTime, setPlaying]);
+  }, [setPlayheadTime, setPlaying, project, isPlaying]);
 
   // ── Seek on external playhead changes ────────────────────────────────────
   useEffect(() => {
@@ -93,9 +118,32 @@ export function VideoPlayer() {
     video.currentTime = playheadTime;
   }, [playheadTime]);
 
+  useEffect(()=>{
+    const music=musicRef.current,video=videoRef.current;if(!music||!video||!soundtrack||!activeClipId)return;
+    const map=buildTimeMap(clips),output=sourceToOutput(map,activeClipId,playheadTime);
+    const position=(output??0)-soundtrack.offset+soundtrack.trimStart;
+    const headroom=Math.max(1,soundtrack.gain+soundtrack.sourceGain);
+    video.volume=soundtrack.sourceGain/headroom;music.volume=soundtrack.gain/headroom;
+    if(Math.abs(music.currentTime-position)>.12)music.currentTime=Math.max(0,Math.min(soundtrack.duration,position));
+    if(isPlaying&&output!==null&&position>=soundtrack.trimStart&&position<soundtrack.trimEnd)void music.play().catch(()=>{});else music.pause();
+  },[soundtrack,playheadTime,isPlaying,activeClipId,clips]);
+  useEffect(()=>{if(!soundtrack&&videoRef.current)videoRef.current.volume=1;},[soundtrack]);
+
   const togglePlay = useCallback(() => setPlaying(!isPlaying), [isPlaying, setPlaying]);
 
   const blurSettings = useEditorStore((s) => s.blurSettings);
+  const audioSettings = useEditorStore(s => s.audioSettings);
+  useEffect(() => { if(videoRef.current) videoRef.current.preservesPitch=audioSettings.preservePitch; }, [audioSettings.preservePitch]);
+
+  useEffect(()=>{
+    const audio=sourceAudioRef.current;if(!audio||!project||audioSettings.lockToSpeed!==false)return;
+    const state=unlockedAudioPosition({id:'preview',...project},playheadTime);
+    audio.playbackRate=1;audio.volume=soundtrack?soundtrack.sourceGain/Math.max(1,soundtrack.gain+soundtrack.sourceGain):1;
+    const segment=getActiveSegment(project.segments,playheadTime);
+    audio.muted=!!audioSettings.muteDuringRamp&&!!segment&&Math.abs(getSegmentSpeedAtTime(segment,playheadTime)-1)>.01;
+    if(state.audible&&Math.abs(audio.currentTime-state.time)>.08)audio.currentTime=state.time;
+    if(isPlaying&&state.audible){if(audio.paused)void audio.play().catch(()=>{});}else audio.pause();
+  },[project,playheadTime,isPlaying,audioSettings,soundtrack]);
 
   const activeSegment = project
     ? getActiveSegment(project.segments, playheadTime)
@@ -132,7 +180,7 @@ export function VideoPlayer() {
     [project],
   );
 
-  const transitionBlur = useMemo(() => {
+  const transitionBlur = (() => {
     if (!blurSettings.enabled) return null;
     const intensityNum = INTENSITY_NUM[blurSettings.intensity] ?? 0.66;
     for (const tp of transitions) {
@@ -148,7 +196,7 @@ export function VideoPlayer() {
       return { proximity, intensity: getBlurIntensity(tp.speedFrom, tp.speedTo) * intensityNum };
     }
     return null;
-  }, [transitions, blurSettings.enabled, blurSettings.intensity, playheadTime]);
+  })();
 
   const blurPx = useMemo(() => {
     if (!project || !transitionBlur) return 0;
@@ -215,6 +263,8 @@ export function VideoPlayer() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', backgroundColor: '#000' }}>
+      {soundtrack?.url&&<audio ref={musicRef} src={soundtrack.url} preload="metadata"/>}
+      {project?.file.url&&audioSettings.lockToSpeed===false&&<audio ref={sourceAudioRef} src={project.file.url} preload="metadata"/>}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* Sized to the video's own intrinsic aspect ratio via CSS aspect-ratio,
             so the crop guide below (an absolutely-positioned sibling) can align
@@ -229,6 +279,7 @@ export function VideoPlayer() {
         >
           <video
             ref={videoRef}
+            muted={audioSettings.lockToSpeed===false||!!audioSettings.muteDuringRamp && Math.abs(rawSpeed-1)>.01}
             src={project.file.url}
             style={{
               width: '100%',

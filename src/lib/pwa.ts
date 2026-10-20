@@ -1,13 +1,4 @@
-/**
- * Progressive-web-app plumbing: service-worker registration (via
- * vite-plugin-pwa's virtual module) and the "Install app" prompt.
- *
- * Why this matters commercially: no competitor's speed-ramp tool works with
- * the network unplugged. After one export, the ffmpeg/onnx engine is in the
- * browser cache (see vite.config.ts's runtimeCaching), so /editor opens and
- * exports on a plane, on a locked-down office network, or on a phone with no
- * signal — and "Install" puts it on the dock like a native app.
- */
+/** Service-worker installation and explicit updates. Offline use requires cached assets. */
 import { useEffect, useState } from 'react';
 import { trackEvent } from './analytics';
 
@@ -16,6 +7,11 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+let updateAvailable=false,applyingUpdate=false,reloadPending=false;
+let updateServiceWorker:((reloadPage?:boolean)=>Promise<void>)|undefined;
+export const isApplyingUpdate=()=>applyingUpdate;
+export async function applyAppUpdate():Promise<void>{if(!updateServiceWorker)return;applyingUpdate=true;try{if(reloadPending){window.location.reload();return;}await updateServiceWorker(true);}catch(error){applyingUpdate=false;throw error;}}
+export function usePwaUpdate():boolean{const [,force]=useState(0);useEffect(()=>{const fn=()=>force(n=>n+1);listeners.add(fn);return()=>{listeners.delete(fn);};},[]);return updateAvailable;}
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 const listeners = new Set<() => void>();
 
@@ -30,7 +26,7 @@ export function registerServiceWorker(): void {
   if (import.meta.env.PROD) {
     import('virtual:pwa-register')
       .then(({ registerSW }) => {
-        registerSW({ immediate: true });
+        updateServiceWorker=registerSW({ immediate: true,onNeedRefresh(){updateAvailable=true;notify();},onNeedReload(){reloadPending=true;updateAvailable=true;if(applyingUpdate)window.location.reload();else notify();} });
       })
       .catch((err) => console.warn('[pwa] service worker registration failed:', err));
   }

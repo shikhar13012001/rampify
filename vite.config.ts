@@ -31,10 +31,12 @@ export default defineConfig({
     // The RIFE model (21 MB) is cached by opticalFlowWorker.ts in IndexedDB
     // already, so it is excluded here on purpose — no double caching.
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       injectRegister: null, // registered by src/lib/pwa.ts so the app can show install/update UI
       manifest: false,      // hand-written: public/manifest.webmanifest
       workbox: {
+        skipWaiting:false,
+        clientsClaim:false,
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         globIgnores: ['**/models/**', '**/demo/**', '**/*.wasm', 'assets/*Worker*.js'],
         // ffmpeg-core.js is ~1 MB of glue; keep it out of precache and let
@@ -48,7 +50,7 @@ export default defineConfig({
           {
             urlPattern: ({ url, sameOrigin }) =>
               sameOrigin &&
-              (url.pathname.endsWith('.wasm') || /\/assets\/.*Worker.*\.js$/.test(url.pathname) || url.pathname.startsWith('/demo/')),
+              (url.pathname.endsWith('.wasm') || /\/assets\/.*Worker.*\.js$/.test(url.pathname) || url.pathname.startsWith('/demo/') || url.pathname.startsWith('/fonts/')),
             handler: 'CacheFirst',
             options: {
               cacheName: 'rampcut-engine-v1',

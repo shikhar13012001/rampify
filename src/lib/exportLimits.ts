@@ -28,9 +28,8 @@ function guestStorage(): StorageLike | null {
  *  `user`/`isPro` subscriptions should call this directly (planTierFor) rather
  *  than re-deriving the mapping; non-reactive call sites use getPlanTier(). */
 export function planTierFor(hasUser: boolean, isPro: boolean): PlanTier {
-  if (isPro) return 'pro';
-  if (hasUser) return 'free';
-  return 'guest';
+  if(!hasUser)return 'guest';
+  return isPro?'pro':'free';
 }
 
 export function getPlanTier(): PlanTier {
@@ -58,21 +57,23 @@ export function getRemainingExports(): number {
 /**
  * Async check used before starting an export.
  * For signed-in users, re-queries /api/check-subscription to get a fresh count.
- * Does NOT mutate isPro as a side effect — callers read isPro from the store.
+ * Refreshes the current entitlement before applying plan restrictions.
  */
 export async function checkExportAllowed(): Promise<ExportAllowance> {
-  const { user, isPro } = useEditorStore.getState();
-
-  if (isPro) return { allowed: true, remaining: 999 };
+  const { user } = useEditorStore.getState();
 
   if (user) {
+    await retryPendingExports();
+    if(pendingIds(user.uid).length)return {allowed:false,remaining:0,reason:'Usage synchronization is pending. Reconnect with the account that started the export before continuing.'};
     try {
       const token = await user.getIdToken();
       const res = await fetch('/api/check-subscription', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
+      if (res.ok&&useEditorStore.getState().user?.uid===user.uid) {
         const data = await res.json() as { isPro: boolean; exportsRemaining: number; exportsThisMonth: number };
+        if(useEditorStore.getState().user?.uid!==user.uid||typeof data.isPro!=='boolean'||!Number.isSafeInteger(data.exportsRemaining)||data.exportsRemaining<0||!Number.isSafeInteger(data.exportsThisMonth)||data.exportsThisMonth<0)return {allowed:false,remaining:0,reason:'Could not verify your export allowance. Reconnect and retry.'};
+        useEditorStore.getState().setIsPro(data.isPro);
         useEditorStore.getState().setExportCounts(data.exportsThisMonth, data.exportsRemaining);
         return {
           allowed: data.exportsRemaining > 0,
@@ -81,13 +82,7 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
         };
       }
     } catch { /* API unavailable (dev mode) — fall through */ }
-    // Fallback: use store value
-    const { exportsRemaining } = useEditorStore.getState();
-    return {
-      allowed: exportsRemaining > 0,
-      remaining: exportsRemaining,
-      reason: exportsRemaining <= 0 ? 'Monthly export limit reached.' : undefined,
-    };
+    return {allowed:false,remaining:0,reason:'Could not verify your export allowance. Reconnect and retry.'};
   }
 
   // Guest.
@@ -120,34 +115,20 @@ export async function checkExportAllowed(): Promise<ExportAllowance> {
  * `shouldRecordExport(phase, hasOutput)` (exportQuota.ts) so a failed or
  * cancelled render never consumes an allowance.
  */
-export async function recordExport(exportId: string): Promise<void> {
-  const { user } = useEditorStore.getState();
-
-  if (!user) {
-    if (GUEST_EXPERIMENT.enabled) recordGuestExport(guestStorage(), exportId);
-    return;
-  }
-
-  try {
-    const token = await user.getIdToken();
-    const res = await fetch('/api/record-export', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ exportId }),
-    });
-
-    if (res.ok) {
-      const data = await res.json() as { exportsThisMonth: number; exportsRemaining: number };
-      useEditorStore.getState().setExportCounts(data.exportsThisMonth, data.exportsRemaining);
-    } else {
-      console.error('[recordExport] server returned', res.status);
-    }
-  } catch (err) {
-    console.error('[recordExport] failed:', err);
-  }
+function pendingKey(uid:string):string {return 'rampcut:pending-exports:'+uid;}
+function pendingIds(uid:string):string[]{try{const value:unknown=JSON.parse(localStorage.getItem(pendingKey(uid))??'[]');return Array.isArray(value)?value.filter((v):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(v)):[];}catch{return [];}}
+export async function recordExport(exportId:string,expectedUid?:string|null):Promise<void> {
+ const {user}=useEditorStore.getState();
+ if(expectedUid===null||expectedUid===undefined&&!user){if(GUEST_EXPERIMENT.enabled)recordGuestExport(guestStorage(),exportId);return;}
+ const ownerUid=expectedUid??user!.uid;
+ try{localStorage.setItem(pendingKey(ownerUid),JSON.stringify([...new Set([...pendingIds(ownerUid),exportId])]));}catch{/* Keep the error visible if synchronization cannot finish. */}
+ if(!user||user.uid!==ownerUid)throw new Error('Sign back into the account that started this export to synchronize usage.');
+ const token=await user.getIdToken();
+ const res=await fetch('/api/record-export',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({exportId})});
+ if(!res.ok)throw new Error('Export saved; usage synchronization is pending.');
+ const data=await res.json() as {exportsThisMonth:number;exportsRemaining:number};
+ if(useEditorStore.getState().user?.uid===user.uid)useEditorStore.getState().setExportCounts(data.exportsThisMonth,data.exportsRemaining);
+ try {localStorage.setItem(pendingKey(user.uid),JSON.stringify(pendingIds(user.uid).filter(id=>id!==exportId)));}catch{/* Server dedupe makes a later retry harmless. */}
 }
-
-export { shouldRecordExport };
+export async function retryPendingExports():Promise<void>{const {user}=useEditorStore.getState();if(!user)return;for(const id of pendingIds(user.uid)){if(useEditorStore.getState().user?.uid!==user.uid)return;try{await recordExport(id,user.uid);}catch{return;}}}
+export {shouldRecordExport};

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { saveProjectState } from '@/lib/projectPersistence';
+import { saveProjectManifest } from '@/lib/projectPersistence';
+import { ProjectTools } from '@/components/ProjectTools';
 import { TopBar } from '@/components/TopBar';
 import { DropZone } from '@/components/DropZone';
 import { Sidebar } from '@/components/Sidebar';
@@ -154,25 +155,17 @@ export default function EditorRoute() {
     };
   }, []);
 
-  // Persist project curves/settings to localStorage on every relevant change.
-  // The video file itself isn't saved (binary), but the curve/settings are enough
-  // to restore the session when the user re-drops the same file.
-  useEffect(() => {
-    return useEditorStore.subscribe((state) => {
-      if (!state.project) return;
-      saveProjectState({
-        fileName:            state.project.file.name,
-        duration:            state.project.file.duration,
-        segments:            state.project.segments,
-        blurSettings:        state.blurSettings,
-        opticalFlowSettings: state.opticalFlowSettings,
-        minSpeed:            state.minSpeed,
-        maxSpeed:            state.maxSpeed,
-        beatMarkers:         state.beatMarkers,
-        savedAt:             Date.now(),
-      });
+  useEffect(()=>{
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    const persist=()=>{if(!saveProjectManifest(useEditorStore.getState()))window.dispatchEvent(new Event('rampcut:autosave-failed'));};
+    const unsubscribe=useEditorStore.subscribe((state,previous)=>{
+      if(!state.project||state.soundtrack===previous.soundtrack&&state.clips===previous.clips&&state.audioSettings===previous.audioSettings&&state.blurSettings===previous.blurSettings&&state.opticalFlowSettings===previous.opticalFlowSettings&&state.cropSettings===previous.cropSettings&&state.colorSettings===previous.colorSettings&&state.captionCues===previous.captionCues&&state.captionSettings===previous.captionSettings&&state.exportResolution===previous.exportResolution&&state.beatMarkers===previous.beatMarkers&&state.activeClipId===previous.activeClipId&&state.history===previous.history)return;
+      clearTimeout(timer);timer=setTimeout(persist,300);
     });
-  }, []);
+    const flush=()=>{clearTimeout(timer);const state=useEditorStore.getState();if(state.project)persist();};
+    window.addEventListener('pagehide',flush);
+    return()=>{window.removeEventListener('pagehide',flush);clearTimeout(timer);unsubscribe();const state=useEditorStore.getState();if(state.project)persist();};
+  },[]);
 
   useEffect(() => {
     const onExport = () => {
@@ -236,10 +229,12 @@ export default function EditorRoute() {
             style={{
               position: 'relative',
               display: 'grid',
-              gridTemplateRows: `${playerHeight}px 8px minmax(0, 1fr) 176px 100px`,
+              // One row per preview/handle/panel/curve/tabs/timeline.
+              gridTemplateRows: `${playerHeight}px 8px max-content max-content minmax(220px, 1fr) max-content 100px`,
               minWidth: 0,
               minHeight: 0,
-              overflow: 'hidden',
+              overflowX: 'hidden',
+              overflowY: 'auto',
             }}
           >
             {/* Video preview */}
@@ -277,6 +272,7 @@ export default function EditorRoute() {
                 style={{
                   backgroundColor: 'var(--color-curve-bg)',
                   overflowY: 'auto',
+                  maxHeight: 240,
                 }}
               >
                 <BeatSyncPanel />
@@ -285,7 +281,7 @@ export default function EditorRoute() {
 
             {/* Captions panel */}
             <ErrorBoundary>
-              <section style={{ backgroundColor: 'var(--color-curve-bg)', overflowY: 'auto' }}>
+              <section style={{ backgroundColor: 'var(--color-curve-bg)', overflowY: 'auto', maxHeight: 240 }}>
                 <CaptionsPanel />
               </section>
             </ErrorBoundary>
@@ -363,6 +359,7 @@ export default function EditorRoute() {
             flexDirection: 'column',
           }}
         >
+          <ProjectTools />
           <DropZone />
         </main>
       )}

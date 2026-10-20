@@ -1,0 +1,2 @@
+import {it,expect} from 'vitest';import {canReloadForUpdate} from './pwaPolicy';
+it('never reloads during a render or before a project is saved',()=>{expect(canReloadForUpdate(true,false,false,true)).toBe(false);expect(canReloadForUpdate(false,true,false,true)).toBe(false);expect(canReloadForUpdate(false,false,true,false)).toBe(false);expect(canReloadForUpdate(false,false,true,true)).toBe(true);});

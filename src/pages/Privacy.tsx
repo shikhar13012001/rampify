@@ -1,3 +1,5 @@
+import {useState} from 'react';
+import {getAnalyticsConsent,setAnalyticsConsent} from '@/lib/analytics';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { Seo } from '@/components/Seo';
@@ -8,7 +10,7 @@ const SECTIONS = [
     title: 'The short version',
     body: [
       'Your video footage never leaves your device. All editing, encoding, and AI interpolation runs locally in your browser via WebAssembly.',
-      'We collect the minimum data needed to run your account: your email address (from Google Sign-In) and your subscription status.',
+      'We collect account and billing information, export usage, and optional session/acquisition analytics. We do not collect video footage, filenames or transcripts.',
       'We do not sell your data. We do not show ads. We do not track you across other websites.',
     ],
   },
@@ -18,6 +20,8 @@ const SECTIONS = [
       'Account data: When you sign in with Google, we receive your email address, display name, and profile photo URL. We store your Firebase user ID and email in Firestore to manage your account.',
       'Subscription data: Your Dodo Payments customer ID, subscription tier, and billing period end date are stored in Firestore so we can keep your Pro status in sync.',
       'Usage data: We store a count of your monthly exports in Firestore to enforce the free-plan limit. No content or filenames are stored — only a timestamp per export.',
+      'Analytics: A random browser ID in localStorage and a session ID help us understand page visits, acquisition tags, clip dimensions/duration/size categories, editing and export outcomes, app version and browser capability. Optional Google Analytics and Vercel analytics may also run when configured. No footage, filenames or transcripts are sent.',
+      'Consent: Analytics currently runs unless you opt out in this browser or enable Do Not Track. Your stored choice can be changed below; this is the existing opt-out behavior, not a claim of prior opt-in consent.',
       'Technical logs: Serverless API requests may be logged by Vercel for uptime and error monitoring. These logs contain no video content.',
     ],
   },
@@ -50,7 +54,7 @@ const SECTIONS = [
     title: 'Data retention',
     body: [
       `Account data is retained until you request deletion. Email ${SUPPORT_EMAIL} to delete your account.`,
-      'Export logs are retained indefinitely as an anonymous count — they contain no file content or metadata.',
+      'Export records are tied to your account UID and retain a timestamp per export; they are not anonymous. Raw analytics and operational limit records have no automatic deletion configured yet. A 90-day raw-event retention policy is proposed; it takes effect only after reviewed cleanup/TTL deployment.',
       'Dodo Payments customer records are retained per Dodo Payments\' own retention policy, independent of Rampcut.',
     ],
   },
@@ -72,11 +76,12 @@ const SECTIONS = [
 ];
 
 export function Privacy() {
+  const [choice,setChoice]=useState(getAnalyticsConsent);
   return (
     <div className="clay-page">
       <Seo
         title="Privacy Policy — Local-First Video Editing | Rampcut"
-        description="Rampcut privacy policy: your video footage never leaves your device. We collect only your email and subscription status. No ads, no cross-site tracking, no data sales."
+        description="Rampcut privacy policy: your video footage never leaves your device. Account, billing, usage and optional analytics collection are described here. No ads, no cross-site tracking, no data sales."
         path="/privacy"
       />
       <ClayNav ctaLabel="Open editor" />
@@ -102,13 +107,14 @@ export function Privacy() {
             Privacy Policy
           </h1>
           <p className="clay-body" style={{ margin: '16px 0 0', fontSize: 14, color: 'var(--color-clay-ink-muted)' }}>
-            Last updated June 24, 2026
+            Last updated October 18, 2026
           </p>
         </div>
       </section>
 
       <section style={{ padding: '0 24px 96px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          <div style={{padding:'16px 0'}}><strong>Analytics on this browser</strong><p>Current choice: {choice==='unset'?'Default (Do Not Track is respected)':choice}. Changing this preference reloads the page and applies it to analytics scripts.</p><button onClick={()=>{setAnalyticsConsent('denied');setChoice('denied');window.location.reload();}}>Disable analytics</button> <button onClick={()=>{setAnalyticsConsent('granted');setChoice('granted');window.location.reload();}}>Allow analytics</button></div>
           {SECTIONS.map((section, i) => (
             <div
               key={section.title}

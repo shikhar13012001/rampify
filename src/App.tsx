@@ -1,3 +1,5 @@
+import {AppUpdateNotice} from '@/components/AppUpdateNotice';
+import { retryPendingExports } from '@/lib/exportLimits';
 import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { UpgradeModal } from '@/components/UpgradeModal';
@@ -29,6 +31,7 @@ import { auth, getFirebaseInitError } from '@/lib/firebase';
 import type { AuthUser } from '@/store/editorStore';
 
 function App() {
+  useEffect(()=>{const retry=()=>{void retryPendingExports();};retry();window.addEventListener('online',retry);return()=>window.removeEventListener('online',retry);},[]);
   const setUser         = useEditorStore(s => s.setUser);
   const setIsPro        = useEditorStore(s => s.setIsPro);
   const setExportCounts = useEditorStore(s => s.setExportCounts);
@@ -60,6 +63,7 @@ function App() {
           getIdToken:  () => firebaseUser.getIdToken(),
         };
         setUser(user);
+        void retryPendingExports();
         setAuthLoading(true);
         try {
           const token = await firebaseUser.getIdToken();
@@ -143,6 +147,7 @@ function App() {
 
   return (
     <>
+      <AppUpdateNotice />
       <UnsupportedEnvironmentGate />
       <Routes>
         <Route path="/" element={<Landing />} />

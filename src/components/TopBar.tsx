@@ -80,6 +80,7 @@ export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarP
           </button>
         )}
         <Link
+          className="editor-logo"
           to="/"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}
         >
@@ -124,10 +125,11 @@ export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarP
       </div>
 
       {/* Right — auth + export */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center' }}>
+      <div className="editor-topbar-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center' }}>
         {/* Pro badge — hidden while auth is loading to avoid a flash */}
         {isPro && !isAuthLoading && (
           <span
+            className="editor-plan-badge"
             style={{
               fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
               textTransform: 'uppercase', color: '#b8a4ed',
@@ -149,6 +151,7 @@ export function TopBar({ onExportClick, onToggleSidebar, onBatchClick }: TopBarP
         {canInstall && !standalone && (
           <button
             type="button"
+            className="editor-install"
             onClick={() => { void install(); }}
             title="Install Rampcut — works offline after your first export"
             aria-label="Install Rampcut"

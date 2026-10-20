@@ -101,7 +101,7 @@ export function gtagEvent(name: string, props?: Record<string, string | number |
     if (name === 'page_view') {
       const path = typeof props?.path === 'string' ? props.path : window.location.pathname;
       params.page_path = path;
-      params.page_location = window.location.href;
+      params.page_location = window.location.origin+path; // Exclude checkout/curve-link query data.
       if (typeof document !== 'undefined') params.page_title = document.title;
     }
 

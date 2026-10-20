@@ -1,11 +1,14 @@
+import {createMediaOwner} from '@/lib/mediaResources';
 import { create } from 'zustand';
 import type {
   AudioSettings,
+  Soundtrack,
   BlurIntensity,
   BlurSettings,
   CaptionCue,
   CaptionSettings,
   Clip,
+  ClipSettings,
   ColorPreset,
   ColorSettings,
   CropPreset,
@@ -74,10 +77,7 @@ interface EditorState {
   // needed to change. `setActiveClip`/`addClipToProject`/
   // `removeClipFromProject` are the only new actions.
   //
-  // Known v1 limitation: session persistence (EditorRoute.tsx) only ever
-  // saves/restores the ACTIVE clip — clips added beyond the first are lost
-  // on a page reload. Undo history is also cleared on every clip switch
-  // (not a per-clip stack) — a disclosed simplification, not an oversight.
+  // V2 persistence stores all clips; switching saves each clip's undo/captions.
   clips: Clip[];
   activeClipId: string | null;
   selectedSegmentId: string | null;
@@ -94,6 +94,7 @@ interface EditorState {
   cropSettings: CropSettings;
   colorSettings: ColorSettings;
   audioSettings: AudioSettings;
+  soundtrack:Soundtrack|null;
   exportResolution: ExportResolution;
   // Beat-sync: absolute seconds in the source video
   beatMarkers: number[];
@@ -140,6 +141,8 @@ interface EditorActions {
   setColorPreset: (preset: ColorPreset) => void;
   setCaptionCues: (cues: CaptionCue[]) => void;
   setCaptionEnabled: (enabled: boolean) => void;
+  setSoundtrack:(track:Soundtrack|null)=>void;
+  setAudioOptions: (options: Partial<AudioSettings>) => void;
   setPreservePitch: (preservePitch: boolean) => void;
   setExportResolution: (resolution: ExportResolution) => void;
   setBeatMarkers: (markers: number[]) => void;
@@ -182,7 +185,8 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   colorSettings: { enabled: false, preset: 'none' },
   captionCues: [],
   captionSettings: { enabled: false },
-  audioSettings: { preservePitch: true },
+  soundtrack:null,
+  audioSettings: { preservePitch: true, lockToSpeed: true, muteDuringRamp: false },
   exportResolution: '1080p',
   beatMarkers: [],
   isDemoProject: false,
@@ -227,6 +231,8 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
         exportProgress: null,
         isExporting: false,
         history: [],
+        captionCues: [],
+        captionSettings: {enabled:false},
         // Loading a NEW project (demo or real) leaves this alone; the
         // caller (DropZone.tsx) is responsible for calling
         // setIsDemoProject() itself right alongside setProject() for that.
@@ -476,8 +482,11 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   setCropPreset: (preset) => set((s) => ({ cropSettings: { ...s.cropSettings, preset } })),
   setColorEnabled: (enabled) => set((s) => ({ colorSettings: { ...s.colorSettings, enabled } })),
   setColorPreset: (preset) => set((s) => ({ colorSettings: { ...s.colorSettings, preset } })),
-  setCaptionCues: (captionCues) => set({ captionCues }),
-  setCaptionEnabled: (enabled) => set((s) => ({ captionSettings: { ...s.captionSettings, enabled } })),
+  setCaptionCues: (captionCues) => set(s=>({captionCues,clips:s.clips.map(c=>c.id===s.activeClipId?{...c,captionCues}:c)})),
+  setCaptionEnabled: (enabled) => set(s=>({captionSettings:{enabled},clips:s.clips.map(c=>c.id===s.activeClipId?{...c,captionSettings:{enabled}}:c)})),
+  setSoundtrack:(soundtrack)=>set({soundtrack}),
+  setAudioOptions: (options) => set(s => ({ audioSettings: { ...s.audioSettings, ...options } })),
+
   setPreservePitch: (preservePitch) =>
     set((s) => ({ audioSettings: { ...s.audioSettings, preservePitch } })),
   setExportResolution: (exportResolution) => set({ exportResolution }),
@@ -526,7 +535,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
         ? segments
         : [makeFullVideoSegment(file.duration)];
       const id = makeClipId();
-      const newClip: Clip = { id, file, segments: initialSegments };
+      const newClip: Clip = { id, file, segments: initialSegments,settings:clipSettings(state) };
       const clips = [...state.clips, newClip];
 
       if (!state.project) {
@@ -546,22 +555,11 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
       return { clips };
     }),
 
-  setActiveClip: (clipId) =>
-    set((state) => {
-      const clip = state.clips.find((c) => c.id === clipId);
-      if (!clip) return state;
-      return {
-        activeClipId: clipId,
-        project: { file: clip.file, segments: clip.segments },
-        selectedSegmentId: null,
-        playheadTime: 0,
-        isPlaying: false,
-        // Undo history is scoped to "since this clip became active" — see
-        // the EditorState `clips` doc comment for why this isn't a
-        // per-clip stack in v1.
-        history: [],
-      };
-    }),
+  setActiveClip: (clipId) => set(state=>{
+    const clip=state.clips.find(c=>c.id===clipId);if(!clip||clipId===state.activeClipId)return state;
+    const clips=state.clips.map(c=>c.id===state.activeClipId?{...c,history:state.history.map(h=>h.segments),captionCues:state.captionCues,captionSettings:state.captionSettings}:c);
+    return {...clip.settings,clips,activeClipId:clipId,project:{file:clip.file,segments:clip.segments},selectedSegmentId:null,playheadTime:0,isPlaying:false,history:(clip.history??[]).map(segments=>({file:clip.file,segments})),captionCues:clip.captionCues??[],captionSettings:clip.captionSettings??{enabled:false}};
+  }),
 
   removeClipFromProject: (clipId) =>
     set((state) => {
@@ -577,21 +575,28 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
           activeClipId: null,
           project: null,
           selectedSegmentId: null,
-          history: [],
+          history: [],captionCues:[],captionSettings:{enabled:false},isPlaying:false,playheadTime:0,
           isDemoProject: false,
         };
       }
       return {
         clips,
+        ...next.settings,
         activeClipId: next.id,
         project: { file: next.file, segments: next.segments },
         selectedSegmentId: null,
         playheadTime: 0,
         isPlaying: false,
-        history: [],
+        history: (next.history??[]).map(segments=>({file:next.file,segments})),
+        captionCues:next.captionCues??[],captionSettings:next.captionSettings??{enabled:false},
       };
     }),
 }));
+
+function clipSettings(state:ClipSettings):ClipSettings {return {audioSettings:state.audioSettings,blurSettings:state.blurSettings,opticalFlowSettings:state.opticalFlowSettings,cropSettings:state.cropSettings,colorSettings:state.colorSettings};}
+
+const ownEditorMedia=createMediaOwner();
+useEditorStore.subscribe(state=>ownEditorMedia([...state.clips.map(c=>c.file.url),state.soundtrack?.url]));
 
 // Mirrors `project` changes (from addSegment/deleteSegment/splitSegment/
 // updateSegmentCurve/undo — none of which know about `clips`) back into the
@@ -602,17 +607,18 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
 // after setProject/setActiveClip/addClipToProject/removeClipFromProject,
 // which already set both together themselves).
 useEditorStore.subscribe((state, prevState) => {
-  if (state.project === prevState.project) return;
+  const controlsChanged=state.audioSettings!==prevState.audioSettings||state.blurSettings!==prevState.blurSettings||state.opticalFlowSettings!==prevState.opticalFlowSettings||state.cropSettings!==prevState.cropSettings||state.colorSettings!==prevState.colorSettings;
+  if (state.project === prevState.project&&!controlsChanged) return;
   if (!state.project || !state.activeClipId) return;
 
   const idx = state.clips.findIndex((c) => c.id === state.activeClipId);
   if (idx === -1) return;
 
   const current = state.clips[idx];
-  if (current.file === state.project.file && current.segments === state.project.segments) return;
+  if (current.file === state.project.file && current.segments === state.project.segments&&!controlsChanged) return;
 
   const clips = [...state.clips];
-  clips[idx] = { ...current, file: state.project.file, segments: state.project.segments };
+  clips[idx] = { ...current,settings:clipSettings(state), file: state.project.file, segments: state.project.segments };
   useEditorStore.setState({ clips });
 });
 

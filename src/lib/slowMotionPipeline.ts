@@ -16,6 +16,9 @@
  * starts). The returned array will be empty in streaming mode.
  */
 
+import {sampleOutputFrames} from './outputFrames';
+import type {EditorProject} from '@/types/editor';
+import {abortable} from './abortable';
 import type { Segment } from '@/types/editor';
 import { extractFrames } from './frameExtractor';
 import OpticalFlowWorkerCtor from '../workers/opticalFlowWorker.ts?worker';
@@ -87,101 +90,72 @@ type WorkerMsg =
 
 let workerInstance: Worker | null  = null;
 let workerReady    = false;
-const readyWaiters: Array<() => void> = [];
-
-function getOrCreateWorker(): Worker {
-  if (workerInstance) return workerInstance;
-
-  setModelStatus('loading');
-
-  workerInstance = new OpticalFlowWorkerCtor();
-
-  workerInstance.addEventListener('message', (e: MessageEvent<WorkerMsg>) => {
-    if (e.data.type === 'ready') {
-      workerReady = true;
-      setModelStatus('ready');
-      setDownloadPct(null);
-      for (const cb of readyWaiters) cb();
-      readyWaiters.length = 0;
-    } else if (e.data.type === 'progress') {
-      if (e.data.phase === 'downloading' && typeof e.data.pct === 'number') {
-        setDownloadPct(e.data.pct);
-      } else {
-        // 'loading' (ONNX session init, post-download) has no byte
-        // progress — clear any stale percentage from a prior download so
-        // the UI doesn't show a frozen "100%" while session creation runs.
-        setDownloadPct(null);
-      }
-    } else if (e.data.type === 'error') {
-      // Previously silently dropped here — loadModel()'s own .catch() (see
-      // opticalFlowWorker.ts) correctly posts this on a real failure (e.g.
-      // ort.InferenceSession.create() rejecting), but nothing on the main
-      // thread ever listened for it: the UI just stayed on "loading"
-      // forever with zero feedback, indistinguishable from a real hang.
-      console.error('[opticalFlowWorker] model init failed:', e.data.message);
-      setModelStatus('error');
-      setModelError(e.data.message);
-      setDownloadPct(null);
-      for (const cb of readyWaiters) cb(); // stop waitForWorkerReady() callers from hanging too
-      readyWaiters.length = 0;
+const readyWaiters = new Set<{resolve:()=>void;reject:(error:Error)=>void}>();
+const pendingRequests = new Set<(error:Error)=>void>();
+function failPending(error:Error):void {
+  for(const waiter of readyWaiters)waiter.reject(error);
+  readyWaiters.clear();
+  for(const reject of [...pendingRequests])reject(error);
+  pendingRequests.clear();
+}
+function getOrCreateWorker():Worker {
+  if(workerInstance)return workerInstance;
+  setModelError(null);setModelStatus('loading');
+  const worker=new OpticalFlowWorkerCtor();workerInstance=worker;
+  worker.addEventListener('message',(e:MessageEvent<WorkerMsg>)=>{
+    if(workerInstance!==worker){if(e.data.type==='done')e.data.frames.forEach(f=>f.close());return;}
+    if(e.data.type==='ready') {
+      workerReady=true;setModelStatus('ready');setDownloadPct(null);
+      for(const waiter of readyWaiters)waiter.resolve();readyWaiters.clear();
+    }else if(e.data.type==='progress') {
+      setDownloadPct(e.data.phase==='downloading'&&typeof e.data.pct==='number'?e.data.pct:null);
+    }else if(e.data.type==='error') {
+      workerReady=false;setModelStatus('error');setModelError(e.data.message);setDownloadPct(null);
+      failPending(new Error(e.data.message));
     }
   });
-
-  workerInstance.addEventListener('error', (ev) => {
-    console.error('[opticalFlowWorker]', ev.message);
-    setModelStatus('error');
-    setModelError(ev.message);
+  worker.addEventListener('error',event=>{
+    if(workerInstance!==worker)return;
+    workerReady=false;setModelStatus('error');setModelError(event.message);setDownloadPct(null);
+    failPending(new Error(event.message));
   });
-
-  return workerInstance;
+  return worker;
 }
-
-/** Resolves when the RIFE model is loaded and the worker is ready. */
-export function waitForWorkerReady(): Promise<void> {
-  if (workerReady) return Promise.resolve();
-  return new Promise((resolve) => {
-    getOrCreateWorker(); // ensure worker is started
-    readyWaiters.push(resolve);
+/** Reject on model failure, cancellation, disposal or a bounded initialization timeout. */
+export function waitForWorkerReady(signal?:AbortSignal):Promise<void> {
+  if(signal?.aborted)return Promise.reject(new DOMException('Cancelled','AbortError'));
+  if(workerReady)return Promise.resolve();
+  if(modelStatus==='error'&&workerInstance)return Promise.reject(new Error(modelError??'Model unavailable'));
+  getOrCreateWorker();
+  const work=new Promise<void>((resolve,reject)=>{
+    const cleanup=()=>{clearTimeout(timer);readyWaiters.delete(waiter);signal?.removeEventListener('abort',cancelled);};
+    const waiter={resolve:()=>{cleanup();resolve();},reject:(error:Error)=>{cleanup();reject(error);}};
+    const cancelled=()=>waiter.reject(new DOMException('Cancelled','AbortError'));
+    const timer=setTimeout(()=>waiter.reject(new Error('Model initialization timed out')),180000);
+    readyWaiters.add(waiter);signal?.addEventListener('abort',cancelled,{once:true});
   });
+  return work;
 }
-
-/** Terminate the optical flow worker and reset state (e.g. on page unload). */
-export function disposeWorker(): void {
-  workerInstance?.terminate();
-  workerInstance = null;
-  workerReady    = false;
-  readyWaiters.length = 0;
-  setModelStatus('idle');
-  setDownloadPct(null);
-  setModelError(null);
+/** Cancellation owns the singleton: terminate it and settle every outstanding request before reuse. */
+export function disposeWorker():void {
+  const worker=workerInstance;workerInstance=null;workerReady=false;
+  worker?.terminate();failPending(new DOMException('Cancelled','AbortError'));
+  setModelStatus('idle');setDownloadPct(null);setModelError(null);
 }
-
-// ─── Worker RPC ───────────────────────────────────────────────────────────────
-
-function interpolateViaWorker(
-  frameA: ImageBitmap,
-  frameB: ImageBitmap,
-  count: number,
-): Promise<ImageBitmap[]> {
-  const worker = getOrCreateWorker();
-
-  return new Promise<ImageBitmap[]>((resolve, reject) => {
-    const handler = (e: MessageEvent<WorkerMsg>) => {
-      if (e.data.type === 'done' || e.data.type === 'error') {
-        worker.removeEventListener('message', handler);
-      }
-
-      if (e.data.type === 'done') {
-        resolve(e.data.frames);
-      } else if (e.data.type === 'error') {
-        reject(new Error(e.data.message));
-      }
+function interpolateViaWorker(frameA:ImageBitmap,frameB:ImageBitmap,count:number,signal?:AbortSignal,timestep?:number):Promise<ImageBitmap[]> {
+  if(signal?.aborted){frameA.close();frameB.close();return Promise.reject(new DOMException('Cancelled','AbortError'));}
+  const worker=getOrCreateWorker();
+  return new Promise((resolve,reject)=>{
+    const cleanup=()=>{clearTimeout(timer);worker.removeEventListener('message',handler);signal?.removeEventListener('abort',cancelled);pendingRequests.delete(fail);};
+    const fail=(error:Error)=>{cleanup();reject(error);};
+    const cancelled=()=>{disposeWorker();};
+    const handler=(event:MessageEvent<WorkerMsg>)=>{
+      if(event.data.type==='done'){cleanup();resolve(event.data.frames);}
+      else if(event.data.type==='error')fail(new Error(event.data.message));
     };
-
-    worker.addEventListener('message', handler);
-
-    // Transfer frames so the worker takes ownership; avoids a pixel-data copy.
-    worker.postMessage({ type: 'interpolate', frameA, frameB, count }, [frameA, frameB]);
+    const timer=setTimeout(()=>{disposeWorker();},120000);
+    pendingRequests.add(fail);worker.addEventListener('message',handler);signal?.addEventListener('abort',cancelled,{once:true});
+    try{worker.postMessage({type:'interpolate',frameA,frameB,count,timestep},[frameA,frameB]);}catch(error){frameA.close();frameB.close();fail(error instanceof Error?error:new Error('Inference request failed'));}
   });
 }
 
@@ -217,8 +191,10 @@ export async function processSlowSegment(
   interpolationCount = 1,
   onProgress?: (progress: number) => void,
   onFrame?: (frames: ImageBitmap[]) => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<ImageBitmap[]> {
-  await waitForWorkerReady();
+  await waitForWorkerReady(signal);
+  signal?.throwIfAborted();
 
   const startSec = segment.startTime;
   const endSec   = segment.endTime;
@@ -236,13 +212,18 @@ export async function processSlowSegment(
 
   // Process frame pairs one at a time to keep memory bounded.
   for (let i = 0; i < times.length - 1; i++) {
-    const [frameA, frameB] = await extractFrames(videoElement, [times[i], times[i + 1]]);
+    signal?.throwIfAborted();
+    const work=extractFrames(videoElement,[times[i],times[i+1]]);
+    const [frameA,frameB]=signal?await abortable(work,signal,frames=>frames.forEach(f=>f.close())):await work;
 
     // Clone frameA so it survives the worker transfer.
-    const frameAClone = await createImageBitmap(frameA);
+    const cloned=createImageBitmap(frameA);
+    const frameAClone=signal?await abortable(cloned,signal,f=>f.close()):await cloned;
 
     // interpolateViaWorker transfers frameA and frameB (they become detached).
-    const synthetic = await interpolateViaWorker(frameA, frameB, interpolationCount);
+    let synthetic:ImageBitmap[];
+    try {synthetic=await interpolateViaWorker(frameA,frameB,interpolationCount,signal);}catch(error){frameAClone.close();throw error;}
+    if(signal?.aborted){frameAClone.close();synthetic.forEach(f=>f.close());signal.throwIfAborted();}
 
     const batch = [frameAClone, ...synthetic];
 
@@ -256,7 +237,9 @@ export async function processSlowSegment(
   }
 
   // Append the final frame (never added as a "frameA").
-  const [lastFrame] = await extractFrames(videoElement, [times[times.length - 1]]);
+  signal?.throwIfAborted();
+  const last=extractFrames(videoElement,[times[times.length-1]]);
+  const [lastFrame]=signal?await abortable(last,signal,frames=>frames.forEach(f=>f.close())):await last;
 
   if (onFrame) {
     await onFrame([lastFrame]);
@@ -265,4 +248,22 @@ export async function processSlowSegment(
 
   result.push(lastFrame);
   return result;
+}
+
+/** Stream exactly one frame per output tick, using the shipped model's timestep input. */
+export async function processOutputTimeline(project:EditorProject,video:HTMLVideoElement,onFrame:(bitmap:ImageBitmap,index:number,total:number)=>Promise<void>,signal:AbortSignal):Promise<void>{
+ await waitForWorkerReady(signal);
+ for(const sample of sampleOutputFrames(project)){
+  signal.throwIfAborted();
+  let frame:ImageBitmap;
+  const a=Math.floor(sample.sourceSeconds*30)/30,b=Math.min(project.file.duration-1e-5,a+1/30),fraction=(sample.sourceSeconds-a)/(b-a);
+  if(sample.interpolate&&fraction>.001&&fraction<.999){
+   const pair=await abortable(extractFrames(video,[a,b]),signal,frames=>frames.forEach(f=>f.close()));
+   const result=await interpolateViaWorker(pair[0],pair[1],1,signal,fraction);
+   frame=result[0];
+  }else{
+   const frames=await abortable(extractFrames(video,[sample.sourceSeconds]),signal,items=>items.forEach(f=>f.close()));frame=frames[0];
+  }
+  try{signal.throwIfAborted();await onFrame(frame,sample.index,sample.total);}finally{frame.close();}
+ }
 }

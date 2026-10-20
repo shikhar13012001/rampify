@@ -262,3 +262,10 @@ describe('mapBeatsToKeypoints', () => {
     expect(curve.type).toBe('linear');
   });
 });
+
+it('places beat peaks on final output time while preserving the source/output lengths',async()=>{
+ const {mapOutputBeatsToCurve}=await import('./beatMapper');const {remapTime}=await import('./curveMath');
+ const curve=mapOutputBeatsToCurve([1,2,3],4,4,'peak-on-beat',{minSpeed:.5,maxSpeed:2});
+ expect(remapTime(curve,4,4)).toBeCloseTo(4,4);
+ for(const beat of [1,2,3]){const peak=curve.points.find(p=>Math.abs(remapTime(curve,p.time*4,4)-beat)<.0001);expect(peak).toBeDefined();expect(peak!.speed).toBeGreaterThan(1);}
+});

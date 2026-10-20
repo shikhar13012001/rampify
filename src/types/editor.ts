@@ -4,6 +4,8 @@ export interface VideoFile {
   duration: number;
   width: number;
   height: number;
+  fingerprint?: string;
+  lastModified?: number;
   size?: number;  // bytes, from File.size
 }
 
@@ -39,7 +41,12 @@ export interface EditorProject {
  * used under a different name — generalized here so both features share one
  * definition instead of two parallel ones.
  */
+export type ClipSettings={audioSettings:AudioSettings;blurSettings:BlurSettings;opticalFlowSettings:OpticalFlowSettings;cropSettings:CropSettings;colorSettings:ColorSettings};
 export interface Clip {
+  settings?:ClipSettings;
+  captionCues?: CaptionCue[];
+  captionSettings?: CaptionSettings;
+  history?: Segment[][];
   id: string;
   file: VideoFile;
   segments: Segment[];
@@ -60,6 +67,8 @@ export interface OpticalFlowSettings {
 }
 
 export interface AudioSettings {
+  lockToSpeed?: boolean;
+  muteDuringRamp?: boolean;
   /** true (default): tempo-only stretch via atempo, pitch stays natural.
    *  false: pitch shifts with speed (asetrate/aresample) — the classic
    *  "chipmunk" / deep-voice tape effect, chosen deliberately as a look. */
@@ -96,7 +105,7 @@ export interface CaptionSettings {
   enabled: boolean;
 }
 
-export type ClipStatus = 'queued' | 'processing' | 'done' | 'error';
+export type ClipStatus = 'queued' | 'processing' | 'ready' | 'discarded' | 'done' | 'error';
 
 /**
  * One clip in a batch queue. Extends the same `Clip` shape used by the
@@ -106,5 +115,10 @@ export interface VideoClip extends Clip {
   status: ClipStatus;
   progress?: number;
   resultBlob?: Blob;
+  exportId?: string;
+  exportOwnerUid?:string|null;
   errorMessage?: string;
 }
+
+/** Original asset plus mix on the final output timeline; URLs never persist. */
+export interface Soundtrack {beats?:number[];name:string;url:string;duration:number;size:number;fingerprint:string;trimStart:number;trimEnd:number;offset:number;gain:number;sourceGain:number}

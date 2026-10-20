@@ -38,7 +38,7 @@ describe('exportLimits — plan tier mapping', () => {
   it('maps (hasUser, isPro) to the correct tier', () => {
     expect(planTierFor(false, false)).toBe('guest');
     expect(planTierFor(true, false)).toBe('free');
-    expect(planTierFor(false, true)).toBe('pro'); // isPro wins even if hasUser is (incorrectly) false
+    expect(planTierFor(false, true)).toBe('guest'); // stale cached Pro cannot elevate a guest
     expect(planTierFor(true, true)).toBe('pro');
   });
 });
@@ -61,30 +61,40 @@ describe('exportLimits — quota by tier', () => {
     GUEST_EXPERIMENT.allowance = ORIGINAL_GUEST_EXPERIMENT.allowance;
     GUEST_EXPERIMENT.resolution = ORIGINAL_GUEST_EXPERIMENT.resolution;
     delete (globalThis as { window?: unknown }).window;
-    vi.restoreAllMocks();
+    vi.restoreAllMocks();vi.unstubAllGlobals();
   });
 
-  it('pro: unlimited, always allowed', async () => {
+  it('pro: unlimited only after a fresh authoritative check', async () => {
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({isPro:true,exportsThisMonth:7,exportsRemaining:999})}));
     useEditorStore.setState({ user: fakeUser(), isPro: true });
     expect(getRemainingExports()).toBe(999);
     await expect(checkExportAllowed()).resolves.toEqual({ allowed: true, remaining: 999 });
   });
 
-  it('free: allowed while exportsRemaining > 0, falls back to store value when the API is unreachable', async () => {
+  it('cached allowance fails closed while the API is unreachable', async () => {
+    vi.stubGlobal('fetch',vi.fn().mockRejectedValue(new Error('offline')));
     useEditorStore.setState({ user: fakeUser(), isPro: false, exportsRemaining: 2 });
     expect(getRemainingExports()).toBe(2);
     // No server running in this test environment — fetch() rejects/throws,
     // exercising the documented "API unavailable (dev mode)" fallback path.
     const allowance = await checkExportAllowed();
-    expect(allowance).toEqual({ allowed: true, remaining: 2 });
+    expect(allowance).toMatchObject({allowed:false,remaining:0});expect(allowance.reason).toMatch(/reconnect/i);
   });
 
   it('free: exhausted allowance is blocked, with a reason', async () => {
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({isPro:false,exportsThisMonth:3,exportsRemaining:0})}));
     useEditorStore.setState({ user: fakeUser(), isPro: false, exportsRemaining: 0 });
     const allowance = await checkExportAllowed();
     expect(allowance.allowed).toBe(false);
     expect(allowance.remaining).toBe(0);
     expect(allowance.reason).toMatch(/limit/i);
+  });
+
+  it('queues usage under the original owner instead of charging a replacement account',async()=>{
+    const storage=new MemoryStorage(),fetchMock=vi.fn();vi.stubGlobal('localStorage',storage);vi.stubGlobal('fetch',fetchMock);
+    useEditorStore.setState({user:{...fakeUser(),uid:'account-b'},isPro:false});
+    const id='9e50a94c-9c93-41ba-92d4-ac47a56d1948';await expect(recordExport(id,'account-a')).rejects.toThrow(/sign back/i);
+    expect(fetchMock).not.toHaveBeenCalled();expect(storage.getItem('rampcut:pending-exports:account-a')).toContain(id);expect(storage.getItem('rampcut:pending-exports:account-b')).toBeNull();
   });
 
   it('guest: hard-blocked while the experiment is disabled', async () => {

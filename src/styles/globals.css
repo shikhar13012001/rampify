@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
+@import "./editorTools.css";
+@source "../../index.html";
 
 @theme {
   /* Clay design system — unified across marketing + editor */
@@ -444,8 +446,8 @@ input[type='range']::-webkit-slider-thumb:hover {
   /* Smaller wordmark on phones */
   .editor-wordmark { display: none !important; }
 
-  /* Main workspace: drop beat-sync panel into a shorter row */
+  /* Keep all seven workspace rows reachable on short mobile viewports. */
   .editor-main {
-    grid-template-rows: minmax(0, 1fr) auto 140px 84px !important;
+    grid-template-rows: minmax(220px, 40dvh) 8px max-content max-content minmax(220px, 1fr) max-content 100px !important;
   }
 }

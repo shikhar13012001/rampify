@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCaptionSrt, hasStrongSpeedRamp } from './ffmpegBridge';
+import { buildCaptionSrt, buildProjectCaptionSrt, findTransitionPoints, hasStrongSpeedRamp } from './ffmpegBridge';
 import type { Segment } from '@/types/editor';
 
 function flatSegment(speed = 1, duration = 10): Segment {
@@ -68,4 +68,12 @@ describe('buildCaptionSrt', () => {
     expect(srt).toContain('fits fine');
     expect(srt).not.toContain('too long');
   });
+});
+
+it('maps captions and later blur transitions across trimmed retained spans',()=>{
+ const first={...flatSegment(2,2),startTime:1,endTime:3,id:'a'},second={...rampedSegment(2),startTime:4,endTime:6,id:'b'};
+ const project={file:{name:'x',url:'blob:x',width:640,height:360,duration:6},segments:[first,second]};
+ const srt=buildProjectCaptionSrt([{start:1,end:2,text:'first'},{start:3.2,end:3.8,text:'deleted'},{start:4,end:5,text:'second'}],project);
+ expect(srt).toContain('00:00:00,000 --> 00:00:00,500');expect(srt).not.toContain('deleted');expect(srt).toContain('00:00:01,000 -->');
+ expect(findTransitionPoints(project.segments)[0].outputTime).toBe(1);
 });

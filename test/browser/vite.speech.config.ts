@@ -1,0 +1,1 @@
+import {defineConfig} from 'vite';import media from './vite.media.config';import {resolve} from 'node:path';export default defineConfig({...media,build:{outDir:'temp/browser/speech-dist',rollupOptions:{input:resolve('test/browser/speech.html')}},preview:{...media.preview,port:5177}});

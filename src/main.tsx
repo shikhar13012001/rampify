@@ -13,7 +13,7 @@ import { hasAnalyticsConsent } from './lib/analytics';
 // project in the Vercel dashboard (Analytics tab). No-op locally. The script
 // is served from this origin (/_vercel/insights/script.js) so the COEP
 // header in vercel.json doesn't block it.
-inject({ mode: import.meta.env.PROD ? 'production' : 'development' });
+if(hasAnalyticsConsent())inject({ mode: import.meta.env.PROD ? 'production' : 'development' });
 registerServiceWorker();
 
 // Google Analytics 4 — no-op unless VITE_GA_MEASUREMENT_ID is set (see

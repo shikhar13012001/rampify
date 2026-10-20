@@ -47,6 +47,9 @@ async function loadModel(): Promise<void> {
   // size, see file header) instead of the much larger fp32 default.
   transcriber = await pipeline('automatic-speech-recognition', MODEL_ID, {
     dtype: 'q8',
+    // Installed ORT's extended QDQ optimizer rejects this quantized decoder.
+    // Basic optimizations retain the q8 download without converting its weights.
+    session_options:{graphOptimizationLevel:'basic'},
     progress_callback: (data: ProgressItem) => {
       if (data.status === 'progress' && typeof data.progress === 'number') {
         self.postMessage({ type: 'progress', pct: Math.round(data.progress) });
@@ -75,6 +78,7 @@ self.onmessage = async (e: MessageEvent<TranscribeMsg>) => {
   }
 
   try {
+    const duration=e.data.audio.length/16000;if(!Number.isFinite(duration)||duration<=0||duration>30)throw new Error('Caption audio must be between zero and30 seconds.');
     const result = await transcriber(e.data.audio, {
       return_timestamps: 'word',
       chunk_length_s: 30,
@@ -87,8 +91,8 @@ self.onmessage = async (e: MessageEvent<TranscribeMsg>) => {
 
     const cues = chunks
       .filter((c) => c.timestamp[1] != null)
-      .map((c) => ({ start: c.timestamp[0], end: c.timestamp[1] as number, text: c.text.trim() }))
-      .filter((c) => c.text.length > 0);
+      .map((c) => ({ start: Math.max(0,c.timestamp[0]), end: Math.min(duration,c.timestamp[1] as number), text: c.text.trim().slice(0,500) }))
+      .filter((c) => c.text.length > 0&&Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start).sort((a,b)=>a.start-b.start);
 
     self.postMessage({ type: 'done', cues });
   } catch (err) {

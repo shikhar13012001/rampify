@@ -1,3 +1,5 @@
+import {JobPresetTools} from './JobPresetTools';
+import {ProjectTools} from './ProjectTools';
 import { useEffect, useMemo, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { PresetPanel } from '@/features/curve/PresetPanel';
@@ -68,12 +70,15 @@ export function Sidebar() {
     }, 0);
   }, [project]);
 
-  const [lockAudio, setLockAudio] = useState(true);
-  const [muteDuringRamp, setMuteDuringRamp] = useState(false);
+  const lockAudio = useEditorStore(s => s.audioSettings.lockToSpeed !== false);
+  const setAudioOptions = useEditorStore(s => s.setAudioOptions);
+  const setLockAudio = (value: boolean) => setAudioOptions({lockToSpeed:value});
+  const muteDuringRamp = useEditorStore(s => !!s.audioSettings.muteDuringRamp);
+  const setMuteDuringRamp = (value: boolean) => setAudioOptions({muteDuringRamp:value});
   const [fileInfoOpen, setFileInfoOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
-  if (!project) return null;
+  if (!project) return <ProjectTools />;
 
   const { file, segments } = project;
   const selected = segments.find((segment) => segment.id === selectedId) ?? segments[0] ?? null;
@@ -96,6 +101,8 @@ export function Sidebar() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <ProjectTools />
+      <JobPresetTools />
       {/* File info — collapsed summary by default */}
       <SectionCard>
         <button
@@ -734,7 +741,7 @@ function OpticalFlowControl({
   useEffect(() => {
     // Only pre-warm the (~20 MB) AI model for Pro users who can actually export
     // with it — free/guest users just see the curve-editor preview, no download needed.
-    if (enabled && isPro) waitForWorkerReady();
+    if (enabled && isPro) void waitForWorkerReady().catch(()=>{/* Model error state is displayed below. */});
   }, [enabled, isPro]);
 
   const hasSlowSegs = useMemo(() => hasSlowSegments(segments), [segments]);

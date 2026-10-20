@@ -1,5 +1,6 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import {readVideoMetadata} from '@/lib/videoMetadata';
 import { formatTime } from '@/features/preview/formatTime';
 
 /**
@@ -24,29 +25,17 @@ export function ClipTabs() {
   const addClipToProject   = useEditorStore(s => s.addClipToProject);
   const removeClipFromProject = useEditorStore(s => s.removeClipFromProject);
 
+  const [loadError,setLoadError]=useState('');
+  const exporting=useEditorStore(s=>s.isExporting);
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!project && clips.length === 0) return null;
 
-  const handleAddFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-
-    const url = URL.createObjectURL(file);
-    const videoEl = document.createElement('video');
-    videoEl.preload = 'metadata';
-    videoEl.src = url;
-    videoEl.onloadedmetadata = () => {
-      addClipToProject({
-        name: file.name,
-        url,
-        duration: videoEl.duration,
-        width: videoEl.videoWidth,
-        height: videoEl.videoHeight,
-        size: file.size,
-      });
-    };
+  const handleAddFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file=e.target.files?.[0];e.target.value='';if(!file)return;
+    if(clips.length>=10){setLoadError('Use up to ten clips per project.');return;}
+    try{const metadata=await readVideoMetadata(file);addClipToProject(metadata);setLoadError('');}
+    catch(error){setLoadError(error instanceof Error?error.message:'Could not load this clip.');}
   };
 
   return (
@@ -61,6 +50,7 @@ export function ClipTabs() {
         backgroundColor: 'var(--color-curve-bg)',
       }}
     >
+      {loadError&&<span role="status" style={{fontSize:11}}>{loadError}</span>}
       {clips.map((clip, i) => {
         const active = clip.id === activeClipId;
         return (
@@ -130,6 +120,7 @@ export function ClipTabs() {
 
       <button
         type="button"
+        disabled={exporting}
         onClick={() => fileRef.current?.click()}
         style={{
           flexShrink: 0,

@@ -164,3 +164,25 @@ describe('editorStore — multi-clip (clips / activeClipId)', () => {
     expect(state.project).toBeNull();
   });
 });
+
+it('keeps caption identity and undo when switching clips',()=>{
+ const s=useEditorStore.getState();s.setProject(fakeProject('captions-a.mp4'));const a=useEditorStore.getState().activeClipId!;
+ s.setCaptionCues([{start:0,end:1,text:'Only A'}]);s.addClipToProject(fakeFile('captions-b.mp4'));const b=useEditorStore.getState().clips[1].id;
+ s.setActiveClip(b);expect(useEditorStore.getState().captionCues).toEqual([]);s.setActiveClip(a);expect(useEditorStore.getState().captionCues[0]?.text).toBe('Only A');
+});
+
+it('restores each clip undo stack and captions after removing another active clip',()=>{
+ const s=useEditorStore.getState();s.setProject(fakeProject('undo-a.mp4'));const a=useEditorStore.getState().activeClipId!;
+ const segment=useEditorStore.getState().project!.segments[0];s.updateSegmentCurve(segment.id,{type:'linear',points:[{time:0,speed:2},{time:1,speed:2}]});
+ s.setCaptionCues([{start:0,end:1,text:'A'}]);s.addClipToProject(fakeFile('undo-b.mp4'));const b=useEditorStore.getState().clips[1].id;s.setActiveClip(b);
+ s.setCaptionCues([{start:0,end:1,text:'B'}]);s.removeClipFromProject(b);expect(useEditorStore.getState().activeClipId).toBe(a);expect(useEditorStore.getState().captionCues[0].text).toBe('A');
+ s.undo();expect(useEditorStore.getState().project!.segments[0].curve).toEqual(segment.curve);
+});
+
+it('keeps color, crop, blur and audio controls with their clip when switching',()=>{
+ const s=useEditorStore.getState();s.setProject({file:{name:'first',url:'blob:1',duration:2,width:320,height:240},segments:[]});
+ const first=useEditorStore.getState().activeClipId!;s.setColorPreset('warm');s.setColorEnabled(true);s.setAudioOptions({preservePitch:false});
+ s.addClipToProject({name:'second',url:'blob:2',duration:2,width:320,height:240});const second=useEditorStore.getState().clips[1].id;s.setActiveClip(second);s.setColorPreset('cool');s.setAudioOptions({preservePitch:true});s.setActiveClip(first);
+ expect(useEditorStore.getState().colorSettings.preset).toBe('warm');expect(useEditorStore.getState().audioSettings.preservePitch).toBe(false);
+ s.setActiveClip(second);expect(useEditorStore.getState().colorSettings.preset).toBe('cool');
+});

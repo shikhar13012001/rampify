@@ -1,0 +1,9 @@
+import {afterEach,expect,it,vi} from 'vitest';
+import {loadProjectState,saveProjectManifest} from './projectPersistence';
+import {useEditorStore} from '@/store/editorStore';
+const key='rampcut_project_v1';
+const valid=()=>({fileName:'legacy.mp4',duration:3,segments:[{id:'a',startTime:0,endTime:3,curve:{type:'linear',points:[{time:0,speed:1},{time:1,speed:1}]}}],blurSettings:{enabled:false,intensity:'balanced'},opticalFlowSettings:{enabled:false,quality:'draft'},minSpeed:.1,maxSpeed:10,beatMarkers:[],savedAt:123});
+afterEach(()=>vi.unstubAllGlobals());
+it('preserves the original v1 data while validating a legacy recovery',()=>{const raw=JSON.stringify(valid()),data=new Map([[key,raw]]);vi.stubGlobal('localStorage',{getItem:(k:string)=>data.get(k)??null,setItem:(k:string,v:string)=>data.set(k,v)});expect(loadProjectState('legacy.mp4',3)).toEqual(valid());expect(data.get(key)).toBe(raw);});
+it('rejects corrupt legacy curves and out-of-source spans without deleting the backup',()=>{for(const mutate of [(s:ReturnType<typeof valid>)=>{s.segments[0].curve.points[0].time=10;},(s:ReturnType<typeof valid>)=>{s.segments[0].endTime=99;},(s:ReturnType<typeof valid>)=>{s.blurSettings.intensity='invalid';}]){const s=valid();mutate(s);const raw=JSON.stringify(s);vi.stubGlobal('localStorage',{getItem:()=>raw});expect(loadProjectState('legacy.mp4',3)).toBeNull();}});
+it('reports full storage and preserves an unknown future project version',()=>{vi.stubGlobal('localStorage',{getItem:()=>null,setItem:()=>{throw new Error('QuotaExceeded');}});expect(saveProjectManifest(useEditorStore.getState())).toBe(false);const setItem=vi.fn();vi.stubGlobal('localStorage',{getItem:()=>'{"schemaVersion":99}',setItem});expect(saveProjectManifest(useEditorStore.getState())).toBe(false);expect(setItem).not.toHaveBeenCalled();});

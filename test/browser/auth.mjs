@@ -1,0 +1,10 @@
+import {createRequire} from 'node:module';
+import {resolve} from 'node:path';
+if(process.env.GCLOUD_PROJECT!=='demo-rampcut-test')throw new Error('Isolated emulator project required');
+console.log('Loading installed Firebase Auth emulator');
+const require=createRequire(import.meta.url),{createApp}=require(resolve('node_modules/firebase-tools/lib/emulator/auth/server.js'));
+console.log('Creating Firebase Auth emulator app');
+const app=await createApp('demo-rampcut-test',2);
+console.log('Binding Firebase Auth emulator');
+const server=app.listen(9099,'127.0.0.1',()=>console.log('Firebase Auth emulator ready on loopback9099'));
+process.on('SIGTERM',()=>server.close(()=>process.exit(0)));

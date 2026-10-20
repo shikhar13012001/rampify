@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';import {unlockedAudioPosition} from './previewAudio';
+const clip={id:'c',file:{name:'x',url:'blob:x',duration:6,width:320,height:240},segments:[{id:'s',startTime:1,endTime:3,curve:{type:'linear' as const,points:[{time:0,speed:.5},{time:1,speed:.5}]}},{id:'last',startTime:4,endTime:6,curve:{type:'linear' as const,points:[{time:0,speed:.5},{time:1,speed:.5}]}}]};
+it('plays source audio at1x using output elapsed time within each retained span',()=>{expect(unlockedAudioPosition(clip,2)).toEqual({time:3,audible:true});expect(unlockedAudioPosition(clip,5.5)).toEqual({time:7,audible:false});expect(unlockedAudioPosition(clip,.5).audible).toBe(false);});

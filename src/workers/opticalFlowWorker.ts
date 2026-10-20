@@ -4,7 +4,7 @@
  * Init sequence
  * 1. Check IndexedDB for a cached copy of the model.
  * 2. If missing: fetch from /models/rife_v4_lite.onnx and cache it.
- * 3. Create InferenceSession with executionProviders ['webgl', 'cpu'].
+ * 3. Create a same-origin single-threaded WASM inference session.
  * 4. Post { type: 'ready' } to the main thread.
  *
  * Message protocol
@@ -19,21 +19,13 @@
  */
 
 import * as ort from 'onnxruntime-web';
+import runtimeModuleURL from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url';
+import runtimeWasmURL from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url';
 import { transposeFrameToTensor, tensorDataToImageData } from '@/lib/tensorUtils';
 
-// ─── ONNX Runtime wasm path ───────────────────────────────────────────────────
-//
-// Using the CDN so no Vite copy-plugin is needed. This previously hardcoded
-// "1.17.3", which had silently drifted out of sync with the actual
-// installed/imported onnxruntime-web version (1.26.0 per package.json) — the
-// JS API (from 1.26.0) requested a WASM filename that simply doesn't exist
-// in the CDN's 1.17.3 package, a plain 404 that manifested as "no available
-// backend found" with zero indication of the real cause (see
-// docs/validation/STATUS.md). MUST match package.json's onnxruntime-web
-// version exactly — test/lib/opticalFlowVersion.test.ts fails the build if
-// this ever drifts again, so this can't silently break the same way twice.
-ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
-ort.env.wasm.numThreads = 1; // single-threaded avoids any COOP/COEP issues
+// Same-origin assets from the installed runtime; JS and WASM cannot drift apart.
+ort.env.wasm.wasmPaths = {mjs:new URL(runtimeModuleURL,self.location.href).href,wasm:new URL(runtimeWasmURL,self.location.href).href};
+ort.env.wasm.numThreads=1;
 
 // ─── IndexedDB model cache ────────────────────────────────────────────────────
 
@@ -75,9 +67,9 @@ function idbPut(db: IDBDatabase, key: string, value: ArrayBuffer): Promise<void>
 // ─── Model loading ────────────────────────────────────────────────────────────
 
 async function loadModel(): Promise<ort.InferenceSession> {
-  const db = await openDB();
+  const db = await openDB().catch(()=>null);
 
-  let modelBuffer = await idbGet(db, MODEL_KEY);
+  let modelBuffer = db?await idbGet(db, MODEL_KEY).catch(()=>null):null;
 
   if (!modelBuffer) {
     self.postMessage({ type: 'progress', phase: 'downloading', pct: 0 });
@@ -112,14 +104,15 @@ async function loadModel(): Promise<ort.InferenceSession> {
       // to an unmeasured download rather than failing outright.
       modelBuffer = await res.arrayBuffer();
     }
-    await idbPut(db, MODEL_KEY, modelBuffer);
+    if(db)await idbPut(db, MODEL_KEY, modelBuffer).catch(()=>{});
   }
 
   self.postMessage({ type: 'progress', phase: 'loading' });
 
+  db?.close();
   const session = await ort.InferenceSession.create(
     new Uint8Array(modelBuffer),
-    { executionProviders: ['webgl', 'cpu'] },
+    { executionProviders: ['wasm'] },
   );
 
   return session;
@@ -127,11 +120,11 @@ async function loadModel(): Promise<ort.InferenceSession> {
 
 // ─── Frame helpers ────────────────────────────────────────────────────────────
 
-function bitmapToImageData(bitmap: ImageBitmap): ImageData {
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+function bitmapToImageData(bitmap: ImageBitmap,H=bitmap.height,W=bitmap.width): ImageData {
+  const canvas = new OffscreenCanvas(W,H);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0);
-  return ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+  return ctx.getImageData(0, 0, W,H);
 }
 
 // ─── RIFE inference ───────────────────────────────────────────────────────────
@@ -148,12 +141,13 @@ async function runRIFE(
   session: ort.InferenceSession,
   frameA: ImageBitmap,
   frameB: ImageBitmap,
+  timestep=.5,
 ): Promise<ImageBitmap> {
-  const H = frameA.height;
-  const W = frameA.width;
+  const originalH=frameA.height,originalW=frameA.width;
+  const H=Math.ceil(originalH/32)*32,W=Math.ceil(originalW/32)*32;
 
-  const tensorA = transposeFrameToTensor(bitmapToImageData(frameA));
-  const tensorB = transposeFrameToTensor(bitmapToImageData(frameB));
+  const tensorA = transposeFrameToTensor(bitmapToImageData(frameA,H,W));
+  const tensorB = transposeFrameToTensor(bitmapToImageData(frameB,H,W));
 
   const feeds: Record<string, ort.Tensor> = {};
 
@@ -164,8 +158,8 @@ async function runRIFE(
       feeds[name] = new ort.Tensor('float32', tensorB, [1, 3, H, W]);
     } else if (name === 'timestep') {
       // Midpoint interpolation
-      feeds[name] = new ort.Tensor('float32', new Float32Array([0.5]), [1]);
-    }
+      feeds[name] = new ort.Tensor('float32', new Float32Array([timestep]), [1]);
+    }else throw new Error('Unsupported model input: '+name);
   }
 
   const results = await session.run(feeds);
@@ -178,7 +172,9 @@ async function runRIFE(
   const canvas  = new OffscreenCanvas(W, H);
   const ctx     = canvas.getContext('2d')!;
   ctx.putImageData(imgData, 0, 0);
-  return canvas.transferToImageBitmap();
+  const cropped=new OffscreenCanvas(originalW,originalH);cropped.getContext('2d')!.drawImage(canvas,0,0);
+  for(const tensor of Object.values(feeds))tensor.dispose();for(const tensor of Object.values(results))tensor.dispose();
+  return cropped.transferToImageBitmap();
 }
 
 // ─── Recursive interpolation ──────────────────────────────────────────────────
@@ -228,11 +224,12 @@ loadModel()
 // ─── Message handler ──────────────────────────────────────────────────────────
 
 self.onmessage = async (e: MessageEvent) => {
-  const { type, frameA, frameB, count } = e.data as {
+  const { type, frameA, frameB, count,timestep } = e.data as {
     type: string;
     frameA: ImageBitmap;
     frameB: ImageBitmap;
     count: number;
+    timestep?:number;
   };
 
   if (type !== 'interpolate') return;
@@ -246,7 +243,7 @@ self.onmessage = async (e: MessageEvent) => {
 
   try {
     const depth = Math.max(1, Math.min(3, count)); // clamp to [1, 3]
-    const frames = await interpolateFrames(session, frameA, frameB, depth);
+    const frames = timestep===undefined?await interpolateFrames(session, frameA, frameB, depth):[await runRIFE(session,frameA,frameB,Math.max(0,Math.min(1,timestep)))];
 
     // Close input bitmaps — they've been read, GPU memory can be freed.
     frameA.close();

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { checkExportCapabilities, detectInAppBrowser, type InAppBrowserName } from '@/lib/browserCapabilities';
 
 const DISMISS_KEY = 'rampcut_inapp_banner_dismissed';
@@ -17,28 +17,15 @@ const DISMISS_KEY = 'rampcut_inapp_banner_dismissed';
  *    a block, so we don't cost activation on a browser that might work fine.
  */
 export function UnsupportedEnvironmentGate() {
-  const [blocked, setBlocked]       = useState<{ missing: string[] } | null>(null);
-  const [inAppName, setInAppName]   = useState<InAppBrowserName | null>(null);
-  const [dismissed, setDismissed]   = useState(false);
-  const [copied, setCopied]         = useState(false);
-
-  useEffect(() => {
-    const name = detectInAppBrowser();
-    setInAppName(name);
-
+  const [blocked] = useState(() => {
     const caps = checkExportCapabilities();
-    if (!caps.supported) {
-      setBlocked({ missing: caps.missing });
-      return;
-    }
-    if (name) {
-      try {
-        setDismissed(sessionStorage.getItem(DISMISS_KEY) === '1');
-      } catch {
-        // sessionStorage unavailable (privacy mode) — just show the banner.
-      }
-    }
-  }, []);
+    return caps.supported ? null : { missing: caps.missing };
+  });
+  const [inAppName] = useState<InAppBrowserName | null>(detectInAppBrowser);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem(DISMISS_KEY) === '1'; } catch { return false; }
+  });
+  const [copied, setCopied] = useState(false);
 
   const copyLink = () => {
     try {

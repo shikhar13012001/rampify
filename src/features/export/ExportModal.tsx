@@ -1,11 +1,11 @@
+import { runExport } from '@/lib/exportCoordinator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
-import { FFmpegBridge, hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
+import { hasSlowSegments, estimateOFSeconds } from '@/lib/ffmpegBridge';
 import type { OFPhase } from '@/lib/ffmpegBridge';
 import { exportBlockedReason, isUnsupportedCombination, GUEST_EXPERIMENT } from '@/lib/planConfig';
 import { checkExportCapabilities } from '@/lib/browserCapabilities';
 import {
-  checkExportAllowed,
   EXPORT_LIMIT,
   SIGNED_IN_FREE_LIMIT,
   getRemainingExports,
@@ -60,11 +60,6 @@ function probeVideoPlayability(url: string, timeoutMs = 3000): Promise<boolean |
   });
 }
 
-const OF_PHASE_LABEL: Record<OFPhase, string> = {
-  interpolating: 'Interpolating frames…',
-  encoding: 'Encoding video…',
-};
-
 interface ExportModalProps {
   onClose: () => void;
 }
@@ -87,6 +82,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const colorSettings = useEditorStore((state) => state.colorSettings);
   const captionSettings = useEditorStore((state) => state.captionSettings);
   const captionCues = useEditorStore((state) => state.captionCues);
+  const soundtrack=useEditorStore(s=>s.soundtrack);
   const audioSettings = useEditorStore((state) => state.audioSettings);
   const clips = useEditorStore((state) => state.clips);
   const exportResolution = useEditorStore((state) => state.exportResolution);
@@ -101,6 +97,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [ofPhase, setOfPhase] = useState<OFPhase | null>(null);
   // Client-generated UUID per export attempt; makes recordExport idempotent.
+  const exportOwnerRef=useRef<string|null|undefined>(undefined);
   const exportIdRef = useRef<string | null>(null);
   // The exportId a download was actually triggered/counted for — guards against
   // the download-effect re-firing (e.g. an unrelated `project` change while
@@ -116,7 +113,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
   // guard for what that corrupts.
   const startInFlightRef = useRef(false);
 
-  const bridgeRef = useRef<FFmpegBridge | null>(null);
+  const bridgeRef = useRef<AbortController | null>(null);
 
   const tier = planTierFor(!!user, isPro);
 
@@ -207,16 +204,6 @@ export function ExportModal({ onClose }: ExportModalProps) {
         return;
       }
 
-      setPhase('checking');
-      const allowance = await checkExportAllowed();
-      setRemaining(allowance.remaining);
-
-      if (!allowance.allowed) {
-        useEditorStore.getState().setUpgradeModalOpen(true);
-        setPhase('idle');
-        return;
-      }
-
       setPhase('processing');
       setProgress(0);
       setSubStatus('');
@@ -236,7 +223,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       recordedExportIdRef.current = null;
       trackEvent(exportStartedEvent(buildExportEventContext()));
 
-      const bridge = new FFmpegBridge();
+      const bridge = new AbortController();
       bridgeRef.current = bridge;
 
       const handleDone = async (blob: Blob) => {
@@ -267,69 +254,10 @@ export function ExportModal({ onClose }: ExportModalProps) {
         setStartedAt(null);
       };
 
-      if (clips.length > 1) {
-        // ── Multi-clip export path ──────────────────────────────────────────
-        // Each clip goes through its own single-clip pipeline (decided per
-        // clip, based on ITS OWN segments/curve), then all are stitched via
-        // ffmpeg's concat demuxer. Blur/OF/crop/color/caption settings are
-        // shared across the whole export in v1 — see processMultiClip's doc.
-        FFmpegBridge.guardExport({ onError: handleError }, () =>
-          bridge.processMultiClip(clips, blurSettings, ofSettings, audioSettings, {
-            onProgress: (pct, sub) => {
-              setProgress(pct);
-              setSubStatus(sub);
-              setExportProgress(pct);
-            },
-            onDone: handleDone,
-            onError: handleError,
-          }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues),
-        );
-      } else if (useOFPipeline) {
-        // ── Optical flow export path ────────────────────────────────────────
-        FFmpegBridge.guardExport({ onError: handleError }, () =>
-          bridge.processWithOpticalFlow(project, ofSettings, audioSettings, {
-            onProgress: (pct, phase) => {
-              setProgress(pct);
-              setOfPhase(phase);
-              setSubStatus(OF_PHASE_LABEL[phase]);
-              setExportProgress(pct);
-            },
-            onDone: handleDone,
-            onError: handleError,
-          }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues),
-        );
-      } else if (blurSettings.enabled) {
-        // ── Blur export path ────────────────────────────────────────────────
-        FFmpegBridge.guardExport({ onError: handleError }, () =>
-          bridge.processWithBlur(project, blurSettings, audioSettings, {
-            onProgress: (pct, sub) => {
-              setProgress(pct);
-              setSubStatus(sub);
-              setExportProgress(pct);
-            },
-            onDone: handleDone,
-            onError: handleError,
-          }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues),
-        );
-      } else {
-        // ── Standard export path ────────────────────────────────────────────
-        bridge.startProcessing(project, audioSettings, {
-          onProgress: (percent) => {
-            setProgress(percent);
-            setExportProgress(percent);
-          },
-          onDone: async (url) => {
-            setDownloadUrl(url);
-            setRemaining(getRemainingExports());
-            setPhase('done');
-            setExportProgress(null);
-            setExporting(false);
-            setStartedAt(null);
-            trackRenderCompleted(url, exportStartTime);
-          },
-          onError: handleError,
-        }, colorSettings, cropSettings, exportResolution, captionSettings, captionCues);
-      }
+      void runExport({id:exportIdRef.current!,clips:clips.length?clips:[{id:'active',...project}],settings:{soundtrack,audioSettings,blurSettings,opticalFlowSettings:ofSettings,resolution:exportResolution,cropSettings,colorSettings,captionSettings,captionCues}},event=>{
+        setProgress(event.percent);setSubStatus(event.message??event.phase);setExportProgress(event.percent);
+      },bridge.signal).then(artifact=>{exportOwnerRef.current=artifact.ownerUid;return handleDone(artifact.blob);}).catch(error=>{if(!bridge.signal.aborted)handleError(error instanceof Error?error.message:String(error));});
+
     } finally {
       // Safe to release re-entrancy right away even though the export itself
       // keeps running asynchronously: by this point `phase` is no longer
@@ -339,7 +267,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       // an export is genuinely in flight.
       startInFlightRef.current = false;
     }
-  }, [project, clips, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, cropSettings, colorSettings, captionSettings, captionCues, exportResolution, audioSettings, useOFPipeline, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
+  }, [project, clips, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, cropSettings, colorSettings, captionSettings, captionCues, soundtrack, exportResolution, audioSettings, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
 
   const cancel = useCallback(() => {
     // Only an actually-in-flight export (bridgeRef set by startExport, not
@@ -349,9 +277,8 @@ export function ExportModal({ onClose }: ExportModalProps) {
     if (bridgeRef.current) {
       trackEvent(exportCancelledEvent(buildExportEventContext(), startedAt ? Date.now() - startedAt : 0));
     }
-    bridgeRef.current?.cancelOpticalFlow();
-    bridgeRef.current?.cancelBlurExport();
-    bridgeRef.current?.cancel();
+
+    bridgeRef.current?.abort();
     bridgeRef.current = null;
     setPhase('idle');
     setProgress(0);
@@ -364,7 +291,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
 
   useEffect(() => {
     return () => {
-      bridgeRef.current?.cancel();
+      bridgeRef.current?.abort();
       setExportProgress(null);
       setExporting(false);
     };
@@ -414,7 +341,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     // Record the export AFTER triggering the download so the user only consumes
     // a quota slot when the file actually starts downloading. The exportId
     // makes the server-side write idempotent across retries.
-    void recordExport(exportId).then(() => setRemaining(getRemainingExports()));
+    void recordExport(exportId,exportOwnerRef.current).then(() => setRemaining(getRemainingExports())).catch(()=>setSubStatus('Your file is ready. Usage synchronization is pending; reconnect or sign back into the account that started this export.'));
   }, [downloadUrl, phase, project, buildExportEventContext]);
 
   useEffect(() => {
@@ -585,14 +512,6 @@ export function ExportModal({ onClose }: ExportModalProps) {
               segment (see ffmpegBridge.ts) — silently, with no other warning
               anywhere. This surfaces that limitation before the user waits on a
               render that would drop every segment after the first. */}
-          {phase === 'idle' && (project?.segments.length ?? 0) > 1 && (
-            <Banner tone="neutral">
-              This clip has {project?.segments.length} segments, but export only
-              processes the first one — segments after a split aren't included yet.
-              Undo the split, or expect only segment 1's speed curve in the output.
-            </Banner>
-          )}
-
           {/* Pre-export time estimate (shown only in idle state) */}
           {phase === 'idle' && useOFPipeline && ofEstimateSecs !== null && (
             <div

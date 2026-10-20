@@ -1,3 +1,4 @@
+import {fingerprintFile} from './projectManifest';
 import type { VideoFile } from '@/types/editor';
 
 function hasValidMetadata(duration: number) {
@@ -10,7 +11,8 @@ function hasValidMetadata(duration: number) {
  * `currentTime = 1e10` trick (clamped to the real duration, which then fires
  * a 'seeked' event with real dimensions populated).
  */
-export function readVideoMetadata(file: File): Promise<VideoFile> {
+export async function readVideoMetadata(file: File): Promise<VideoFile> {
+  const fingerprint=await fingerprintFile(file);
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
@@ -38,7 +40,8 @@ export function readVideoMetadata(file: File): Promise<VideoFile> {
       const height   = video.videoHeight;
       done = true;
       cleanup();
-      resolve({ name: file.name, url, duration, width, height, size: file.size });
+      if(duration>30||width<2||height<2){URL.revokeObjectURL(url);reject(new Error('Use a video up to 30 seconds with a decodable video track.'));return;}
+      resolve({ name: file.name, url, duration, width, height, size: file.size, fingerprint, lastModified:file.lastModified });
     };
 
     const tryFinish = () => {

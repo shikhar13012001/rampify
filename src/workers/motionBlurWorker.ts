@@ -17,7 +17,9 @@ const VERT_SRC = /* glsl */ `#version 300 es
 in vec2 aPosition;
 out vec2 vTexCoord;
 void main() {
-  vTexCoord = aPosition * 0.5 + 0.5;
+  // ImageBitmap uploads ignore UNPACK_FLIP_Y_WEBGL. Invert texture Y here
+  // so the top of the source stays at the top of the framebuffer.
+  vTexCoord = vec2(aPosition.x * 0.5 + 0.5, 0.5 - aPosition.y * 0.5);
   gl_Position = vec4(aPosition, 0.0, 1.0);
 }`;
 
@@ -139,18 +141,6 @@ function getOrCreateState(frameWidth: number, frameHeight: number): GLState {
       'Motion blur requires a browser that supports WebGL2 in OffscreenCanvas.',
     );
   }
-
-  // Without this, uploaded ImageBitmaps come out vertically flipped: image
-  // data's row 0 is conventionally the TOP of the image, but WebGL's texture
-  // coordinate v=0 is its BOTTOM by convention — texImage2D uploads rows
-  // as-is unless told otherwise, so the vertex shader's untouched
-  // full-screen-quad UVs (v=1 at screen top) end up sampling the image's
-  // LAST row at the top of the frame. This is the confirmed cause of the
-  // video appearing inverted during motion-blur overlay windows: every
-  // frame this worker renders (the still overlay composited during a blur
-  // transition) came out upside-down, which also reads as "no motion blur
-  // visible there" since a flipped static frame doesn't look like a blend.
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
   const program = createProgram(gl);
   gl.useProgram(program);

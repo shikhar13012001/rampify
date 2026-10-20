@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildColorFilter, buildCropFilter, buildCssColorFilter, buildSubtitlesFilter } from './videoFilters';
+import { resolveOutputSize, buildColorFilter, buildCropFilter, buildCssColorFilter, buildSubtitlesFilter } from './videoFilters';
 import type { ColorPreset, CropPreset } from '@/types/editor';
 
 describe('buildCropFilter', () => {
@@ -76,4 +76,17 @@ describe('buildSubtitlesFilter', () => {
   it('defaults to captions.srt', () => {
     expect(buildSubtitlesFilter()).toContain('subtitles=captions.srt');
   });
+});
+
+describe('resolution ceiling independent of crop',()=>{
+ const original={enabled:false,preset:'original'} as const;
+ it('limits landscape/portrait without upscaling',()=>{
+  expect(resolveOutputSize({width:3840,height:2160},'1080p',original)).toEqual({width:1920,height:1080});
+  expect(resolveOutputSize({width:2160,height:3840},'1080p',original)).toEqual({width:1080,height:1920});
+  expect(resolveOutputSize({width:640,height:360},'4k',original)).toEqual({width:640,height:360});
+ });
+ it('keeps square output square and rounds odd dimensions down',()=>{
+  expect(resolveOutputSize({width:3000,height:3000},'1080p',original)).toEqual({width:1080,height:1080});
+  expect(resolveOutputSize({width:641,height:361},'1080p',original)).toEqual({width:640,height:360});
+ });
 });

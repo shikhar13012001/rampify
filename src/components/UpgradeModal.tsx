@@ -76,6 +76,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
   // the browser to checkout after the user dismissed the modal). The modal is
   // conditionally mounted by App.tsx, so unmount == close, and all transient
   // state (checkoutState / checkoutError) naturally resets on each open.
+  const checkoutAttempt=useRef(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
 
   // Cancel on unmount.
@@ -125,7 +126,7 @@ export function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
       const res = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ billingPeriod: billing }),
+        body: JSON.stringify({ billingPeriod: billing,checkoutAttemptId:checkoutAttempt.current }),
         signal: controller.signal,
       });
       const isJson = res.headers.get('content-type')?.includes('application/json');

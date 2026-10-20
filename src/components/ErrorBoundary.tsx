@@ -1,5 +1,7 @@
 import { Component } from 'react';
-import type { ReactNode, ErrorInfo } from 'react';
+import {diagnostic} from '@/lib/diagnostics';
+import {trackEvent} from '@/lib/analytics';
+import type { ReactNode } from 'react';
 
 interface Props { children: ReactNode }
 interface State { error: Error | null }
@@ -14,8 +16,9 @@ export class ErrorBoundary extends Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[Rampcut] Uncaught error:', error, info.componentStack);
+  componentDidCatch() {
+    console.error('[Rampcut] UI failure',diagnostic('ui_render',__APP_VERSION__));
+    trackEvent({name:'ui_error',props:{stage:'ui_render'}});
   }
 
   render() {

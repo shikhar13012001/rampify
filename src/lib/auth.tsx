@@ -166,6 +166,8 @@ export function UserButton({ user }: UserButtonProps) {
     <div ref={menuRef} style={{ position: 'relative' }}>
       <button
         type="button"
+        className="editor-auth-control"
+        aria-label={`Account for ${user.displayName ?? user.email ?? 'user'}`}
         onClick={() => setOpen(v => !v)}
         title={user.displayName ?? user.email ?? 'Account'}
         style={{
@@ -215,6 +217,7 @@ export function UserButton({ user }: UserButtonProps) {
           </span>
         )}
         <span
+          className="editor-auth-label"
           style={{
             maxWidth: 120,
             overflow: 'hidden',
@@ -228,6 +231,7 @@ export function UserButton({ user }: UserButtonProps) {
 
       {open && (
         <div
+          className="editor-account-menu"
           style={{
             position: 'absolute',
             top: 'calc(100% + 6px)',
@@ -242,11 +246,12 @@ export function UserButton({ user }: UserButtonProps) {
           }}
         >
           <div
+            className="editor-account-email"
             style={{
               padding: '10px 14px',
               borderBottom: '1px solid #efe9da',
               fontSize: 11,
-              color: '#8a8a8a',
+              color: 'var(--color-text-muted)',
             }}
           >
             {user.email}
@@ -380,6 +385,8 @@ export function SignInButton() {
       <button
         type="button"
         onClick={handleClick}
+        className="editor-auth-control"
+        aria-label={loading ? 'Signing in…' : 'Sign in with Google'}
         disabled={loading}
         style={{
           display: 'inline-flex',
@@ -404,7 +411,7 @@ export function SignInButton() {
         }}
       >
         <GoogleIcon />
-        {loading ? 'Signing in…' : 'Sign in with Google'}
+        <span className="editor-auth-label">{loading ? 'Signing in…' : 'Sign in with Google'}</span>
       </button>
 
       {/* Transient error toast — only shown after an explicit failed sign-in attempt */}

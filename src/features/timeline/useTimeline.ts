@@ -52,12 +52,6 @@ function speedColor(speed: number): string {
   return '#ff4d8b';                     // very fast → Clay pink
 }
 
-// ─── Deterministic waveform bar height ───────────────────────────────────────
-// Golden-ratio sine gives a natural-looking irregular pattern
-function waveBarH(i: number): number {
-  return 0.12 + 0.76 * Math.abs(Math.sin(i * 1.6180339 + Math.cos(i * 0.372)));
-}
-
 // ─── Public types ────────────────────────────────────────────────────────────
 export interface TimelineOptions {
   duration: number;
@@ -68,6 +62,7 @@ export interface TimelineOptions {
   width: number;
   /** Beat times in seconds (source-video time), drawn as teal lines on the waveform row. */
   beatMarkers?: number[];
+  waveform?: Float32Array;
   /** When true the user is Pro — changes quality badge text/colour on slow segments. */
   isPro?: boolean;
   /** When true optical flow is enabled — affects slow-segment badge copy. */
@@ -84,7 +79,7 @@ export interface TimelineHelpers {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useTimeline(
   canvasRef: RefObject<HTMLCanvasElement | null>,
-  { duration, segments, playheadTime, selectedSegmentId, width, beatMarkers, isPro, ofEnabled }: TimelineOptions
+  { duration, segments, playheadTime, selectedSegmentId, width, beatMarkers, isPro, ofEnabled, waveform }: TimelineOptions
 ): TimelineHelpers {
 
   // Coordinate helpers are pure math — recreate whenever duration/width change.
@@ -252,7 +247,7 @@ export function useTimeline(
       }
     }
 
-    // ── 6. Waveform row (placeholder) — Clay canvas ────────────────────
+    // ── 6. Decoded audio waveform — Clay canvas ────────────────────
     ctx.fillStyle = '#fffaf0';
     ctx.fillRect(0, waveY, W, waveAreaH);
 
@@ -264,7 +259,7 @@ export function useTimeline(
 
     for (let i = 0; i < barCount; i++) {
       const bx = i * stride;
-      const bh = waveBarH(i) * maxBarPx;
+      const bh = (waveform?.[Math.min(waveform.length-1,Math.floor(i*waveform.length/barCount))]??0) * maxBarPx;
       const by = waveY + (waveAreaH - bh) / 2;
       ctx.fillStyle = 'rgba(184, 164, 237, 0.35)';
       ctx.fillRect(bx, by, BAR_W, bh);
@@ -319,7 +314,7 @@ export function useTimeline(
     ctx.fill();
 
     ctx.restore();
-  }, [canvasRef, duration, segments, playheadTime, selectedSegmentId, width, beatMarkers, isPro, ofEnabled]);
+  }, [canvasRef, duration, segments, playheadTime, selectedSegmentId, width, beatMarkers, isPro, ofEnabled, waveform]);
 
   return { timeToX, xToTime, segmentAtX, isNearPlayhead };
 }

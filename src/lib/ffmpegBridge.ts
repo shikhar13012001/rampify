@@ -1,8 +1,10 @@
 import { curveToFFmpegFilter, getSpeedAtTime, interpolateSpeed, remapTime } from './curveMath';
 import { extractFrames } from './frameExtractor';
 import { getBlurIntensity, getTransitionFrameCount } from './blurMath';
-import { processSlowSegment } from './slowMotionPipeline';
-import { buildColorFilter, buildCropFilter, buildSubtitlesFilter } from './videoFilters';
+import { abortable } from './abortable';
+import { processOutputTimeline, disposeWorker } from './slowMotionPipeline';
+import { buildColorFilter, buildCropFilter, resolveOutputSize, buildSubtitlesFilter } from './videoFilters';
+import { buildTimeMap } from './renderPlan';
 import type {
   AudioSettings,
   BlurSettings,
@@ -34,23 +36,19 @@ function resolvePostFilters(
   colorSettings?: ColorSettings,
   cropSettings?: CropSettings,
   resolution: ExportResolution = '1080p',
+  source?: {width:number;height:number},
 ): { colorFilter?: string; cropFilter?: string } {
   const colorFilter = colorSettings?.enabled ? buildColorFilter(colorSettings.preset) ?? undefined : undefined;
   const cropFilter  = cropSettings?.enabled ? buildCropFilter(cropSettings.preset, resolution) ?? undefined : undefined;
+  if (source) {
+    const size=resolveOutputSize(source,resolution,cropSettings??{enabled:false,preset:'original'});
+    const crop=cropSettings?.enabled&&cropSettings.preset!=='original'?buildCropFilter(cropSettings.preset,resolution)?.split(',scale=')[0]:undefined;
+    return {colorFilter,cropFilter:[crop,`scale=${size.width}:${size.height}`, 'setsar=1'].filter(Boolean).join(',')};
+  }
   return { colorFilter, cropFilter };
 }
 
-/**
- * True when a segment has at least one speed-transition steeper than the
- * same threshold motion blur uses (SPEED_DELTA_THRESHOLD, defined below).
- * Reused here as the "strong ramp" signal for captions: this app's audio is
- * time-stretched by a single AVERAGE speed per segment (buildAtempoFilters),
- * while video follows the variable curve — on a strongly-ramped segment, a
- * caption timed via the same remapTime() used for video will be accurate to
- * the VIDEO but visibly drift from the (uniformly stretched) speech audio.
- * Exported so CaptionsPanel.tsx can warn the user before export, not just
- * silently degrade.
- */
+/** Strong-ramp signal used to prompt review of piecewise speech timing. */
 export function hasStrongSpeedRamp(segment: Segment): boolean {
   return findTransitionPoints([segment], SPEED_DELTA_THRESHOLD).length > 0;
 }
@@ -108,18 +106,23 @@ export function buildCaptionSrt(cues: CaptionCue[], segment: Segment, duration: 
     .join('\n');
 }
 
-/** Shared by all three export methods: resolves caption settings into a
- *  ready-to-send SRT string + the matching subtitles filter fragment. */
-function resolveCaptions(
-  captionSettings: CaptionSettings | undefined,
-  captionCues: CaptionCue[] | undefined,
-  segment: Segment | undefined,
-  duration: number,
-): { captionsSrt?: string; subtitlesFilter?: string } {
-  if (!captionSettings?.enabled || !segment || !captionCues || captionCues.length === 0) return {};
-  const srt = buildCaptionSrt(captionCues, segment, duration);
-  if (!srt) return {};
-  return { captionsSrt: srt, subtitlesFilter: buildSubtitlesFilter() };
+/** Intersect cues with retained spans, then map onto the concatenated output. */
+export function buildProjectCaptionSrt(cues:CaptionCue[], project:EditorProject):string|null {
+  const map=buildTimeMap([{id:'captions',...project}]);
+  const entries:{start:number;end:number;text:string}[]=[];
+  for(const span of map.spans)for(const cue of cues){
+    const start=Math.max(cue.start,span.sourceStart),end=Math.min(cue.end,span.sourceEnd);
+    if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)continue;
+    const duration=span.sourceEnd-span.sourceStart;
+    entries.push({start:Math.round((span.outputStart+remapTime(span.curve,start-span.sourceStart,duration))*1000),end:Math.round((span.outputStart+remapTime(span.curve,end-span.sourceStart,duration))*1000),text:cue.text.replace(/[\r\n]+/g,' ').replace(/<[^>]*>/g,'')});
+  }
+  const valid=entries.filter(e=>e.end>e.start).sort((a,b)=>a.start-b.start);
+  return valid.length?valid.map((e,i)=>`${i+1}\n${formatSrtTimestamp(e.start)} --> ${formatSrtTimestamp(e.end)}\n${e.text}\n`).join('\n'):null;
+}
+function resolveCaptions(settings:CaptionSettings|undefined,cues:CaptionCue[]|undefined,project:EditorProject):{captionsSrt?:string;subtitlesFilter?:string} {
+  if(!settings?.enabled||!cues?.length)return {};
+  const srt=buildProjectCaptionSrt(cues,project);
+  return srt?{captionsSrt:srt,subtitlesFilter:buildSubtitlesFilter()}:{};
 }
 
 // ─── Optical flow types ───────────────────────────────────────────────────────
@@ -165,7 +168,7 @@ const QUALITY_DEPTH: Record<OpticalFlowQuality, number> = {
 const MS_PER_INFERENCE = 80;
 
 // OF progress split: interpolation phase = 0–65%, encoding = 65–100%.
-const OF_INTERP_END = 65;
+
 
 // ─── Optical flow public helpers ──────────────────────────────────────────────
 
@@ -195,7 +198,7 @@ function avgSegmentSpeed(seg: Segment): number {
 
 /** True if any segment in the list has average speed below 0.6× threshold. */
 export function hasSlowSegments(segments: Segment[]): boolean {
-  return segments.some((s) => avgSegmentSpeed(s) < 0.6);
+  return segments.some(s=>s.curve.points.some(p=>p.speed<.6));
 }
 
 /**
@@ -232,6 +235,7 @@ export function findTransitionPoints(
   threshold = SPEED_DELTA_THRESHOLD,
 ): TransitionPoint[] {
   const out: TransitionPoint[] = [];
+  let outputOffset=0;
 
   for (const seg of segments) {
     const duration = seg.endTime - seg.startTime;
@@ -247,10 +251,11 @@ export function findTransitionPoints(
       const normTime  = pts[i].time;
       const inputTime = seg.startTime + normTime * duration;
       // remapTime takes seconds-within-segment, not normalised time.
-      const outputTime = remapTime(seg.curve, normTime * duration, duration);
+      const outputTime = outputOffset + remapTime(seg.curve, normTime * duration, duration);
 
       out.push({ inputTime, outputTime, speedFrom: pts[i].speed, speedTo: pts[i + 1].speed, speedDelta });
     }
+    outputOffset+=remapTime(seg.curve,duration,duration);
   }
 
   return out;
@@ -305,6 +310,18 @@ function blurFramesViaWorker(
   });
 }
 
+function waitForMetadata(video:HTMLVideoElement,signal:AbortSignal):Promise<void> {
+  return new Promise((resolve,reject)=>{
+    const cleanup=()=>{clearTimeout(timer);video.removeEventListener('loadedmetadata',ready);video.removeEventListener('error',failed);signal.removeEventListener('abort',cancelled);};
+    const ready=()=>{cleanup();resolve();};
+    const failed=()=>{cleanup();reject(new Error('Video load error'));};
+    const cancelled=()=>{cleanup();reject(new DOMException('Cancelled','AbortError'));};
+    const timer=setTimeout(()=>{cleanup();reject(new Error('Video metadata load timeout'));},10000);
+    video.addEventListener('loadedmetadata',ready,{once:true});video.addEventListener('error',failed,{once:true});signal.addEventListener('abort',cancelled,{once:true});
+    if(signal.aborted)cancelled();else if(video.readyState>=1)ready();
+  });
+}
+
 /**
  * Scales a blurred ImageBitmap (2× resolution from the GL worker) back down to
  * the original video dimensions and encodes as JPEG bytes.
@@ -353,6 +370,8 @@ export class FFmpegBridge {
 
   // Optical flow export state.
   private ofAborted = false;
+  private readonly lifecycle=new AbortController();
+  private concatWorker: Worker | null = null;
   private ofFfmpegWorker: Worker | null = null;
 
   constructor() {
@@ -372,13 +391,11 @@ export class FFmpegBridge {
     captionSettings?: CaptionSettings,
     captionCues?: CaptionCue[],
   ): void {
+    this.lifecycle.signal.throwIfAborted();
     this.callbacks = callbacks;
 
     const { file, segments } = project;
-    // NOTE: only segments[0] is ever exported — segments[1+] are silently
-    // dropped. Same pre-existing limitation as processWithOpticalFlow (which
-    // at least documents it inline); ExportModal.tsx now warns the user
-    // upfront when segments.length > 1 rather than leaving this silent.
+    // Legacy fields remain for the worker protocol; the standard renderer uses all spans.
     const segment = segments[0];
     const segmentDuration = segment ? segment.endTime - segment.startTime : 0;
     const setptsFilter = segment
@@ -388,8 +405,8 @@ export class FFmpegBridge {
     const avgSpeed = segment ? avgSegmentSpeed(segment) : 1;
 
     const atempoFilters = buildAtempoFilters(avgSpeed);
-    const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution);
-    const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, segment, segmentDuration);
+    const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution, file);
+    const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, project);
 
     this.worker.onmessage = (event) => this.handleMessage(event.data);
     this.worker.onerror = (event) => {
@@ -399,6 +416,7 @@ export class FFmpegBridge {
 
     this.worker.postMessage({
       type: 'start',
+      segments, audioSettings, sourceFile: {duration:file.duration,width:file.width,height:file.height},
       videoUrl: file.url,
       setptsFilter,
       atempoFilters,
@@ -413,11 +431,14 @@ export class FFmpegBridge {
   }
 
   cancel(): void {
+    this.lifecycle.abort();
     this.worker.postMessage({ type: 'cancel' });
     this.worker.terminate();
     FFmpegBridge.sharedWorker = null;
     this.resetCallbacks();
 
+    this.concatWorker?.terminate();
+    this.concatWorker=null;
     this.cancelBlurExport();
     this.cancelOpticalFlow();
   }
@@ -425,6 +446,7 @@ export class FFmpegBridge {
   // ── Blur export ─────────────────────────────────────────────────────────────
 
   cancelBlurExport(): void {
+    this.lifecycle.abort();
     this.blurExportWorker?.postMessage({ type: 'cancel' });
     this.blurExportWorker?.terminate();
     this.blurExportWorker = null;
@@ -435,12 +457,11 @@ export class FFmpegBridge {
   // ── Optical flow export ──────────────────────────────────────────────────────
 
   cancelOpticalFlow(): void {
+    this.lifecycle.abort();
     this.ofAborted = true;
     this.ofFfmpegWorker?.terminate();
     this.ofFfmpegWorker = null;
-    // NOTE: does NOT call disposeWorker() — that would leave in-flight
-    // interpolateViaWorker promises unresolved. The pipeline loop checks
-    // ofAborted after each pair and exits cleanly.
+    disposeWorker();
   }
 
   /**
@@ -461,125 +482,36 @@ export class FFmpegBridge {
     captionSettings?: CaptionSettings,
     captionCues?: CaptionCue[],
   ): Promise<void> {
+    this.lifecycle.signal.throwIfAborted();
     const { file, segments } = project;
 
-    const slowSegments = segments.filter((s) => avgSegmentSpeed(s) < 0.6);
-    if (slowSegments.length === 0) {
-      callbacks.onError('No slow segments found for optical flow processing');
-      return;
-    }
-
-    this.ofAborted = false;
-
-    const video = document.createElement('video');
-    video.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none';
-    video.src = file.url;
-    video.muted = true;
-    video.preload = 'auto';
-    document.body.appendChild(video);
-
-    const depth = QUALITY_DEPTH[ofSettings.quality];
-    const frameFiles: FrameFile[] = [];
-    let frameIdx = 0;
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Video metadata load timeout')), 10_000);
-        video.addEventListener('loadedmetadata', () => { clearTimeout(timeout); resolve(); }, { once: true });
-        video.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Video load error')); }, { once: true });
-      });
-      video.pause();
-
-      callbacks.onProgress(0, 'interpolating');
-
-      // Process the first slow segment (multi-segment concat is future work).
-      const seg = slowSegments[0];
-
-      await processSlowSegment(
-        seg,
-        video,
-        depth,
-        (pct) => {
-          if (this.ofAborted) throw new Error('Cancelled');
-          callbacks.onProgress(Math.round(pct * OF_INTERP_END), 'interpolating');
-        },
-        async (batch) => {
-          // Convert each bitmap to JPEG immediately to free GPU-backed memory.
-          for (const bitmap of batch) {
-            if (this.ofAborted) { bitmap.close(); continue; }
-            const jpegData = await bitmapToJpeg(bitmap, file.width, file.height);
-            frameFiles.push({ name: `of_${String(frameIdx).padStart(6, '0')}.jpg`, data: jpegData });
-            frameIdx++;
-          }
-        },
-      );
-
-      if (this.ofAborted || frameFiles.length === 0) return;
-
-      callbacks.onProgress(OF_INTERP_END, 'encoding');
-
-      // Compute the output framerate so the frame sequence fills the correct duration.
-      const segAvgSpeed = avgSegmentSpeed(seg);
-      const outputDuration = (seg.endTime - seg.startTime) / segAvgSpeed;
-      const framerate = frameFiles.length / outputDuration;
-
-      // Slow the audio to match the stretched video duration.
-      const atempoFilters = buildAtempoFilters(segAvgSpeed);
-      const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution);
-      const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, seg, seg.endTime - seg.startTime);
-
-      this.ofFfmpegWorker = createWorker();
-      const worker = this.ofFfmpegWorker;
-
-      const transferables: ArrayBuffer[] = frameFiles.map((f) => f.data.buffer as ArrayBuffer);
-
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        worker.onmessage = (e) => {
-          const data = e.data as Record<string, unknown>;
-          if (data.type === 'progress') {
-            const rawPct = data.progress as number;
-            const mapped = OF_INTERP_END + Math.round(rawPct * (100 - OF_INTERP_END) / 100);
-            callbacks.onProgress(mapped, 'encoding');
-          } else if (data.type === 'done') {
-            resolve(new Blob([data.buffer as ArrayBuffer], { type: 'video/mp4' }));
-          } else if (data.type === 'error') {
-            reject(new Error(data.message as string));
-          }
-        };
-        worker.onerror = (ev) => reject(new Error(ev.message ?? 'Worker error'));
-
-        worker.postMessage(
-          {
-            type: 'start',
-            videoUrl: file.url,
-            setptsFilter: 'setpts=PTS-STARTPTS',
-            atempoFilters,
-            avgSpeed: segAvgSpeed,
-            preservePitch: audioSettings.preservePitch,
-            outputName: 'output.mp4',
-            frameFiles,
-            framerate,
-            returnMode: 'buffer',
-            colorFilter,
-            cropFilter,
-            captionsSrt,
-            subtitlesFilter,
-          },
-          transferables,
-        );
-      }).finally(() => {
-        worker.terminate();
-        this.ofFfmpegWorker = null;
-      });
-
-      callbacks.onDone(blob);
-
-    } catch (err) {
-      if (!this.ofAborted) callbacks.onError(String(err));
-    } finally {
-      document.body.removeChild(video);
-      video.src = '';
-    }
+    this.ofAborted=false;
+    const signal=this.lifecycle.signal,video=document.createElement('video');
+    video.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none';
+    video.src=file.url;video.muted=true;video.preload='auto';document.body.appendChild(video);
+    const worker=createWorker();this.ofFfmpegWorker=worker;
+    const rpc=(message:object,transfer:Transferable[]=[])=>abortable(new Promise<Record<string,unknown>>((resolve,reject)=>{
+      worker.onmessage=event=>{if(event.data.type==='error')reject(new Error(event.data.message));else if(['chunkDone','done'].includes(event.data.type))resolve(event.data);};
+      worker.onerror=event=>reject(new Error(event.message));worker.postMessage(message,transfer);
+    }),signal);
+    let frames:FrameFile[]=[],chunk=0;
+    const flush=async()=>{if(!frames.length)return;const batch=frames;frames=[];await rpc({type:'aiChunk',frames:batch,index:chunk++,crf:ofSettings.quality==='ultra'?18:ofSettings.quality==='quality'?23:26},batch.map(f=>f.data.buffer as ArrayBuffer));};
+    try{
+      await waitForMetadata(video,signal);video.pause();
+      await processOutputTimeline(project,video,async(bitmap,index,total)=>{
+        const bytes=await abortable(bitmapToJpeg(bitmap,file.width,file.height),signal);signal.throwIfAborted();
+        frames.push({name:`of_${String(frames.length).padStart(6,'0')}.jpg`,data:bytes});
+        if(frames.length===30)await flush();
+        callbacks.onProgress(Math.round((index+1)/total*90),'interpolating');
+      },signal);
+      await flush();signal.throwIfAborted();disposeWorker();
+      callbacks.onProgress(92,'encoding');
+      const {colorFilter,cropFilter}=resolvePostFilters(colorSettings,cropSettings,resolution,file);
+      const {captionsSrt,subtitlesFilter}=resolveCaptions(captionSettings,captionCues,project);
+      const result=await rpc({type:'aiFinish',videoUrl:file.url,sourceFile:file,segments,audioSettings,captionsSrt,postFilter:[colorFilter,cropFilter,subtitlesFilter].filter(Boolean).join(',')});
+      callbacks.onDone(new Blob([result.buffer as ArrayBuffer],{type:'video/mp4'}));
+    }catch(error){if(!signal.aborted)callbacks.onError(error instanceof Error?error.message:String(error));}
+    finally{frames=[];worker.terminate();this.ofFfmpegWorker=null;disposeWorker();video.remove();video.src='';}
   }
 
   /**
@@ -600,8 +532,9 @@ export class FFmpegBridge {
     captionSettings?: CaptionSettings,
     captionCues?: CaptionCue[],
   ): Promise<void> {
+    this.lifecycle.signal.throwIfAborted();
     const { file, segments } = project;
-    const segment = segments[0]; // see startProcessing's note — same limitation here
+    const segment = segments[0]; // Legacy protocol fields; the worker uses all spans.
 
     const segmentDuration = segment ? segment.endTime - segment.startTime : 0;
     const setptsFilter = segment
@@ -628,11 +561,8 @@ export class FFmpegBridge {
       document.body.appendChild(video);
 
       try {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Video metadata load timeout')), 10000);
-          video.addEventListener('loadedmetadata', () => { clearTimeout(timeout); resolve(); }, { once: true });
-          video.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Video load error')); }, { once: true });
-        });
+        await waitForMetadata(video,this.lifecycle.signal);
+      this.lifecycle.signal.throwIfAborted();
         video.pause();
 
         this.motionBlurWorkerInstance = new MotionBlurWorkerCtor();
@@ -652,16 +582,18 @@ export class FFmpegBridge {
             frameTimes.push(Math.max(0, Math.min(file.duration, t)));
           }
 
-          const frames = await extractFrames(video, frameTimes);
+          const frames = await abortable(extractFrames(video, frameTimes),this.lifecycle.signal,frames=>frames.forEach(frame=>frame.close()));
 
-          const blurredBitmap = await blurFramesViaWorker(
+          if(this.lifecycle.signal.aborted){frames.forEach(frame=>frame.close());this.lifecycle.signal.throwIfAborted();}
+          const blurredBitmap = await abortable(blurFramesViaWorker(
             this.motionBlurWorkerInstance,
             frames,
             tp.speedTo,
             getBlurIntensity(tp.speedFrom, tp.speedTo) * intensityNum,
-          );
+          ),this.lifecycle.signal,bitmap=>bitmap.close());
 
-          const jpegData = await bitmapToJpeg(blurredBitmap, file.width, file.height);
+          const jpegData = await abortable(bitmapToJpeg(blurredBitmap, file.width, file.height),this.lifecycle.signal);
+          this.lifecycle.signal.throwIfAborted();
 
           // PTS in the OUTPUT video: remapTime gives the output time in seconds.
           // tStart/tEnd bracket the transition window.
@@ -689,12 +621,13 @@ export class FFmpegBridge {
       }
     }
 
+    this.lifecycle.signal.throwIfAborted();
     callbacks.onProgress(BLUR_PHASE_END, 'Encoding…');
 
     // ── Phase 2: ffmpeg encode ───────────────────────────────────────────────
 
-    const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution);
-    const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, segment, segmentDuration);
+    const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution, file);
+    const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, project);
 
     this.blurExportWorker = createWorker();
     const worker = this.blurExportWorker;
@@ -702,7 +635,7 @@ export class FFmpegBridge {
     // Collect transferable ArrayBuffers so the postMessage doesn't copy the JPEG bytes.
     const transferables: ArrayBuffer[] = blurFrames.map((bf) => bf.data.buffer as ArrayBuffer);
 
-    const blob = await new Promise<Blob>((resolve, reject) => {
+    const blob = await abortable(new Promise<Blob>((resolve, reject) => {
       worker.onmessage = (e) => {
         const data = e.data as Record<string, unknown>;
 
@@ -730,6 +663,7 @@ export class FFmpegBridge {
       worker.postMessage(
         {
           type: 'start',
+          segments, audioSettings, sourceFile: {duration:file.duration,width:file.width,height:file.height},
           videoUrl: file.url,
           setptsFilter,
           atempoFilters,
@@ -745,29 +679,19 @@ export class FFmpegBridge {
         },
         transferables,
       );
-    }).finally(() => {
+    }),this.lifecycle.signal).finally(() => {
       worker.terminate();
       this.blurExportWorker = null;
     });
 
+    this.lifecycle.signal.throwIfAborted();
     callbacks.onDone(blob);
   }
 
   // ── Multi-clip export ────────────────────────────────────────────────────────
 
-  /**
-   * Exports each clip independently through whichever single-clip pipeline
-   * applies to it (OF if enabled and that clip has a slow segment, else blur
-   * if enabled, else the standard path — decided PER CLIP, since each clip's
-   * curve is independent), then stitches the results with ffmpeg's concat
-   * demuxer (`-c copy`, no re-encode — safe because every part comes from
-   * this same bridge's identical encode settings). Blur/OF/crop/color/
-   * caption SETTINGS are shared across the whole export in v1 (not
-   * per-clip) — only each clip's own speed curve genuinely varies.
-   *
-   * A single-clip project (clips.length === 1) skips the concat step
-   * entirely — this is exactly the existing single-clip behavior, not a
-   * new code path masquerading as one.
+  /** Render each clip independently and normalize all parts onto a common canvas.
+   * Caption cues stay with their source clip; finishing settings apply to the job.
    */
   async processMultiClip(
     clips: Clip[],
@@ -779,46 +703,51 @@ export class FFmpegBridge {
     cropSettings?: CropSettings,
     resolution?: ExportResolution,
     captionSettings?: CaptionSettings,
-    captionCues?: CaptionCue[],
+    _captionCues?: CaptionCue[],
   ): Promise<void> {
+    this.ofAborted=false;
     if (clips.length === 0) {
       callbacks.onError('No clips to export');
       return;
     }
 
     const exportOne = (clip: Clip, onProgress: (pct: number) => void): Promise<Blob> => {
+      const own=clip.settings;
+      const ownAudio=own?.audioSettings??audioSettings,ownBlur=own?.blurSettings??blurSettings,ownOF=own?.opticalFlowSettings??ofSettings,ownColor=own?.colorSettings??colorSettings,ownCrop=own?.cropSettings??cropSettings;
       const project: EditorProject = { file: clip.file, segments: clip.segments };
-      const useOF = ofSettings.enabled && hasSlowSegments(clip.segments);
-      const useBlur = !useOF && blurSettings.enabled;
+      const ownCaptionSettings=clip.captionSettings??captionSettings;
+      const ownCues=clip.captionCues??(clips.length===1?_captionCues:[])??[];
+      const useOF = ownOF.enabled && hasSlowSegments(clip.segments);
+      const useBlur = !useOF && ownBlur.enabled;
 
       if (useOF) {
         return new Promise<Blob>((resolve, reject) => {
           FFmpegBridge.guardExport({ onError: reject }, () =>
-            this.processWithOpticalFlow(project, ofSettings, audioSettings, {
+            this.processWithOpticalFlow(project, ownOF, ownAudio, {
               onProgress: (pct) => onProgress(pct),
               onDone: resolve,
               onError: reject,
-            }, colorSettings, cropSettings, resolution, captionSettings, captionCues),
+            }, ownColor, ownCrop, resolution, ownCaptionSettings, ownCues),
           );
         });
       }
       if (useBlur) {
         return new Promise<Blob>((resolve, reject) => {
           FFmpegBridge.guardExport({ onError: reject }, () =>
-            this.processWithBlur(project, blurSettings, audioSettings, {
+            this.processWithBlur(project, ownBlur, ownAudio, {
               onProgress: (pct) => onProgress(pct),
               onDone: resolve,
               onError: reject,
-            }, colorSettings, cropSettings, resolution, captionSettings, captionCues),
+            }, ownColor, ownCrop, resolution, ownCaptionSettings, ownCues),
           );
         });
       }
       return new Promise<Blob>((resolve, reject) => {
-        this.startProcessing(project, audioSettings, {
+        this.startProcessing(project, ownAudio, {
           onProgress,
-          onDone: async (url) => resolve(await fetch(url).then((r) => r.blob())),
+          onDone: async (url) => {try{resolve(await fetch(url).then(r=>r.blob()));}catch(error){reject(error);}finally{URL.revokeObjectURL(url);}},
           onError: reject,
-        }, colorSettings, cropSettings, resolution, captionSettings, captionCues);
+        }, ownColor, ownCrop, resolution, ownCaptionSettings, ownCues);
       });
     };
 
@@ -836,20 +765,23 @@ export class FFmpegBridge {
       const parts: { name: string; data: Uint8Array }[] = [];
 
       for (let i = 0; i < clips.length; i++) {
+        if(this.ofAborted)throw new Error('Cancelled');
         const label = `Exporting clip ${i + 1} of ${clips.length}…`;
         const blob = await exportOne(clips[i], (pct) => {
           const overall = Math.round(((i + pct / 100) / clips.length) * 90);
           callbacks.onProgress(overall, label);
         });
+        if(this.ofAborted)throw new Error('Cancelled');
         parts.push({ name: `part${i}.mp4`, data: new Uint8Array(await blob.arrayBuffer()) });
       }
 
       callbacks.onProgress(92, 'Combining clips…');
 
       const worker = createWorker();
+      this.concatWorker=worker;
       const transferables = parts.map((p) => p.data.buffer as ArrayBuffer);
 
-      const finalBlob = await new Promise<Blob>((resolve, reject) => {
+      const finalBlob = await abortable(new Promise<Blob>((resolve, reject) => {
         worker.onmessage = (e) => {
           const data = e.data as Record<string, unknown>;
           if (data.type === 'done') {
@@ -859,8 +791,8 @@ export class FFmpegBridge {
           }
         };
         worker.onerror = (ev) => reject(new Error(ev.message ?? 'Worker error'));
-        worker.postMessage({ type: 'concat', parts, outputName: 'output.mp4', returnMode: 'buffer' }, transferables);
-      }).finally(() => worker.terminate());
+        worker.postMessage({ type: 'concat', parts, canvas:resolveOutputSize(clips[0].file,resolution??'1080p',clips[0].settings?.cropSettings??cropSettings??{enabled:false,preset:'original'}),outputName: 'output.mp4', returnMode: 'buffer' }, transferables);
+      }),this.lifecycle.signal).finally(() => {worker.terminate();this.concatWorker=null;});
 
       callbacks.onProgress(100, 'Done');
       callbacks.onDone(finalBlob);

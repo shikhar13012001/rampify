@@ -10,6 +10,8 @@ interface BatchPanelProps {
 }
 
 const STATUS_COLOR: Record<ClipStatus, string> = {
+  ready: '#2d8d8d',
+  discarded: 'var(--color-text-subtle)',
   queued:     'var(--color-text-subtle)',
   processing: '#b8a4ed',
   done:       '#2d8d8d',
@@ -25,12 +27,19 @@ export function BatchPanel({ onClose }: BatchPanelProps) {
   const clearBatch     = useBatchStore((s) => s.clearBatch);
   const applyCurveToAll = useBatchStore((s) => s.applyCurveToAll);
   const processBatch   = useBatchStore((s) => s.processBatch);
+  const downloadReady = useBatchStore(s=>s.downloadReady);
+  const discardReady = useBatchStore(s=>s.discardReady);
+  const accountingMessage = useBatchStore(s=>s.accountingMessage);
+  const isSynchronizing=useBatchStore(s=>s.isSynchronizing);
+  const hasReady = clips.some(c=>c.status==='ready');
   const cancelBatch    = useBatchStore((s) => s.cancelBatch);
 
   const activeProject   = useEditorStore((s) => s.project);
   const audioSettings   = useEditorStore((s) => s.audioSettings);
   const blurSettings    = useEditorStore((s) => s.blurSettings);
   const ofSettings      = useEditorStore((s) => s.opticalFlowSettings);
+  const cropSettings = useEditorStore(s=>s.cropSettings);
+  const colorSettings = useEditorStore(s=>s.colorSettings);
   const exportResolution = useEditorStore((s) => s.exportResolution);
 
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -156,15 +165,8 @@ export function BatchPanel({ onClose }: BatchPanelProps) {
                     {clip.status === 'error' && clip.errorMessage ? ` · ${clip.errorMessage}` : ''}
                   </div>
                 </div>
-                {clip.status === 'done' && clip.resultBlob && (
-                  <a
-                    href={URL.createObjectURL(clip.resultBlob)}
-                    download={clip.file.name.replace(/\.[^.]+$/, '') + '_rampified.mp4'}
-                    style={{ fontSize: 11, fontWeight: 700, color: '#2d8d8d', textDecoration: 'none' }}
-                  >
-                    Download
-                  </a>
-                )}
+                {clip.status==='ready' && <><button onClick={()=>downloadReady(clip.id)}>Download</button><button onClick={()=>discardReady(clip.id)}>Discard</button></>}
+                {clip.status==='done' && <span style={{fontSize:11}}>Download requested</span>}
                 {!isProcessing && (
                   <button
                     type="button"
@@ -186,12 +188,14 @@ export function BatchPanel({ onClose }: BatchPanelProps) {
           </p>
         )}
 
+        {hasReady&&<p role="status" style={{fontSize:12}}>Download or discard the finished file to continue the queue.</p>}
+        {accountingMessage&&<p role="status" style={{fontSize:12}}>{accountingMessage}</p>}
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             type="button"
             onClick={() => activeCurve && applyCurveToAll(activeCurve)}
-            disabled={!activeCurve || clips.length === 0 || isProcessing}
+            disabled={!activeCurve || clips.length === 0 || isProcessing || hasReady}
             title={activeCurve ? 'Copy the curve from the open project onto every clip in this queue' : 'Load a video in the main editor first'}
             style={{
               flex: 1, padding: '10px 14px', borderRadius: 10, border: '1px solid #e5dfd0',
@@ -207,9 +211,9 @@ export function BatchPanel({ onClose }: BatchPanelProps) {
             onClick={() =>
               isProcessing
                 ? cancelBatch()
-                : void processBatch({ audioSettings, blurSettings, opticalFlowSettings: ofSettings, resolution: exportResolution })
+                : void processBatch({ soundtrack:useEditorStore.getState().soundtrack, audioSettings, blurSettings, opticalFlowSettings: ofSettings, resolution: exportResolution, cropSettings, colorSettings })
             }
-            disabled={clips.length === 0}
+            disabled={clips.length === 0 || hasReady || isSynchronizing}
             style={{
               flex: 1, padding: '10px 14px', borderRadius: 10, border: '1px solid transparent',
               background: clips.length === 0 ? 'rgba(10,10,10,0.3)' : '#0a0a0a',

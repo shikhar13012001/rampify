@@ -44,14 +44,14 @@ function catmullRom(p0: number, p1: number, p2: number, p3: number, u: number): 
 
 // ─── Segment type used internally ─────────────────────────────────────────────
 
-interface Seg { t0: number; t1: number; s0: number; s1: number }
+export interface CurveInterval { t0: number; t1: number; s0: number; s1: number }
 
 /**
  * Expand a SpeedCurve into a list of (t0,t1,s0,s1) segments in seconds,
  * padded with constant-speed extensions so [0, duration] is fully covered.
  * SpeedPoint.time values are normalised [0,1] and are multiplied by duration here.
  */
-function buildSegments(curve: SpeedCurve, duration: number): Seg[] {
+function compileSegments(curve: SpeedCurve, duration: number): CurveInterval[] {
   const pts = sorted(curve);
   if (pts.length === 0) {
     return [{ t0: 0, t1: duration, s0: 1, s1: 1 }];
@@ -63,7 +63,26 @@ function buildSegments(curve: SpeedCurve, duration: number): Seg[] {
     s: clamp(p.speed, MIN_SPEED, MAX_SPEED),
   }));
 
-  const segs: Seg[] = [];
+  if (curve.type === 'bezier' && pts.length > 1) {
+    const result: CurveInterval[] = [];
+    const knots = [...new Set([0, ...pts.map(p => clamp(p.time, 0, 1)), 1])].sort((a,b)=>a-b);
+    const refine = (a:number,b:number,budget:number,depth:number):void => {
+      const s0=interpolateSpeed(curve,a), s1=interpolateSpeed(curve,b), m=(a+b)/2;
+      const sm=interpolateSpeed(curve,m);
+      const whole={t0:a*duration,t1:b*duration,s0,s1};
+      const left={t0:a*duration,t1:m*duration,s0,s1:sm};
+      const right={t0:m*duration,t1:b*duration,s0:sm,s1};
+      const error=Math.abs(integralToTime(whole,whole.t1)-integralToTime(left,left.t1)-integralToTime(right,right.t1));
+      if (error <= budget && Math.abs(sm-(s0+s1)/2)<.01 || depth>=14) {
+        result.push(left,right);
+        if(result.length>2048) throw new Error('Curve exceeds the supported timing complexity.');
+      } else { refine(a,m,budget/2,depth+1); refine(m,b,budget/2,depth+1); }
+    };
+    for(let i=1;i<knots.length;i++) if(knots[i]>knots[i-1]) refine(knots[i-1],knots[i],.0001/(knots.length-1),0);
+    return result;
+  }
+
+  const segs: CurveInterval[] = [];
 
   // Lead-in: constant speed before first point
   if (dn[0].t > 1e-9) {
@@ -84,6 +103,13 @@ function buildSegments(curve: SpeedCurve, duration: number): Seg[] {
   return segs;
 }
 
+const intervalCache=new WeakMap<SpeedCurve,Map<number,CurveInterval[]>>();
+export function buildSegments(curve:SpeedCurve,duration:number):CurveInterval[] {
+ let byDuration=intervalCache.get(curve);if(!byDuration){byDuration=new Map();intervalCache.set(curve,byDuration);}
+ const cached=byDuration.get(duration);if(cached)return cached;
+ const intervals=compileSegments(curve,duration);if(byDuration.size>4)byDuration.clear();byDuration.set(duration,intervals);return intervals;
+}
+
 /**
  * Exact integral of 1/s(τ) from seg.t0 to `inputTime`, where
  * s(τ) is linearly interpolated between s0 and s1 over [t0, t1].
@@ -91,7 +117,7 @@ function buildSegments(curve: SpeedCurve, duration: number): Seg[] {
  * • Constant speed: (inputTime - t0) / s0
  * • Linear ramp:    (dt/ds) · ln(s(inputTime) / s0)
  */
-function integralToTime(seg: Seg, inputTime: number): number {
+function integralToTime(seg: CurveInterval, inputTime: number): number {
   const localT = inputTime - seg.t0;
   const dt = seg.t1 - seg.t0;
   const ds = seg.s1 - seg.s0;
@@ -215,7 +241,7 @@ export function curveToFFmpegFilter(curve: SpeedCurve, duration: number): string
   const T = '(PTS-STARTPTS)*TB';
 
   /** ffmpeg sub-expression for the output time within one segment */
-  function segExpr(seg: Seg, cum: number): string {
+  function segExpr(seg: CurveInterval, cum: number): string {
     const { t0, s0, s1 } = seg;
     const dt = seg.t1 - t0;
     const ds = s1 - s0;
@@ -240,15 +266,12 @@ export function curveToFFmpegFilter(curve: SpeedCurve, duration: number): string
     return `setpts=${segExpr(segs[0], 0)}/TB`;
   }
 
-  // Multiple segments: right-fold into nested if(lt(T, boundary), this, rest).
-  // Use \, instead of , — ffmpeg's filter-graph parser splits on bare commas even
-  // in programmatic usage; \, is un-escaped to , by the time the expression evaluator runs.
-  const C = '\\,'; // filter-graph-safe comma
-  let expr = segExpr(segs[segs.length - 1], cumOut[segs.length - 1]);
-  for (let i = segs.length - 2; i >= 0; i--) {
-    const boundary = segs[i].t1.toFixed(6);
-    expr = `if(lt(${T}${C}${boundary})${C}${segExpr(segs[i], cumOut[i])}${C}${expr})`;
+  // A balanced expression tree bounds parser recursion even for adaptive Bezier knots.
+  const C = '\\,';
+  function branch(start: number, end: number): string {
+    if (end - start === 1) return segExpr(segs[start], cumOut[start]);
+    const mid = Math.floor((start + end) / 2);
+    return `if(lt(${T}${C}${segs[mid].t0.toFixed(6)})${C}${branch(start, mid)}${C}${branch(mid, end)})`;
   }
-
-  return `setpts=${expr}/TB`;
+  return `setpts=${branch(0, segs.length)}/TB`;
 }

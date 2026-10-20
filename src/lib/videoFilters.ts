@@ -11,7 +11,7 @@
  * plain string-building functions with no worker/DOM involvement.
  */
 
-import type { ColorPreset, CropPreset, ExportResolution } from '@/types/editor';
+import type { ColorPreset, CropPreset, CropSettings, ExportResolution } from '@/types/editor';
 
 // ─── Crop / aspect ratio ───────────────────────────────────────────────────────
 
@@ -101,5 +101,15 @@ export function buildCssColorFilter(preset: ColorPreset): string | null {
  * social-video caption styling.
  */
 export function buildSubtitlesFilter(srtFilename = 'captions.srt'): string {
-  return `subtitles=${srtFilename}:force_style='FontSize=22,PrimaryColour=&H00FFFFFF,BorderStyle=3,Outline=1,MarginV=40'`;
+  return `subtitles=${srtFilename}:fontsdir=fonts:force_style='FontName=Noto Sans,FontSize=22,PrimaryColour=&H00FFFFFF,BorderStyle=3,Outline=1,MarginV=40'`;
+}
+
+/** Resolve a ceiling independently of crop. Never upscale source pixels. */
+export function resolveOutputSize(source:{width:number;height:number},resolution:ExportResolution,crop:CropSettings):{width:number;height:number} {
+ let {width,height}=source;
+ if(!Number.isFinite(width)||!Number.isFinite(height)||width<2||height<2) throw new Error('Invalid video dimensions');
+ if(crop.enabled&&crop.preset!=='original') {const [w,h]=crop.preset.split(':').map(Number);const ratio=w/h;if(width/height>ratio)width=height*ratio;else height=width/ratio;}
+ const short=resolution==='4k'?2160:1080,long=resolution==='4k'?3840:1920;
+ const scale=Math.min(1,(width>=height?long:short)/width,(width>=height?short:long)/height);
+ return {width:Math.max(2,Math.floor(width*scale/2)*2),height:Math.max(2,Math.floor(height*scale/2)*2)};
 }

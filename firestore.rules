@@ -14,22 +14,15 @@ service cloud.firestore {
       // Free users get a monthly export cap. The count is derived from the
       // number of docs in this subcollection, so clients must NOT be able to
       // delete logs (which would reset the counter) or write arbitrary fields
-      // (which could be used to inflate or corrupt the count). Only the owner
-      // can create a log with exactly the expected schema, and only read their
-      // own logs.
+      // (which could be used to inflate or corrupt the count). Only the server
+      // creates records; owners can read their own logs.
       //
       // Canonical path: the /api/record-export endpoint writes via the Admin
       // SDK with a server-generated timestamp. These rules guard against
       // direct client writes as defense-in-depth.
       match /export_logs/{logId} {
         allow read:   if request.auth != null && request.auth.uid == uid;
-        allow create: if request.auth != null
-                        && request.auth.uid == uid
-                        && request.resource.data.exportedAt is timestamp
-                        && request.resource.data.keys().hasOnly(['exportedAt'])
-                        // Bound the timestamp to ~now to prevent future-dated
-                        // writes that would bypass the monthly count query.
-                        && request.resource.data.exportedAt <= request.time + 60000;
+        allow create: if false; // Admin-only server transaction.
         allow update, delete: if false;
       }
     }

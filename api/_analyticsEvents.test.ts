@@ -114,3 +114,8 @@ describe('parseAnalyticsEvent', () => {
     expect(result.ok).toBe(false); // wrong type is still rejected — schema enforces string|null
   });
 });
+
+it('rejects public payment claims and media-bearing props',()=>{
+ expect(parseAnalyticsEvent(validPayload({name:'payment_succeeded'})).ok).toBe(false);
+ expect(parseAnalyticsEvent(validPayload({props:{filename:'private.mp4'}})).ok).toBe(false);
+});

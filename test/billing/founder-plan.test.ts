@@ -39,28 +39,15 @@ describe('checkout', () => {
     expect(src).toContain('res.status(503)');
   });
   it('refuses a founder checkout once the seat cap is reached', () => {
-    expect(src).toContain('sold >= FOUNDER_SEATS');
-    expect(src).toContain("code: 'founder_sold_out'");
+    expect(src).toContain('reserveFounder');
+    expect(src).toContain("error.code==='founder_sold_out'");
   });
   it('still sends billingPeriod in checkout metadata (the webhook keys off it)', () => {
-    expect(src).toContain('metadata: { userId: decoded.uid, billingPeriod }');
+    expect(src).toContain('metadata: { userId: decoded.uid, billingPeriod, checkoutAttemptId:attemptId }');
   });
 });
 
-describe('webhook', () => {
-  const src = read('api', 'webhooks', 'dodo.ts');
-  it('a founder payment.succeeded grants Pro with no expiry and increments the seat counter', () => {
-    const grant = src.slice(src.indexOf("case 'payment.succeeded':"), src.indexOf('// ── Revoke Pro'));
-    expect(grant).toContain("billingPeriod === 'founder'");
-    expect(grant).toContain('extra.subscriptionEnd = null');
-    expect(grant).toContain('FieldValue.increment(1)');
-  });
-  it('a refund releases the seat before downgrading', () => {
-    const refund = src.slice(src.indexOf("case 'refund.succeeded':"), src.indexOf("case 'refund.succeeded':") + 900);
-    expect(refund).toContain('releaseFounderSeatIfAny');
-    expect(refund).toContain('downgradeByCustomer');
-  });
-});
+// Webhook grant/refund behavior is covered by api/_billingState.test.ts and the signed emulator suite.
 
 describe('client surfaces', () => {
   it('UpgradeModal offers founder only while /api/founder-seats says it is available', () => {

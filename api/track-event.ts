@@ -7,6 +7,7 @@ import {
   handlePreflight,
   applyCors,
 } from './_adminInit.js';
+import {ingestAnalytics} from './_analyticsBudget.js';
 import { parseAnalyticsEvent } from './_analyticsEvents.js';
 
 /**
@@ -33,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   initAdmin();
 
   const parsed = parseAnalyticsEvent(req.body);
-  if (!parsed.ok) {
+  if (parsed.ok === false) {
     return res.status(400).json({ error: parsed.error });
   }
   const event = parsed.data;
@@ -53,24 +54,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const db = adminDb();
-    // Idempotent write: doc id is the client-generated eventId, so a retried
-    // send overwrites the same doc instead of creating a duplicate — same
-    // pattern as api/record-export.ts's exportId-keyed writes.
-    await db.collection('analytics_events').doc(event.eventId).set({
-      name: event.name,
-      timestamp: new Date(event.timestamp),
-      receivedAt: new Date(),
-      sessionId: event.sessionId,
-      anonId: event.anonId,
-      uid,
-      isTestSession: event.isTestSession,
-      exportId: event.exportId ?? null,
-      appVersion: event.appVersion ?? null,
-      acquisition: event.acquisition ?? null,
-      capabilities: event.capabilities ?? null,
-      props: event.props ?? {},
-    });
+    const result=await ingestAnalytics(adminDb(),event,uid);
+    if(result==='throttled'){res.setHeader('Retry-After','60');return res.status(429).json({error:'Analytics budget reached'});}
+
   } catch (err) {
     console.error('[track-event] write failed:', err);
     return res.status(500).json({ error: 'Failed to record event' });

@@ -1,3 +1,6 @@
+import {reserveFounder,finishFounderCheckout,failFounderCheckout,FounderUnavailable} from './_founderInventory.js';
+import {randomUUID} from 'node:crypto';
+import {entitlementForUser} from './_billingState.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   initAdmin,
@@ -8,17 +11,8 @@ import {
   resolveAllowedOrigin,
 } from './_adminInit.js';
 import { getServerEnv } from './_env.js';
-import { FOUNDER_META_DOC, FOUNDER_SEATS, isBillingPeriod, type BillingPeriod } from './_plans.js';
+import { isBillingPeriod, type BillingPeriod } from './_plans.js';
 
-function isStillValid(end: unknown): boolean {
-  if (end == null) return true;
-  if (end instanceof Date) return end.getTime() > Date.now();
-  // Firestore Timestamp
-  if (typeof end === 'object' && end !== null && 'toMillis' in end && typeof (end as { toMillis: () => number }).toMillis === 'function') {
-    return (end as { toMillis: () => number }).toMillis() > Date.now();
-  }
-  return true;
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -59,35 +53,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Checkout session creation failed' });
   }
 
-  // Founder seats are capped — refuse a checkout once the cap is reached so a
-  // late buyer never pays for a seat the marketing copy said was gone. The
-  // count is maintained by api/webhooks/dodo.ts; see api/_plans.ts.
-  if (billingPeriod === 'founder') {
-    try {
-      const metaSnap = await adminDb().doc(FOUNDER_META_DOC).get();
-      const sold = Number(metaSnap.data()?.sold ?? 0);
-      if (sold >= FOUNDER_SEATS) {
-        return res.status(409).json({ error: 'Founder seats are sold out', code: 'founder_sold_out' });
-      }
-    } catch (err) {
-      console.error('[create-checkout-session] founder seat lookup failed:', err);
-      return res.status(500).json({ error: 'Checkout session creation failed' });
-    }
-  }
-
   // Pro-status guard: refuse to create a duplicate subscription.
   try {
     const db = adminDb();
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     if (userDoc.exists) {
       const data = userDoc.data() ?? {};
-      if (data.subscriptionTier === 'pro' && isStillValid(data.subscriptionEnd)) {
+      if (entitlementForUser(data)) {
         return res.status(409).json({ error: 'Already Pro' });
       }
     }
   } catch (err) {
-    // Non-fatal: proceed with checkout if the read fails.
     console.error('[create-checkout-session] user lookup failed:', err);
+    return res.status(503).json({error:'Could not verify existing subscription. Please retry.'});
   }
 
   const origin = resolveAllowedOrigin(
@@ -97,6 +75,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Unable to determine a trusted redirect origin. Set ALLOWED_ORIGINS.' });
   }
 
+  let attemptId:string=randomUUID();
+  if(billingPeriod==='founder'){
+    const supplied=(req.body as {checkoutAttemptId?:unknown}).checkoutAttemptId;
+    if(typeof supplied!=='string'||!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(supplied))return res.status(400).json({error:'A checkout attempt ID is required'});
+    attemptId=supplied;
+    try{
+      const held=await reserveFounder(adminDb(),decoded.uid,attemptId);attemptId=held.reservation.attemptId;
+      if(!held.create){
+        if(held.reservation.state==='created'&&held.reservation.url)return res.status(200).json({url:held.reservation.url});
+        return res.status(409).json({code:'checkout_pending',error:'Your earlier checkout is being reconciled. Please contact support before trying again.'});
+      }
+    }catch(error){if(error instanceof FounderUnavailable)return res.status(error.code==='founder_sold_out'?409:503).json({code:error.code,error:'Founder checkout is temporarily unavailable.'});console.error('[create-checkout-session] reservation failed',error instanceof Error?error.name:'unknown');return res.status(503).json({code:'checkout_retry',error:'Checkout is busy. Retry this same attempt shortly.'});}
+  }
   try {
     const dodo = dodoClient();
     // NOTE: the monthly/annual product_ids must be configured as recurring
@@ -115,12 +106,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       customer: decoded.email_verified && decoded.email
         ? { email: decoded.email, name: decoded.name ?? decoded.email }
         : undefined,
-      metadata: { userId: decoded.uid, billingPeriod },
+      metadata: { userId: decoded.uid, billingPeriod, checkoutAttemptId:attemptId },
     });
 
+    if(billingPeriod==='founder')await finishFounderCheckout(adminDb(),decoded.uid,attemptId,session);
     return res.status(200).json({ url: session.checkout_url });
   } catch (err) {
-    console.error('[create-checkout-session]', err);
+    if(billingPeriod==='founder'){const status=(err as {status?:number}).status;await failFounderCheckout(adminDb(),decoded.uid,attemptId,!!status&&[400,401,403,404,422].includes(status)).catch(()=>{});}
+    console.error('[create-checkout-session] failed',err instanceof Error?err.name:'unknown');
     return res.status(500).json({ error: 'Checkout session creation failed' });
   }
 }

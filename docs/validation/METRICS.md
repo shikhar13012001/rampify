@@ -408,3 +408,55 @@ landed. No event in this catalog has been observed actually reaching
 Firestore in a real browser as part of this task — same honest caveat
 `RESULTS.md` already established for the export pipeline: nothing here
 claims to have exercised the running app.
+
+
+## Integrity and lifecycle additions — 2026-10-18 (local only)
+
+Public ingestion rejects payment_succeeded, uses a strict property allowlist and
+UTF-8 byte limit, creates event IDs immutably, and ignores client-supplied UID in
+favor of a verified token. Payment events come only from the transactional Dodo
+ledger and are deduplicated by environment plus actual payment ID. Billing in
+test_mode or a demo project forces test analytics. Error-boundary diagnostics
+contain sanitized app version and stage only, never exception text/component
+stacks, file names, source fingerprints, captions or video/audio data.
+
+Accepted storage is limited transactionally to1000events/hour globally and
+60events/session/minute. Above budget the API returns429/Retry-After60 and creates
+no event. This is an accepted-event storage bound, not a bound on HTTP requests,
+reads/retries or DDoS cost. The limits have expiresAt metadata, but Firestore TTL
+has not been deployed. Proposed owner-reviewed WAF controls: per-route request
+limits and payload-size enforcement, bot/challenge rules where compatible with
+anonymous usage, provider signature validation ahead of costly billing work,
+spend alerts and a documented disable-ingestion switch. No shared edge/CI config
+or feature flags were modified by this implementation.
+
+Proposed raw event retention is90days; deploy TTL or cleanup only after separate
+approval and verification. Read-only inventory should count document totals and
+oldest/newest receivedAt timestamps per collection/environment, record absent or
+invalid timestamps, and estimate deletion batch sizes. Never export raw footage
+or user content for that inventory. Do not claim expiration is operating until
+provider TTL configuration and observed deletions are verified.
+
+### Complete deletion/retention inventory for operator review
+
+| Store | Data / proposed handling |
+|---|---|
+| Firebase Auth and users/{uid} | Account identity, legacy subscription and environment grants; verify identity for an approved deletion, preserve legally required billing linkage separately. |
+| users/{uid}/billing_facts | Minimal payment/subscription/refund facts; retention needs provider/accounting requirements and audit review, not an automatic90day event TTL. |
+| billing_customers | Environment-scoped customer-to-UID index; handle with the account and retained billing mapping. |
+| dodo_events | Immutable delivery dedupe IDs; preserve across the provider retry horizon and approved billing retention. Deleting these prematurely enables replay. |
+| founder_reservations and meta/founder | Capacity and uncertain checkout state; reconcile provider status first. Never release paid/pending inventory merely because an account deletion was requested. |
+| users/{uid}/export_logs | Immutable export IDs/timestamps; preserve the documented dedupe horizon or replace with a reviewed tombstone strategy before deletion. |
+| users/{uid}/export_usage | UTC-month aggregate; reconcile with immutable logs before changing or deleting. |
+| analytics_events | Proposed90day raw retention; delete UID-linked records during approved account deletion where appropriate. Anonymous IDs cannot be inferred from UID after unlinking. |
+| analytics_limits | Global/hour and hashed session/minute counters; proposed48hour expiry, TTL deployment pending. |
+| Browser storage | Project manifests, settings/presets, soundtrack identity/beat metadata, pending export IDs, random analytics IDs and consent; user clears site data or exported local backups. Blob URLs/media bytes are not saved in manifests. |
+| IndexedDB / Cache Storage | RIFE model, speech-model runtime caches, app/engine assets; local site-data removal. |
+| Dodo / Vercel / optional GA | Independent provider retention; request deletion/retention changes through the approved provider workflow. No promise that app-side deletion erases provider financial/security records. |
+
+Deletion runbook: verify the request and target, inventory before mutation, identify
+billing/legal holds, create a reviewable dry-run proposal and backup, obtain scoped
+approval, apply bounded batches in an authorized environment, verify the selected
+records and indexes, and keep a minimal non-content audit receipt. Do not run
+production deletes from this document. All newly added billing/analytics
+collections remain denied to direct clients by the default Firestore rules.

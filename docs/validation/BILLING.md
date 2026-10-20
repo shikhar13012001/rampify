@@ -413,3 +413,74 @@ is reported, not touched). `git diff` / `git checkout --` on
 reverts the code fixes individually. `src/lib/billingPreference.ts` and
 `scripts/verify-dodo-products.mjs` can be deleted if this direction is
 reconsidered — nothing else depends on them.
+
+
+## Local replacement contract — 2026-10-18 (not deployed)
+
+The earlier source audit above is historical. The working tree now contains
+`api/_billingState.ts`, `_billingLedger.ts`, `_founderInventory.ts` and
+`_billingAudit.ts`. No live customer/provider data was changed by this work.
+
+- Verify the exact raw HTTP body using Standard Webhooks. There is no development bypass.
+- Normalize only known configured product IDs. Never grant Founder from metadata.billingPeriod.
+- Keep environment-scoped customer mapping, entity facts and access projections.
+- Commit the immutable delivery inbox, entity projection, user grants, payment analytics
+  outbox and any eligible founder inventory delta in one Firestore transaction.
+- Reduce independent grants. A failed different checkout cannot revoke an existing
+  purchase. Expiry is checked on every API request; the client refreshes before export.
+- Scheduled cancellation retains the verified paid period. A full refund revokes only
+  its matched purchase/period; partial and unmapped refunds require review, rather
+  than deleting unrelated grants. Current `service_periods` is preferred to the
+  installed older SDK's payment-created timestamp fallback.
+- Count actual succeeded payment IDs once. Subscription activation does not itself
+  represent revenue. Test payments carry test environment markers.
+
+Contract sources checked on 2026-10-18: installed dodopayments1.17.x types and
+[subscription integration](https://docs.dodopayments.com/developer-resources/subscription-integration-guide),
+[checkout sessions](https://docs.dodopayments.com/developer-resources/checkout-session).
+The current docs expose service periods, renewal payment IDs and past-due grace
+fields newer than some installed types. The runtime projection validates these
+optional fields. Event timestamps identify occurrences; latest delivery data is
+not a trusted entity revision clock. Conflicting/incomplete history still needs
+provider reconciliation; do not claim an automatic proof from arrival order.
+
+### Founder inventory migration and reconciliation
+
+Founder checkout now requires `meta/founder` with inventoryVersion1, matching
+`environment`, nonnegative integer sold/pending, and a reviewed count of verified
+paid Founder grants. Missing inventory never implies zero sold. Pending sessions
+consume seats before contacting Dodo. Repeated requests reuse the same user/attempt
+reservation and existing hosted URL. A request with an uncertain provider outcome
+stays held. Only a definite provider rejection releases automatically.
+
+The provider's documented default session lifetime is24hours (15minutes only with
+confirm:true), so the original proposed30minute reservation TTL was rejected.
+The installed SDK exposes create but no typed retrieval/expiry reconciliation.
+Do not release reservations on an invented timer or blindly retry unknown creates.
+A release needs a reviewed provider status/payment check, plus a transaction that
+checks reservation identity/state and reduces pending exactly once. Do not infer
+provider-side idempotency from an unused SDK RequestOptions field.
+
+Production rollout requires a separately approved migration. Prepare a minimal
+read-only snapshot with snapshotComplete,environment,users,facts,reservations;
+never include addresses/cards/raw payloads. Run locally:
+
+```powershell
+node node_modules/tsx/dist/cli.mjs scripts/audit-billing-snapshot.ts PATH_TO_MINIMAL_SNAPSHOT.json
+```
+
+This writes only ignored `temp/billing-audit/proposal.json`; it cannot contact a
+provider or Firestore. Review unresolved legacy accounts, customer mappings,
+partial/unmapped refunds and uncertain reservations. Its proposal is not authority
+to write production. Preserve a backup and compare grants before/after any later
+approved migration. Existing legacy Pro rows remain on their compatibility read
+path and are flagged for mapping, rather than silently rewriting paid access.
+The500-entity per-account guard requires reviewed compaction/backfill before that
+bound; it does not drop old facts silently.
+
+Local evidence: reducer/unit fixtures plus `node test/browser/run-billing.mjs`
+against only demo-rampcut-test/loopback. Signed HTTP cases cover out-of-order
+payment/activation, scheduled cancellation, full refund, unrelated failure and
+forged signatures; actual Firestore checks cover replay, payment dedupe, founder
+cap contention and analytics budget. Transactions may return retriable503 under
+contention: retry the same attempt, never reserve a different attempt blindly.

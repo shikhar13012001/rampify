@@ -47,6 +47,11 @@ export function loadLocalEnv() {
 export function initAdmin() {
   loadLocalEnv();
   if (getApps().length === 0) {
+    if(process.env.FIRESTORE_EMULATOR_HOST && process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.GCLOUD_PROJECT?.startsWith('demo-')) {
+      if(!/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST)||!/^127\.0\.0\.1:\d+$/.test(process.env.FIREBASE_AUTH_EMULATOR_HOST))throw new Error('Test emulators must be loopback-only');
+      initializeApp({projectId:process.env.GCLOUD_PROJECT});return;
+    }
+
     let serviceAccount: object;
     const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY;
 

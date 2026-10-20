@@ -1,87 +1,14 @@
-/**
- * Source-level regression guards for the Dodo webhook handler
- * (api/webhooks/dodo.ts) — this repo has no Firebase Admin mocking
- * infrastructure (same established gap as api/record-export.ts, noted in
- * docs/validation/METRICS.md), so the handler's actual Firestore-writing
- * behavior is not exercised by an automated test here. These checks verify
- * the SOURCE still has the specific fixes/properties this task's billing
- * audit found and relied on — not a substitute for a real integration test
- * against a live (test-mode) webhook delivery. See
- * docs/validation/BILLING.md's test purchase checklist for that.
- */
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-const dodoWebhookSrc = readFileSync(
-  join(__dirname, '..', '..', 'api', 'webhooks', 'dodo.ts'),
-  'utf-8',
-);
-
-describe('refund.succeeded revokes Pro access (this task\'s primary fix)', () => {
-  it('refund.succeeded is no longer in the "informational — no tier change" case list', () => {
-    const informationalBlock = dodoWebhookSrc.slice(
-      dodoWebhookSrc.indexOf('Informational — no tier change'),
-      dodoWebhookSrc.indexOf('default:'),
-    );
-    expect(informationalBlock).not.toContain("case 'refund.succeeded':");
-  });
-
-  it('refund.succeeded has its own case that calls downgradeByCustomer', () => {
-    const refundCaseIndex = dodoWebhookSrc.indexOf("case 'refund.succeeded':");
-    expect(refundCaseIndex).toBeGreaterThan(-1);
-    const refundCaseBlock = dodoWebhookSrc.slice(refundCaseIndex, refundCaseIndex + 800);
-    expect(refundCaseBlock).toContain('downgradeByCustomer');
-  });
-
-  it('refund.failed (a refund attempt that did NOT succeed) correctly stays informational-only', () => {
-    const informationalBlock = dodoWebhookSrc.slice(
-      dodoWebhookSrc.indexOf('Informational — no tier change'),
-      dodoWebhookSrc.indexOf('default:'),
-    );
-    expect(informationalBlock).toContain("case 'refund.failed':");
-  });
-});
-
-describe('webhook authentication and idempotency (verified by inspection, unchanged by this task)', () => {
-  it('verifies the Standard Webhooks signature before trusting the payload', () => {
-    expect(dodoWebhookSrc).toContain('wh.verify(rawBody');
-  });
-
-  it('the dev-bypass path requires BOTH the explicit flag and an empty raw body — cannot be triggered by an unsigned real request', () => {
-    expect(dodoWebhookSrc).toContain("devBypass && rawBody.length === 0");
-  });
-
-  it('dedupes by the Standard Webhooks delivery id before processing any event', () => {
-    expect(dodoWebhookSrc).toContain("db.collection('dodo_events').doc(webhookId)");
-    expect(dodoWebhookSrc).toContain('duplicate: true');
-  });
-
-  it('grants/revokes tier via merge-based Firestore writes, never additive — cannot itself create a duplicate entitlement', () => {
-    expect(dodoWebhookSrc).toContain('{ merge: true }');
-  });
-});
-
-describe('checkout-success cannot self-grant Pro (verified by inspection)', () => {
-  it('UpgradeSuccess.tsx only sets isPro from a server response, never from the URL/route itself', () => {
-    const upgradeSuccessSrc = readFileSync(
-      join(__dirname, '..', '..', 'src', 'pages', 'UpgradeSuccess.tsx'),
-      'utf-8',
-    );
-    // Every setIsPro(true) call must be inside a branch reading data from
-    // an actual /api/check-subscription response, not from route params.
-    const setIsProCalls = [...upgradeSuccessSrc.matchAll(/setIsPro\(true\)/g)];
-    expect(setIsProCalls.length).toBeGreaterThan(0);
-    expect(upgradeSuccessSrc).not.toMatch(/useParams|useSearchParams/);
-    expect(upgradeSuccessSrc).toContain("fetch('/api/check-subscription'");
-  });
-
-  it('check-subscription.ts is the sole source of isPro, computed from Firestore, not trusted from the request', () => {
-    const checkSubSrc = readFileSync(
-      join(__dirname, '..', '..', 'api', 'check-subscription.ts'),
-      'utf-8',
-    );
-    expect(checkSubSrc).toContain("userData.subscriptionTier === 'pro'");
-    expect(checkSubSrc).toContain('verifyIdToken');
-  });
+import {it,expect,vi} from 'vitest';import {Readable} from 'node:stream';import {Webhook} from 'standardwebhooks';
+import type {VercelRequest,VercelResponse} from '@vercel/node';
+const state=vi.hoisted(()=>({apply:vi.fn().mockResolvedValue({duplicate:false}),key:'whsec_'+Buffer.from('local-test-key-2026').toString('base64')}));
+vi.mock('../../api/_adminInit.js',()=>({initAdmin:()=>{},loadLocalEnv:()=>{},adminDb:()=>({})}));
+vi.mock('../../api/_env.js',()=>({getServerEnv:()=>({DODO_PAYMENTS_WEBHOOK_KEY:state.key,DODO_PAYMENTS_ENVIRONMENT:'test_mode',DODO_PRO_MONTHLY_PRODUCT_ID:'monthly',DODO_PRO_ANNUAL_PRODUCT_ID:'annual',DODO_PRO_FOUNDER_PRODUCT_ID:'founder',DODO_WEBHOOK_DEV_BYPASS:'1'})}));
+vi.mock('../../api/_billingLedger.js',()=>({applyBillingFact:state.apply,billingKey:(v:string)=>v}));
+import handler from '../../api/webhooks/dodo';
+function response(){return {code:0,data:null as unknown,status(code:number){this.code=code;return this;},json(data:unknown){this.data=data;return this;}};}
+it('commits a verified mapped fact and rejects unsigned requests even with the old bypass flag',async()=>{
+ const raw=JSON.stringify({type:'payment.succeeded',timestamp:new Date().toISOString(),data:{payload_type:'Payment',payment_id:'p',status:'succeeded',customer:{customer_id:'c'},metadata:{userId:'u'},product_cart:[{product_id:'founder',quantity:1}]}}),id='event',now=new Date();
+ const headers={'webhook-id':id,'webhook-timestamp':String(Math.floor(now.getTime()/1000)),'webhook-signature':new Webhook(state.key).sign(id,now,raw)};
+ const req=Object.assign(Readable.from([raw]),{method:'POST',headers}) as unknown as VercelRequest,res=response();await handler(req,res as unknown as VercelResponse);expect(res.code).toBe(200);expect(state.apply).toHaveBeenCalledWith({},expect.objectContaining({entityId:'p',plan:'founder'}));
+ const bad=Object.assign(Readable.from([raw]),{method:'POST',headers:{...headers,'webhook-signature':'v1,bad'}}) as unknown as VercelRequest,out=response();await handler(bad,out as unknown as VercelResponse);expect(out.code).toBe(400);expect(state.apply).toHaveBeenCalledOnce();
 });

@@ -25,7 +25,7 @@ export const ANALYTICS_EVENT_NAMES = [
   'signup_completed',
   'upgrade_viewed',
   'checkout_started',
-  'payment_succeeded',
+  'ui_error',
   'curve_link_copied',
   'curve_link_opened',
   'pwa_installed',
@@ -51,12 +51,16 @@ const CapabilitiesSchema = z
 
 // Primitive-only, bounded prop bag — the server-side mirror of
 // src/lib/analytics.ts's AnalyticsProps type.
-const PropsSchema = z
-  .record(
-    z.string().max(40),
-    z.union([z.string().max(200), z.number(), z.boolean(), z.null()]),
-  )
-  .refine((props) => Object.keys(props).length <= 20, { message: 'Too many props (max 20)' });
+const string=z.string().max(200),number=z.number().finite();
+const PropsSchema=z.object({
+ tier:z.enum(['guest','free','pro']).optional(),resolution:z.enum(['1080p','4k']).optional(),
+ blurEnabled:z.boolean().optional(),ofEnabled:z.boolean().optional(),isDemoClip:z.boolean().optional(),
+ durationMs:number.nonnegative().optional(),elapsedMs:number.nonnegative().optional(),validated:z.boolean().nullable().optional(),
+ stage:z.enum(['worker_load','video_decode','output_too_small','ffmpeg_exit','already_running','unknown','ui_render']).optional(),
+ source:string.optional(),presetId:string.nullable().optional(),pointCount:number.int().nonnegative().optional(),segmentCount:number.int().nonnegative().optional(),
+ isRestoredSession:z.boolean().optional(),durationSec:number.nonnegative().optional(),width:number.nonnegative().optional(),height:number.nonnegative().optional(),sizeMB:number.nonnegative().nullable().optional(),
+ path:string.optional(),referrerHost:string.nullable().optional(),billingPeriod:z.enum(['monthly','annual','founder']).optional(),
+}).strict();
 
 export const AnalyticsEventSchema = z.object({
   eventId: z.string().uuid(),
@@ -93,7 +97,7 @@ const MAX_PAYLOAD_BYTES = 4000;
 export function parseAnalyticsEvent(body: unknown): ParseResult {
   let approxSize: number;
   try {
-    approxSize = JSON.stringify(body ?? {}).length;
+    approxSize = Buffer.byteLength(JSON.stringify(body ?? {}),'utf8');
   } catch {
     return { ok: false, error: 'Payload is not serializable' };
   }

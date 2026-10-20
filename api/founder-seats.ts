@@ -28,27 +28,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('[founder-seats] env invalid:', err);
   }
 
-  let sold = 0;
+  let sold = 0,pending=0,ready=false;
   if (configured) {
     try {
       const snap = await adminDb().doc(FOUNDER_META_DOC).get();
-      sold = Math.max(0, Number(snap.data()?.sold ?? 0));
+      const data=snap.data();
+      ready=data?.environment===getServerEnv().DODO_PAYMENTS_ENVIRONMENT&&data?.inventoryVersion===1&&Number.isSafeInteger(data.sold)&&data.sold>=0&&Number.isSafeInteger(data.pending)&&data.pending>=0;
+      sold=ready?data!.sold:0;pending=ready?data!.pending:0;
     } catch (err) {
       console.error('[founder-seats] seat lookup failed:', err);
       return res.status(500).json({ error: 'Seat lookup failed' });
     }
   }
 
-  const remaining = Math.max(0, FOUNDER_SEATS - sold);
+  const remaining = Math.max(0, FOUNDER_SEATS - sold - pending);
   // Short public cache: a seat count that is a minute stale is fine; the
   // checkout endpoint re-checks the live number before creating a session.
   res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60');
   return res.status(200).json({
     configured,
-    available: configured && remaining > 0,
+    available: configured && ready && remaining > 0,
+    pending,
+    reconciliationRequired:configured&&!ready,
     total: FOUNDER_SEATS,
     sold,
-    remaining,
+    remaining:ready?remaining:0,
     priceUsd: FOUNDER_PRICE_USD,
   });
 }

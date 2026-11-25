@@ -19,6 +19,25 @@ export interface ProjectSnapshot {soundtrack?:Soundtrack|null;clips:Clip[];activ
 export function serializeProject(s:ProjectSnapshot):ProjectManifestV2 {
  return manifestSchema.parse({schemaVersion:2,soundtrack:s.soundtrack?{...s.soundtrack,url:undefined}:null,savedAt:Date.now(),activeClipId:s.activeClipId,clips:s.clips.map(c=>({settings:c.id===s.activeClipId?{audioSettings:s.audioSettings,blurSettings:s.blurSettings,opticalFlowSettings:s.opticalFlowSettings,cropSettings:s.cropSettings,colorSettings:s.colorSettings}:c.settings,id:c.id,file:{name:c.file.name,duration:c.file.duration,width:c.file.width,height:c.file.height,size:c.file.size,fingerprint:c.file.fingerprint,lastModified:c.file.lastModified},segments:c.segments,captionCues:c.id===s.activeClipId?s.captionCues:c.captionCues??[],captionSettings:c.id===s.activeClipId?s.captionSettings:c.captionSettings??{enabled:false},history:c.id===s.activeClipId?(s.history??[]).map(h=>h.segments):c.history})),settings:{musicMix:s.soundtrack?{trimStart:s.soundtrack.trimStart,trimEnd:s.soundtrack.trimEnd,offset:s.soundtrack.offset,gain:s.soundtrack.gain,sourceGain:s.soundtrack.sourceGain}:undefined,audioSettings:s.audioSettings,blurSettings:s.blurSettings,opticalFlowSettings:s.opticalFlowSettings,cropSettings:s.cropSettings,colorSettings:s.colorSettings,captionSettings:s.captionSettings,resolution:s.exportResolution},beatMarkers:s.beatMarkers});
 }
+/**
+ * Turns a failed save into a sentence that names the rule that failed, so the person can fix it
+ * (and a bug report is actionable). Reports only the rule and its location, never project content.
+ */
+export function describeSaveFailure(error:unknown):string {
+ const issues=(error as {issues?:{path:(string|number)[];message:string;code?:string}[]})?.issues;
+ const issue=Array.isArray(issues)?issues[0]:undefined;
+ if(!issue)return 'Cannot save this project. Try again, or export your clips first and reload the page.';
+ const path=issue.path.map(String);
+ const where=path.includes('clips')&&path[path.indexOf('clips')+1]!==undefined?` (clip ${Number(path[path.indexOf('clips')+1])+1})`:'';
+ if(path[0]==='soundtrack'||path.includes('musicMix'))return 'Cannot save: the soundtrack settings are out of range. "Music out" must be later than "Music in" and no longer than the track (tracks are limited to 120 s).';
+ if(issue.message==='Duplicate curve time')return `Cannot save: a speed curve${where} has two points at the same moment. Nudge or delete one of the overlapping points.`;
+ if(path.includes('points'))return `Cannot save: a speed curve${where} has a point outside the allowed range (time 0–1, speed 0.1×–10×).`;
+ if(path.includes('segments')||path.includes('history'))return issue.code==='too_big'?`Cannot save: a clip${where} has too many sections (limit 100) or too much undo history.`:`Cannot save: a section${where} has an invalid start or end time. Undo your last split or delete and try again.`;
+ if(issue.message==='Invalid clip timeline or undo history')return `Cannot save: the sections${where} overlap or run past the end of the video. Undo your last split or delete and try again.`;
+ if(path[0]==='clips'&&path.length===1)return 'Cannot save: a project can hold 1 to 10 clips.';
+ if(issue.message==='Invalid active clip identity')return 'Cannot save: the selected clip could not be identified. Click a clip tab and try again.';
+ return `Cannot save this project (${path.join(' › ')||'project'}: ${issue.message}).`;
+}
 export function parseProject(raw:string):ProjectManifestV2 {if(raw.length>4*1024*1024)throw new Error('Project file exceeds 4 MiB');return manifestSchema.parse(JSON.parse(raw));}
 export const PROJECT_KEY='rampcut_project_v2';
 export function saveProjectManifest(s:ProjectSnapshot):boolean {try{const old=localStorage.getItem(PROJECT_KEY);if(old){const version=JSON.parse(old).schemaVersion;if(version!==2)return false;}localStorage.setItem(PROJECT_KEY,JSON.stringify(serializeProject(s)));return true;}catch{return false;}}

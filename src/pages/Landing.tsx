@@ -4,6 +4,7 @@ import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { PricingTable } from '@/components/marketing/PricingTable';
 import { BeforeAfterDemo } from '@/components/marketing/BeforeAfterDemo';
+import { DemoClips } from '@/components/marketing/DemoClips';
 import { Seo } from '@/components/Seo';
 import { trackEvent } from '@/lib/analytics';
 import { SIGNED_IN_FREE_LIMIT } from '@/lib/planConfig';
@@ -32,6 +33,9 @@ export function Landing() {
       {/* ── Before/after — renders nothing until a real export asset exists;
            see BeforeAfterDemo.tsx and docs/validation/HOMEPAGE.md ────────── */}
       <BeforeAfterDemo />
+
+      {/* ── Two extra demo clips (third-party footage; check rights before deploy) ── */}
+      <DemoClips />
 
       {/* ── Feature grid (saturated cards) ──────────────────────────────── */}
       <FeatureGrid />

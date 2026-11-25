@@ -41,6 +41,7 @@ export function VideoPlayer() {
   const openUpgrade     = useEditorStore((s) => s.setUpgradeModalOpen);
 
   const sourceAudioRef=useRef<HTMLAudioElement>(null);
+  const lastAudioSeekRef=useRef(0);
   const clockRef=useRef(0);
   const musicRef=useRef<HTMLAudioElement>(null);
   const soundtrack=useEditorStore(s=>s.soundtrack);
@@ -141,8 +142,13 @@ export function VideoPlayer() {
     audio.playbackRate=1;audio.volume=soundtrack?soundtrack.sourceGain/Math.max(1,soundtrack.gain+soundtrack.sourceGain):1;
     const segment=getActiveSegment(project.segments,playheadTime);
     audio.muted=!!audioSettings.muteDuringRamp&&!!segment&&Math.abs(getSegmentSpeedAtTime(segment,playheadTime)-1)>.01;
-    if(state.audible&&Math.abs(audio.currentTime-state.time)>.08)audio.currentTime=state.time;
-    if(isPlaying&&state.audible){if(audio.paused)void audio.play().catch(()=>{});}else audio.pause();
+    // Unlocked audio is its own 1x clock, so it only needs rough alignment with the picture. Seeking on
+    // every small drift restarts buffering of the file, which made the first plays stutter or stay silent.
+    // Seek only for a real jump (a new section) or a sustained drift, never while a seek is in flight.
+    const drift=Math.abs(audio.currentTime-state.time),now=performance.now();
+    if(state.audible&&!audio.seeking&&(drift>.5||(isPlaying?drift>.25&&now-lastAudioSeekRef.current>500:drift>.05))){audio.currentTime=state.time;lastAudioSeekRef.current=now;}
+    // Start only once enough is buffered; the effect re-runs every frame, so it starts as soon as it can.
+    if(isPlaying&&state.audible){if(audio.paused&&audio.readyState>=3)void audio.play().catch(()=>{});}else audio.pause();
   },[project,playheadTime,isPlaying,audioSettings,soundtrack]);
 
   const activeSegment = project
@@ -264,7 +270,7 @@ export function VideoPlayer() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', backgroundColor: '#000' }}>
       {soundtrack?.url&&<audio ref={musicRef} src={soundtrack.url} preload="metadata"/>}
-      {project?.file.url&&audioSettings.lockToSpeed===false&&<audio ref={sourceAudioRef} src={project.file.url} preload="metadata"/>}
+      {project?.file.url&&audioSettings.lockToSpeed===false&&<audio ref={sourceAudioRef} src={project.file.url} preload="auto"/>}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* Sized to the video's own intrinsic aspect ratio via CSS aspect-ratio,
             so the crop guide below (an absolutely-positioned sibling) can align

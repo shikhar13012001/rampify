@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { serializeProject, parseProject, readProjectManifest, restoreManifest } from '@/lib/projectPersistence';
+import { describeSaveFailure } from '@/lib/projectManifest';
 import { downloadText } from '@/lib/downloadText';
-import { readVideoMetadata } from '@/lib/videoMetadata';
+import { readVideoMetadata, isAcceptedVideoFile } from '@/lib/videoMetadata';
 
 export function ProjectTools() {
   const project = useEditorStore(s => s.project);
@@ -51,20 +52,21 @@ export function ProjectTools() {
     <div className="editor-tools-actions--pair">
       <button className="editor-tool-button editor-tool-button--primary" type="button" disabled={!project} onClick={() => {
         try { downloadText(JSON.stringify(serializeProject(useEditorStore.getState()), null, 2), 'project.rampcut'); setMessage(''); }
-        catch { setMessage('Cannot save this project. Check clip and curve limits.'); }
+        catch (error) { setMessage(describeSaveFailure(error)); }
       }}>Save project</button>
-      <button className="editor-tool-button" type="button" disabled={exporting} onClick={() => input.current?.click()}>Open project</button>
+      <button className="editor-tool-button" type="button" disabled={exporting} title="Open a saved .rampcut project file (not a video)" onClick={() => input.current?.click()}>Open project</button>
     </div>
       <button className="editor-tool-button editor-tool-button--quiet" type="button" disabled={exporting} onClick={() => {
         const saved = readProjectManifest();
         if (saved) restore(JSON.stringify(saved)); else setMessage('No valid autosaved project found.');
       }}>Recover autosave</button>
       {project && !project.file.url && <button className="editor-tool-button" type="button" disabled={exporting} onClick={() => media.current?.click()}>Relink source</button>}
-    <p className="editor-tool-help">Edits stay on this device. Save a backup and keep your original clips for relinking.</p>
+    <p className="editor-tool-help">Edits stay on this device. Save a backup and keep your original clips for relinking. Open project loads a saved .rampcut file; to edit a video, drop it on the editor or use Add clip.</p>
     {message && <span className="editor-tool-status" role="status">{message}</span>}
     <input ref={input} type="file" accept=".rampcut,application/json" aria-label="Open project file" hidden onChange={async e => {
       const file = e.target.files?.[0]; e.target.value = '';
       if (!file) return;
+      if (isAcceptedVideoFile(file)) { setMessage('That is a video, not a project file. Open project loads saved .rampcut files. To edit this video, drop it on the editor or use Add clip.'); return; }
       if (file.size > 4 * 1024 * 1024) { setMessage('Project files must be smaller than 4 MiB.'); return; }
       try { restore(await file.text()); } catch { setMessage('Could not read this project file.'); }
     }}/>

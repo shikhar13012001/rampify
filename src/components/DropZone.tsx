@@ -446,6 +446,7 @@ export function DropZone() {
 
           {error ? (
             <div
+              role="alert"
               style={{
                 marginTop: 20,
                 display: 'flex',

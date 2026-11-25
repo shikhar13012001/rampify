@@ -39,3 +39,12 @@ api/keys/
 validation-data/*
 !validation-data/README.md
 .jdk-emulator/
+
+# Real/pulled environment files hold secrets (e.g. `vercel env pull .env.preview`). Never commit.
+# The tracked *.example templates are re-included.
+.env
+.env.*
+!.env.example
+
+# Firebase/Google service-account keys (downloaded from the console). Never commit.
+*firebase-adminsdk*.json

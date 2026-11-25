@@ -13,15 +13,10 @@ import {
   planTierFor,
   shouldRecordExport,
 } from '@/lib/exportLimits';
-import { trackEvent, classifyErrorStage } from '@/lib/analytics';
-import {
-  exportStartedEvent,
-  exportRenderCompletedEvent,
-  exportFailedEvent,
-  exportCancelledEvent,
-  downloadInitiatedEvent,
-  type ExportEventContext,
-} from '@/lib/exportAnalytics';
+import { trackEvent } from '@/lib/analytics';
+import type { ExportEventContext } from '@/lib/exportAnalytics';
+import { createExportAttempt, nextRetryChain, type ExportAttempt } from '@/lib/exportAttempt';
+import { classifyExportFailure, durationBucket, fileSizeBucket, type ExportFailure } from '@/lib/exportFailure';
 
 /**
  * Best-effort, non-blocking playability probe: loads `url` (the export's own
@@ -117,37 +112,55 @@ export function ExportModal({ onClose }: ExportModalProps) {
 
   const tier = planTierFor(!!user, isPro);
 
-  // Shared analytics context builder — every export_* event references the
-  // same exportId (exportIdRef.current) so they can be joined/deduped by
-  // export. isDemoClip comes straight from the store's isDemoProject flag,
-  // set by DropZone.tsx's loadDemoClip()/handleFile() — so an export of the
-  // homepage's demo clip is correctly excluded from qualifiesAsActivation()
-  // (exportAnalytics.ts), never conflated with a real own-clip export.
-  const buildExportEventContext = useCallback(
-    (): ExportEventContext => ({
-      exportId: exportIdRef.current ?? 'unknown',
-      tier,
-      resolution: exportResolution,
-      blurEnabled: blurSettings.enabled,
-      ofEnabled: ofSettings.enabled,
-      isDemoClip: isDemoProject,
-    }),
-    [tier, exportResolution, blurSettings.enabled, ofSettings.enabled, isDemoProject],
+  // Analytics lifecycle for the current attempt (see exportAttempt.ts): it
+  // guarantees exactly one terminal event per exportId, including when the
+  // modal is closed or the page is left mid-render, and links retries.
+  const attemptRef = useRef<ExportAttempt | null>(null);
+  const attemptNumberRef = useRef(1);
+  const [failure, setFailure] = useState<ExportFailure | null>(null);
+
+  // Snapshot of the shared event context for ONE attempt. isDemoClip comes
+  // straight from the store's isDemoProject flag (set by DropZone.tsx's
+  // loadDemoClip()/handleFile()), so a demo-clip export is never conflated
+  // with a real own-clip export in qualifiesAsActivation().
+  const buildAttemptContext = useCallback(
+    (exportId: string): ExportEventContext => {
+      const previous = attemptRef.current;
+      const chain = nextRetryChain(
+        previous ? { exportId: previous.exportId, outcome: previous.outcome, attempt: attemptNumberRef.current } : null,
+      );
+      attemptNumberRef.current = chain.attempt;
+      const totalDuration = clips.length > 1
+        ? clips.reduce((sum, clip) => sum + (clip.file.duration || 0), 0)
+        : project?.file.duration;
+      return {
+        exportId,
+        tier,
+        resolution: exportResolution,
+        blurEnabled: blurSettings.enabled,
+        ofEnabled: ofSettings.enabled,
+        isDemoClip: isDemoProject,
+        retryOfExportId: chain.retryOfExportId,
+        attempt: chain.attempt,
+        fileSizeBucket: fileSizeBucket(project?.file.size),
+        durationBucket: durationBucket(totalDuration),
+      };
+    },
+    [tier, exportResolution, blurSettings.enabled, ofSettings.enabled, isDemoProject, project, clips],
   );
 
-  // Fires export_render_completed AFTER the UI has already been updated
-  // (setDownloadUrl/setPhase in the caller) — the playability probe can take
-  // up to a few seconds and must never delay the download or the "done" UI.
-  const trackRenderCompleted = useCallback(
-    (url: string, startedAtMs: number | null) => {
-      const durationMs = startedAtMs ? Date.now() - startedAtMs : 0;
-      const ctx = buildExportEventContext();
-      void probeVideoPlayability(url).then((validated) => {
-        trackEvent(exportRenderCompletedEvent(ctx, durationMs, validated));
-      });
-    },
-    [buildExportEventContext],
-  );
+  // The render has produced a file. The playability probe can take up to a few
+  // seconds and must never delay the download or the "done" UI, so it resolves
+  // the attempt asynchronously (or inconclusively if the modal closes first -
+  // exportAttempt.abandon() handles that).
+  const trackRenderCompleted = useCallback((url: string) => {
+    const attempt = attemptRef.current;
+    if (!attempt) return;
+    attempt.rendered();
+    void probeVideoPlayability(url).then((validated) => {
+      attempt.complete(validated);
+    });
+  }, []);
 
   // Capability check (see DropZone.tsx for the same check, shown earlier as a
   // dismissible warning) — this is the hard block: computed once since
@@ -219,9 +232,15 @@ export function ExportModal({ onClose }: ExportModalProps) {
       // render), this local is only for these closures' own analytics use.
       const exportStartTime = Date.now();
       setStartedAt(exportStartTime);
-      exportIdRef.current = crypto.randomUUID();
+      // Resolve any leftover attempt first so it can't stay unresolved.
+      attemptRef.current?.abandon();
+      const exportId = crypto.randomUUID();
+      exportIdRef.current = exportId;
       recordedExportIdRef.current = null;
-      trackEvent(exportStartedEvent(buildExportEventContext()));
+      setFailure(null);
+      const attempt = createExportAttempt(buildAttemptContext(exportId), trackEvent);
+      attemptRef.current = attempt;
+      attempt.start();
 
       const bridge = new AbortController();
       bridgeRef.current = bridge;
@@ -236,15 +255,19 @@ export function ExportModal({ onClose }: ExportModalProps) {
         setExportProgress(null);
         setExporting(false);
         setStartedAt(null);
-        trackRenderCompleted(url, exportStartTime);
+        trackRenderCompleted(url);
       };
 
-      const handleError = (message: string) => {
-        // Full technical detail (e.g. an ffmpeg log dump) goes to the console,
-        // not the UI — see friendlyErrorMessage() for what the user sees. Only
-        // a coarse, closed-set stage tag (never the raw text) goes to analytics.
+      const handleError = (error: unknown) => {
+        // Full technical detail (e.g. an ffmpeg log dump) goes to the console
+        // and the collapsed "Technical details"; the user sees the classified
+        // explanation + next step. Only the closed-set stage/code/retryable
+        // (never the raw text) goes to analytics - see exportFailure.ts.
+        const message = error instanceof Error ? error.message : String(error);
         console.error('[export] failed:', message);
-        trackEvent(exportFailedEvent(buildExportEventContext(), classifyErrorStage(message)));
+        const classified = classifyExportFailure(error);
+        attempt.fail(classified);
+        setFailure(classified);
         setErrorMessage(message);
         setPhase('error');
         setSubStatus('');
@@ -256,7 +279,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
 
       void runExport({id:exportIdRef.current!,clips:clips.length?clips:[{id:'active',...project}],settings:{soundtrack,audioSettings,blurSettings,opticalFlowSettings:ofSettings,resolution:exportResolution,cropSettings,colorSettings,captionSettings,captionCues}},event=>{
         setProgress(event.percent);setSubStatus(event.message??event.phase);setExportProgress(event.percent);
-      },bridge.signal).then(artifact=>{exportOwnerRef.current=artifact.ownerUid;return handleDone(artifact.blob);}).catch(error=>{if(!bridge.signal.aborted)handleError(error instanceof Error?error.message:String(error));});
+      },bridge.signal).then(artifact=>{exportOwnerRef.current=artifact.ownerUid;return handleDone(artifact.blob);}).catch(error=>{if(!bridge.signal.aborted)handleError(error);});
 
     } finally {
       // Safe to release re-entrancy right away even though the export itself
@@ -267,7 +290,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
       // an export is genuinely in flight.
       startInFlightRef.current = false;
     }
-  }, [project, clips, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, cropSettings, colorSettings, captionSettings, captionCues, soundtrack, exportResolution, audioSettings, setExportProgress, setExporting, buildExportEventContext, trackRenderCompleted]);
+  }, [project, clips, capabilities, blockedReason, unsupportedCombo, tier, blurSettings, ofSettings, cropSettings, colorSettings, captionSettings, captionCues, soundtrack, exportResolution, audioSettings, setExportProgress, setExporting, buildAttemptContext, trackRenderCompleted]);
 
   const cancel = useCallback(() => {
     // Only an actually-in-flight export (bridgeRef set by startExport, not
@@ -275,7 +298,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
     // during phase 'processing', but guard here too rather than trusting a
     // possibly-stale `phase` closure value.
     if (bridgeRef.current) {
-      trackEvent(exportCancelledEvent(buildExportEventContext(), startedAt ? Date.now() - startedAt : 0));
+      attemptRef.current?.cancel();
     }
 
     bridgeRef.current?.abort();
@@ -287,10 +310,13 @@ export function ExportModal({ onClose }: ExportModalProps) {
     setExportProgress(null);
     setExporting(false);
     setStartedAt(null);
-  }, [setExportProgress, setExporting, buildExportEventContext, startedAt]);
+  }, [setExportProgress, setExporting]);
 
   useEffect(() => {
     return () => {
+      // Closing the modal mid-render aborts the work; record that outcome so
+      // the attempt is never left without a terminal event.
+      attemptRef.current?.abandon();
       bridgeRef.current?.abort();
       setExportProgress(null);
       setExporting(false);
@@ -337,12 +363,12 @@ export function ExportModal({ onClose }: ExportModalProps) {
     // half of the render-completed / download-initiated / user-confirmed
     // split docs/validation/METRICS.md defines; it does NOT mean the browser
     // actually finished saving the file, only that this anchor.click() ran.
-    trackEvent(downloadInitiatedEvent(buildExportEventContext()));
+    attemptRef.current?.downloadInitiated();
     // Record the export AFTER triggering the download so the user only consumes
     // a quota slot when the file actually starts downloading. The exportId
     // makes the server-side write idempotent across retries.
     void recordExport(exportId,exportOwnerRef.current).then(() => setRemaining(getRemainingExports())).catch(()=>setSubStatus('Your file is ready. Usage synchronization is pending; reconnect or sign back into the account that started this export.'));
-  }, [downloadUrl, phase, project, buildExportEventContext]);
+  }, [downloadUrl, phase, project]);
 
   useEffect(() => {
     if (phase !== 'processing') return;
@@ -350,9 +376,33 @@ export function ExportModal({ onClose }: ExportModalProps) {
       event.preventDefault();
       event.returnValue = '';
     };
+    // pagehide (unlike beforeunload) only fires when the page is really going
+    // away, so it's the right moment to resolve the attempt as abandoned.
+    const onPageHide = () => { attemptRef.current?.abandon(); };
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pagehide', onPageHide);
+    };
   }, [phase]);
+
+  // Dialog keyboard behaviour: land focus inside on open, restore it on close,
+  // and let Escape dismiss - except mid-render, where closing means cancelling
+  // and must stay a deliberate click (same rule as the backdrop click).
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => previouslyFocused?.focus?.();
+  }, []);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && phase !== 'processing') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [phase, onClose]);
 
   const secondsRemaining = estimateTimeRemaining(progress, startedAt, blurSettings.enabled);
   const progressLabel = phase === 'done'
@@ -387,7 +437,13 @@ export function ExportModal({ onClose }: ExportModalProps) {
         }}
       >
         <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="export-modal-title"
+          tabIndex={-1}
           style={{
+            outline: 'none',
             width: 'min(400px, 100%)',
             borderRadius: 20,
             border: '1px solid #e5dfd0',
@@ -404,7 +460,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <ExportModalIcon phase={phase} />
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.02em' }}>
+                <h2 id="export-modal-title" style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#0a0a0a', letterSpacing: '-0.02em' }}>
                   {phase === 'done' ? 'Export ready' : phase === 'error' ? 'Export failed' : 'Export video'}
                 </h2>
               </div>
@@ -584,13 +640,20 @@ export function ExportModal({ onClose }: ExportModalProps) {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, alignItems: 'center' }}>
-                <span style={{ color: '#4a4a4a' }}>{progressLabel}</span>
-                <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                {/* Polite live region for the phase text only; the changing
+                    percentage is aria-hidden so a screen reader isn't flooded. */}
+                <span role="status" aria-live="polite" style={{ color: '#4a4a4a' }}>{progressLabel}</span>
+                <span aria-hidden="true" style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                   {phase === 'done' ? '100' : progress}%
                 </span>
               </div>
               {/* Progress track */}
               <div
+                role="progressbar"
+                aria-label="Export progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={phase === 'done' ? 100 : Math.round(progress)}
                 style={{
                   height: 6,
                   borderRadius: 999,
@@ -636,6 +699,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
           {/* Error */}
           {phase === 'error' && (
             <div
+              role="alert"
               style={{
                 borderRadius: 10,
                 border: '1px solid rgba(255, 77, 139, 0.2)',
@@ -653,7 +717,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
               </svg>
               <div style={{ minWidth: 0 }}>
                 <p style={{ margin: 0, color: '#ff4d8b', fontSize: 13, lineHeight: 1.5 }}>
-                  {friendlyErrorMessage(errorMessage)}
+                  {(failure ?? classifyExportFailure(errorMessage)).userMessage}
                 </p>
                 {errorMessage && (
                   <details style={{ marginTop: 6 }}>
@@ -665,7 +729,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
                       whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 120, overflowY: 'auto',
                       fontFamily: 'var(--font-mono)',
                     }}>
-                      {errorMessage}
+                      {failure ? `[${failure.stage}/${failure.code}]\n` : ''}{errorMessage}
                     </pre>
                   </details>
                 )}
@@ -761,7 +825,7 @@ export function ExportModal({ onClose }: ExportModalProps) {
                     // Each manual repeat click is its own download_initiated —
                     // it doesn't re-consume quota (see the effect above) but
                     // is still a real, distinct user action worth counting.
-                    trackEvent(downloadInitiatedEvent(buildExportEventContext()));
+                    attemptRef.current?.downloadInitiated({ repeat: true });
                   }}
                   style={primaryBtn(false)}
                 >
@@ -785,13 +849,14 @@ export function ExportModal({ onClose }: ExportModalProps) {
                   onClick={() => {
                     setPhase('idle');
                     setErrorMessage('');
+                    setFailure(null);
                     setDownloadUrl(null);
                     setProgress(0);
                     setStartedAt(null);
                   }}
                   style={primaryBtn(false)}
                 >
-                  Try again
+                  {failure && !failure.retryable ? 'Back to settings' : 'Try again'}
                 </button>
               </>
             )}
@@ -903,33 +968,6 @@ function ExportModalIcon({ phase }: { phase: Phase }) {
       </svg>
     </div>
   );
-}
-
-/**
- * Maps a raw error (often a multi-line ffmpeg log dump — see
- * ffmpegWorker.ts's `exitCode !== 0` branch) to a short, actionable message.
- * The raw text is never shown as the primary UI message — it's logged to the
- * console (see handleError above) and available in the collapsed <details>
- * this renders alongside, for anyone who needs it.
- */
-function friendlyErrorMessage(raw: string): string {
-  const lower = raw.toLowerCase();
-  if (lower.includes('worker error') || lower.includes('failed to load') || lower.includes('coreurl')) {
-    return "The video engine couldn't load. Check your connection and try again.";
-  }
-  if (lower.includes('video load error') || lower.includes('metadata load timeout')) {
-    return "Couldn't read the video for processing. Try re-loading the clip.";
-  }
-  if (lower.includes('suspiciously small') || lower.includes('encode likely failed')) {
-    return 'The export produced no usable output. Try a shorter clip or a simpler speed curve.';
-  }
-  if (lower.includes('ffmpeg exited with code')) {
-    return 'The video encoder hit an error processing this clip.';
-  }
-  if (lower.includes('already running')) {
-    return 'Another export is still in progress — wait for it to finish first.';
-  }
-  return 'Export failed. Please try again.';
 }
 
 function estimateTimeRemaining(progress: number, startedAt: number | null, blurEnabled: boolean) {

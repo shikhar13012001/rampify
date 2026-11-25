@@ -8,7 +8,8 @@ import {
   applyCors,
 } from './_adminInit.js';
 import {ingestAnalytics} from './_analyticsBudget.js';
-import { parseAnalyticsEvent } from './_analyticsEvents.js';
+import { parseAnalyticsEvent, type AuthState } from './_analyticsEvents.js';
+import { clientIp } from './_rateLimit.js';
 
 /**
  * Records one analytics event (see docs/validation/METRICS.md for the event
@@ -40,21 +41,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const event = parsed.data;
 
   let uid: string | null = null;
+  // Recorded on the event so identity gaps are diagnosable from the data
+  // itself ("uid is null" used to be indistinguishable from "never signed in").
+  let authState: AuthState = 'anonymous';
   const authHeader = req.headers.authorization;
   if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
     try {
       const decoded = await adminAuth().verifyIdToken(authHeader.slice(7));
       uid = decoded.uid;
+      authState = 'verified';
     } catch {
       // An invalid/expired token degrades to anonymous rather than failing
       // the whole request — a stale token on an analytics call shouldn't
       // cost the event entirely.
       uid = null;
+      authState = 'token_invalid';
     }
   }
 
   try {
-    const result=await ingestAnalytics(adminDb(),event,uid);
+    const result=await ingestAnalytics(adminDb(),event,uid,new Date(),{authState,ip:clientIp(req)});
     if(result==='throttled'){res.setHeader('Retry-After','60');return res.status(429).json({error:'Analytics budget reached'});}
 
   } catch (err) {

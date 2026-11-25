@@ -1,6 +1,7 @@
 import {reserveFounder,finishFounderCheckout,failFounderCheckout,FounderUnavailable} from './_founderInventory.js';
 import {randomUUID} from 'node:crypto';
 import {entitlementForUser} from './_billingState.js';
+import {enforceRateLimit,RATE_RULES} from './_rateLimit.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   initAdmin,
@@ -28,6 +29,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  // Checked before any billing work: each attempt can create a Dodo session.
+  if (await enforceRateLimit(adminDb(), res, RATE_RULES.checkout, decoded.uid)) return;
 
   // Strict billingPeriod validation — no silent default for unknown values.
   const requested = (req.body ?? {}) as { billingPeriod?: unknown };

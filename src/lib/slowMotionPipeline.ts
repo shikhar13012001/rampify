@@ -116,8 +116,9 @@ function getOrCreateWorker():Worker {
   });
   worker.addEventListener('error',event=>{
     if(workerInstance!==worker)return;
-    workerReady=false;setModelStatus('error');setModelError(event.message);setDownloadPct(null);
-    failPending(new Error(event.message));
+    const message=event.message?.trim()||'Model unavailable: the AI worker stopped unexpectedly';
+    workerReady=false;setModelStatus('error');setModelError(message);setDownloadPct(null);
+    failPending(new Error(message));
   });
   return worker;
 }

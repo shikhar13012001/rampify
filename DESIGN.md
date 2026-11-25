@@ -202,7 +202,7 @@ This is the single most important semantic system in the product — it appears 
 ### 3.6 Upgrade
 - Two-panel modal: features (left) + pricing toggle (right).
 - Monthly $12 / Annual $96 (SAVE 33%).
-- "Start Pro" → Stripe Checkout (origin-allowlisted server-side).
+- "Start Pro" → Dodo Checkout (origin-allowlisted server-side).
 - On return: `/upgrade/success` polls for `isPro` up to 30s, then redirects to `/editor`.
 
 ---

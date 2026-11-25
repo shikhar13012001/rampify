@@ -1,0 +1,127 @@
+# CI for Rampcut.
+#
+# Approved locally by the owner (Phase 1E). NOTHING here has run on GitHub yet:
+# it takes effect only once this file is committed and pushed, which needs
+# separate approval (docs/validation/WORKING_AGREEMENT.md section 4).
+#
+# Design rules:
+#   - No secrets, no Firebase project, no Dodo API, no deployment. Everything
+#     runs against mocks, in-memory fakes or local emulators.
+#   - `verify` is the required gate and mirrors `npm run verify` exactly, which
+#     passed locally on Windows. It has NOT been executed on Linux; the
+#     import-case test (test/security/import-case.test.ts) is the proxy for the
+#     main Linux-only failure mode (case-sensitive paths).
+#   - `browser` is the real-browser export harness. It needs Java, the Firestore
+#     emulator jar and Playwright browsers, and it has never been run on Linux,
+#     so it is manual-only and non-blocking until it has a green run.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: Also run the real-browser emulator harness (experimental)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Deliberately empty: tests must pass without any real credential present.
+  CI: true
+
+jobs:
+  verify:
+    name: typecheck, lint, tests, production build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Several tests encode and decode real files with the system ffmpeg
+      # (libx264 + aac + libass); a fresh runner does not ship it.
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -hide_banner -version | head -1
+          ffmpeg -hide_banner -encoders 2>/dev/null | grep -E "libx264|aac" | head -3
+
+      - run: npm ci
+
+      - name: Typecheck (app + API)
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Includes the production build + prerender/SEO assertions:
+      # test/seo/prerendered-routes.test.ts runs a real `npm run build` in beforeAll.
+      - name: Unit and integration tests (includes the production build)
+        run: npm run test
+
+      - name: Secret scan of tracked files (patterns only, nothing is printed on success)
+        run: |
+          if git grep -n -I -E "BEGIN (RSA |EC )?PRIVATE KEY|sk_live_|whsec_[A-Za-z0-9+/=]{24,}" -- . ':!test' ':!*.md' ':!package-lock.json' ':!.env.example' ':!.github'; then
+            echo "::error::A secret-looking value is committed. Remove it and rotate the credential."
+            exit 1
+          fi
+
+  browser:
+    name: real-browser export harness (experimental, non-blocking)
+    if: github.event_name == 'workflow_dispatch' && inputs.browser
+    needs: verify
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: npm ci
+
+      # The harness's Playwright runtime is not a package.json dependency
+      # (locally it comes from the Skyvern venv). Install it for this job only.
+      - name: Install Playwright (not saved to package.json)
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Download the Firestore emulator
+        run: npx firebase setup:emulators:firestore
+
+      - name: Run the harness
+        run: |
+          export RAMPCUT_FIRESTORE_EMULATOR_JAR="$(ls ~/.cache/firebase/emulators/cloud-firestore-emulator-v*.jar | tail -1)"
+          node test/browser/run.mjs
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-harness-logs
+          path: temp/browser/*.log
+          retention-days: 7

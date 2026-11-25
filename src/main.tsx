@@ -7,7 +7,8 @@ import './styles/globals.css';
 import App from './App';
 import { registerServiceWorker } from './lib/pwa';
 import { initGoogleAnalytics } from './lib/googleAnalytics';
-import { hasAnalyticsConsent } from './lib/analytics';
+import { expectAuthState, hasAnalyticsConsent } from './lib/analytics';
+import { installGlobalErrorTracking } from './lib/globalErrors';
 
 // Vercel Web Analytics — cookieless page views + referrers, enabled per
 // project in the Vercel dashboard (Analytics tab). No-op locally. The script
@@ -15,6 +16,15 @@ import { hasAnalyticsConsent } from './lib/analytics';
 // header in vercel.json doesn't block it.
 if(hasAnalyticsConsent())inject({ mode: import.meta.env.PROD ? 'production' : 'development' });
 registerServiceWorker();
+
+// Uncaught errors / unhandled rejections → closed-set `ui_error` events through
+// the first-party pipeline (class only, never message text). See globalErrors.ts.
+installGlobalErrorTracking();
+
+// Hold first-load analytics events until Firebase reports who is signed in, so
+// they carry the verified uid. Flushed by notifyAuthState() (App.tsx), after 2 s,
+// or on pagehide - see analytics.ts.
+expectAuthState();
 
 // Google Analytics 4 — no-op unless VITE_GA_MEASUREMENT_ID is set (see
 // .env.example and src/lib/googleAnalytics.ts) and the same consent rule the

@@ -17,6 +17,22 @@
 import { useEditorStore } from '@/store/editorStore';
 import { checkExportCapabilities, type CapabilityCheck } from './browserCapabilities';
 import { gtagEvent } from './googleAnalytics';
+import {
+  advanceSession,
+  browserFamilyFromUserAgent,
+  classifyTraffic,
+  createEventGate,
+  deviceClassFor,
+  identityTransition,
+  isTestTraffic,
+  resolveInternalFlag,
+  routeLabel,
+  type AppEnvironment,
+  type TrafficClass,
+} from './analyticsContext';
+
+/** Bump when the payload's shared-property contract changes (server stores it). */
+export const ANALYTICS_EVENT_VERSION = 2;
 
 export type AnalyticsEventName =
   | 'page_view'
@@ -36,7 +52,9 @@ export type AnalyticsEventName =
   | 'ui_error'
   | 'curve_link_copied'
   | 'curve_link_opened'
-  | 'pwa_installed';
+  | 'pwa_installed'
+  /** Server-verified anon↔uid link; sent once per (browser identity, account). */
+  | 'identity_linked';
 
 // Bounded, primitive-only prop bag — never nested objects/arrays, never
 // arbitrary free-text (filenames, raw error messages, URLs). Event builders
@@ -53,6 +71,11 @@ export interface AnalyticsEvent {
   props?: AnalyticsProps;
 }
 
+/**
+ * @deprecated Legacy stage vocabulary kept so historical events stay
+ * interpretable. New export_failed events use the ANALYTICS_CONTRACT.md
+ * stages produced by exportFailure.ts's classifyExportFailure().
+ */
 export type ErrorStage =
   | 'worker_load'
   | 'video_decode'
@@ -92,6 +115,9 @@ const ANON_ID_KEY = 'rampcut:anon-id';
 const SESSION_ID_KEY = 'rampcut:session-id';
 const CONSENT_KEY = 'rampcut:analytics-consent';
 const TEST_SESSION_KEY = 'rampcut:test-session';
+const INTERNAL_FLAG_KEY = 'rampcut:internal';
+const IDENTITY_LINK_KEY = 'rampcut:identity-link';
+const eventGate = createEventGate();
 const ACQUISITION_KEY = 'rampcut:acquisition';
 const JOURNEY_LOG_KEY = 'rampcut:journey-log';
 const JOURNEY_LOG_MAX = 200;
@@ -125,10 +151,42 @@ export function getAnonId(): string {
   return getOrCreateId(ANON_ID_KEY, safeStorage(() => localStorage));
 }
 
-/** Per-tab session identity (sessionStorage) — resets on a new tab/window,
- *  or when the tab is closed. */
+/** Per-tab session identity (sessionStorage). A session ends when the tab
+ *  closes OR after 30 minutes without an event (see analyticsContext.ts) —
+ *  without the idle rule a tab left open overnight was one "session" forever.
+ *  Calling this counts as activity. */
 export function getSessionId(): string {
-  return getOrCreateId(SESSION_ID_KEY, safeStorage(() => sessionStorage));
+  const storage = safeStorage(() => sessionStorage);
+  const now = Date.now();
+  try {
+    const { record, isNew } = advanceSession(storage?.getItem(SESSION_ID_KEY) ?? null, now, () => crypto.randomUUID());
+    if (storage) {
+      try {
+        storage.setItem(SESSION_ID_KEY, JSON.stringify(record));
+      } catch { /* quota / disabled storage — the id is still valid for this call */ }
+      if (isNew) {
+        // New session → first-touch acquisition and the dedupe gate start over.
+        try { storage.removeItem(ACQUISITION_KEY); } catch { /* ignore */ }
+      }
+    }
+    return record.id;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
+/** Starts a brand-new anonymous identity and session. Used when the signed-in
+ *  user changes, so two people sharing a browser are never merged. */
+function rotateAnonymousIdentity(): void {
+  try { safeStorage(() => localStorage)?.setItem(ANON_ID_KEY, crypto.randomUUID()); } catch { /* ignore */ }
+  try { safeStorage(() => localStorage)?.removeItem(IDENTITY_LINK_KEY); } catch { /* ignore */ }
+  try {
+    const storage = safeStorage(() => sessionStorage);
+    storage?.removeItem(SESSION_ID_KEY);
+    storage?.removeItem(ACQUISITION_KEY);
+    storage?.removeItem(JOURNEY_LOG_KEY);
+  } catch { /* ignore */ }
+  eventGate.reset();
 }
 
 // ─── Consent ────────────────────────────────────────────────────────────────
@@ -240,6 +298,132 @@ export function isTestSession(): boolean {
   } catch { /* leave storedFlag at its default of false */ }
 
   return computeIsTestSession({ isDev: import.meta.env.DEV, queryFlag, storedFlag });
+}
+
+// ─── Environment + traffic class (customer / founder / development / staging) ─
+// `isTestSession` alone could only say "test or not", and was effectively
+// always false in production — so the founder's own exports and Vercel preview
+// traffic were indistinguishable from customers'. trafficClass makes the
+// segment explicit; isTestSession is derived from it so the two can't drift.
+
+export interface TrafficContext {
+  environment: AppEnvironment;
+  trafficClass: TrafficClass;
+}
+
+export function getTrafficContext(): TrafficContext {
+  let hostname: string | null = null;
+  let queryInternal: string | null = null;
+  let storedInternal = false;
+  try {
+    hostname = typeof location !== 'undefined' ? (location.hostname ?? null) : null;
+    const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    queryInternal = params?.get('rampcut_internal') ?? null;
+  } catch { /* leave defaults */ }
+
+  const local = safeStorage(() => localStorage);
+  try { storedInternal = local?.getItem(INTERNAL_FLAG_KEY) === '1'; } catch { /* default false */ }
+  const internalFlag = resolveInternalFlag(queryInternal, storedInternal);
+  try {
+    if (queryInternal === '1') local?.setItem(INTERNAL_FLAG_KEY, '1');
+    if (queryInternal === '0') local?.removeItem(INTERNAL_FLAG_KEY);
+  } catch { /* ignore */ }
+
+  let testFlag = false;
+  try { testFlag = safeStorage(() => sessionStorage)?.getItem(TEST_SESSION_KEY) === '1'; } catch { /* default false */ }
+  // ?rampcut_test=1 on this very page load (not yet persisted by isTestSession()).
+  try {
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('rampcut_test') === '1') testFlag = true;
+  } catch { /* ignore */ }
+
+  return classifyTraffic({ hostname, isDev: import.meta.env.DEV, internalFlag, testFlag });
+}
+
+// ─── Identity: anonymous ↔ authenticated ───────────────────────────────────
+// Root cause of "uid was null in all 3,126 historical events": the server only
+// trusts a uid it verifies from an Authorization header, and trackEvent never
+// sent one. It now attaches the Firebase ID token whenever a user is signed
+// in. notifyAuthState() additionally records an explicit, server-verified
+// identity_linked edge (anonId ↔ uid) so pre-signup activity can be joined to
+// the account that later signed up.
+
+let lastKnownUid: string | null | undefined;
+
+// ─── Holding events until the first auth callback ──────────────────────────
+// Firebase restores a persisted session asynchronously. Events fired in the
+// first moments of a page load (landing_view, page_view, editor_opened…) used
+// to go out before that, so a signed-in user's first events of EVERY page load
+// were recorded anonymous (found by test/browser/identity.mjs). While auth is
+// expected they are held, then flushed once notifyAuthState() reports the
+// outcome - or after AUTH_WAIT_MS, or when the page is hidden, whichever is
+// first, so a slow/failed Firebase can never lose or indefinitely delay data.
+
+/** Longest an event may wait for the auth callback. */
+export const AUTH_WAIT_MS = 2000;
+let awaitingAuth = false;
+let authWaitTimer: ReturnType<typeof setTimeout> | null = null;
+const heldUntilAuth: Array<() => void> = [];
+
+function releaseHeldEvents(): void {
+  awaitingAuth = false;
+  if (authWaitTimer) { clearTimeout(authWaitTimer); authWaitTimer = null; }
+  for (const send of heldUntilAuth.splice(0)) {
+    try { send(); } catch { /* analytics must never throw */ }
+  }
+}
+
+/** Call once at startup, BEFORE the first render, when Firebase auth will report. */
+export function expectAuthState(): void {
+  if (awaitingAuth) return;
+  awaitingAuth = true;
+  authWaitTimer = setTimeout(releaseHeldEvents, AUTH_WAIT_MS);
+  try {
+    // Leaving the page must not drop held events.
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pagehide', releaseHeldEvents, { once: true });
+    }
+  } catch { /* non-browser environment */ }
+}
+
+/** Call from the auth-state listener with the Firebase uid (or null). Idempotent. */
+export function notifyAuthState(uid: string | null): void {
+  try {
+    // Auth has reported: send anything held so far with the right credential.
+    releaseHeldEvents();
+    const transition = identityTransition(lastKnownUid, uid);
+    lastKnownUid = uid;
+    if (transition.kind === 'none') return;
+
+    let linkTarget: string | null = null;
+    if (transition.kind === 'rotate') {
+      rotateAnonymousIdentity();
+      linkTarget = transition.thenLink;
+    } else {
+      linkTarget = transition.uid;
+    }
+    if (!linkTarget) return;
+
+    // Skip if this exact (anonId, uid) pair was already linked from this browser.
+    const anonId = getAnonId();
+    const marker = `${anonId}:${linkTarget}`;
+    const local = safeStorage(() => localStorage);
+    try {
+      if (local?.getItem(IDENTITY_LINK_KEY) === marker) return;
+    } catch { /* fall through and send */ }
+    trackEvent({ name: 'identity_linked' });
+    try { local?.setItem(IDENTITY_LINK_KEY, marker); } catch { /* ignore */ }
+  } catch {
+    // Identity bookkeeping must never throw into the auth listener.
+  }
+}
+
+/** Test seam: forgets the in-memory auth observation. */
+export function __resetIdentityForTests(): void {
+  lastKnownUid = undefined;
+  awaitingAuth = false;
+  heldUntilAuth.length = 0;
+  if (authWaitTimer) { clearTimeout(authWaitTimer); authWaitTimer = null; }
+  eventGate.reset();
 }
 
 // ─── Acquisition (source / medium / campaign / landing page) ──────────────
@@ -356,21 +540,53 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
  * callers — editing and export must keep working identically whether this
  * succeeds, fails, or is a complete no-op (missing fetch, denied consent).
  */
+/** Max time to wait for a Firebase ID token before sending the event anonymously. */
+const TOKEN_WAIT_MS = 2000;
+
+function postEvent(payload: unknown, token: string | null): void {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  void fetch('/api/track-event', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).catch(() => { /* best-effort — a network failure here is invisible to the caller by design */ });
+}
+
 export function trackEvent(event: AnalyticsEvent): void {
   try {
     if(event.name==='payment_succeeded')return; // Payment events are server verified only.
     if (typeof fetch !== 'function') return;
     if (!hasAnalyticsConsent()) return;
 
+    // Session first: it may rotate (idle timeout), which resets first-touch
+    // acquisition and the duplicate gate that the lines below depend on.
+    const sessionId = getSessionId();
+    // Identical = same name AND same discriminator (export, route or clip source).
+    const gateKey = event.exportId ?? String(event.props?.path ?? event.props?.source ?? '');
+    if (!eventGate.allow(event.name, gateKey, sessionId)) return;
+
     const state = useEditorStore.getState();
+    const traffic = getTrafficContext();
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : undefined;
+    const width = typeof window !== 'undefined' ? window.innerWidth : undefined;
     const payload = {
       eventId: crypto.randomUUID(),
+      eventVersion: ANALYTICS_EVENT_VERSION,
       name: event.name,
       timestamp: Date.now(),
-      sessionId: getSessionId(),
+      sessionId,
       anonId: getAnonId(),
+      // Shape only: the server ignores this and uses the uid it verifies from
+      // the Authorization header below.
       uid: state.user?.uid ?? null,
-      isTestSession: isTestSession(),
+      isTestSession: isTestSession() || isTestTraffic(traffic.trafficClass),
+      environment: traffic.environment,
+      trafficClass: traffic.trafficClass,
+      route: routeLabel(typeof location !== 'undefined' ? location.pathname : null),
+      browserFamily: browserFamilyFromUserAgent(ua),
+      deviceClass: deviceClassFor(width, ua),
       exportId: event.exportId ?? null,
       appVersion: __APP_VERSION__,
       acquisition: readAcquisition(),
@@ -378,12 +594,35 @@ export function trackEvent(event: AnalyticsEvent): void {
       props: event.props ?? {},
     };
 
-    void fetch('/api/track-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      keepalive: true,
-    }).catch(() => { /* best-effort — a network failure here is invisible to the caller by design */ });
+    // Dispatch reads the signed-in user at SEND time, not call time: events
+    // fired before Firebase restores the persisted session are held (see
+    // expectAuthState) and must be authenticated with whoever turns out to be
+    // signed in, otherwise the first events of every page load lose their uid.
+    const dispatch = () => {
+      const user = useEditorStore.getState().user;
+      if (user && typeof user.getIdToken === 'function') {
+        // Authenticate the event so the server can record a verified uid.
+        // Never block on it: a slow/failed token still sends the event
+        // anonymously (the server marks authState accordingly).
+        payload.uid = user.uid;
+        let settled = false;
+        const send = (token: string | null) => {
+          if (settled) return;
+          settled = true;
+          postEvent(payload, token);
+        };
+        const timer = setTimeout(() => send(null), TOKEN_WAIT_MS);
+        Promise.resolve()
+          .then(() => user.getIdToken())
+          .then((token) => { clearTimeout(timer); send(token || null); })
+          .catch(() => { clearTimeout(timer); send(null); });
+      } else {
+        payload.uid = null;
+        postEvent(payload, null);
+      }
+    };
+    if (awaitingAuth) heldUntilAuth.push(dispatch);
+    else dispatch();
 
     // Mirror into GA4 (no-op unless VITE_GA_MEASUREMENT_ID is configured —
     // see googleAnalytics.ts). Test sessions are excluded, same as the

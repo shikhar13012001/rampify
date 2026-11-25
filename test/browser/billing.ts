@@ -28,18 +28,22 @@ try{
  const second=reservations.findIndex((r,i)=>r.status==='fulfilled'&&i!==success);const definite=(reservations[second] as PromiseFulfilledResult<Awaited<ReturnType<typeof reserveFounder>>>).value;
  await failFounderCheckout(db,users[second],definite.reservation.attemptId,true);assert.equal((await db.doc('meta/founder').get()).data()?.pending,23);
  console.log('PASS real Firestore billing transaction replay, one-payment revenue dedupe, seat-cap concurrency and conservative failure recovery');
+ // Fixture dates are relative to now: hard-coded calendar dates silently expire
+ // (the paid period ends, the server correctly reports free) and turn this
+ // lifecycle check into a time bomb.
+ const base=Date.now()-5*86400000,at=(days:number,seconds=0)=>new Date(base+days*86400000+seconds*1000).toISOString();
  const subUid='sub-'+randomUUID(),customer='cus-'+subUid,subscriptionId='sub-'+randomUUID();
- const send=async(type:string,data:object,occurredAt='2026-10-01T00:00:00Z')=>{const id=randomUUID(),timestamp=new Date(),raw=JSON.stringify({type,timestamp:occurredAt,data});const signature=new Webhook(process.env.DODO_PAYMENTS_WEBHOOK_KEY!).sign(id,timestamp,raw);const res=await fetch('http://127.0.0.1:3001/api/webhooks/dodo',{method:'POST',headers:{'Content-Type':'application/json','webhook-id':id,'webhook-timestamp':String(Math.floor(timestamp.getTime()/1000)),'webhook-signature':signature},body:raw});assert.equal(res.status,200,await res.text());};
- const payment={payload_type:'Payment',payment_id:'pay-sub-'+randomUUID(),subscription_id:subscriptionId,created_at:'2026-10-01T00:00:01Z',customer:{customer_id:customer},metadata:{userId:subUid},status:'succeeded',total_amount:900,currency:'USD'};
+ const send=async(type:string,data:object,occurredAt=at(0))=>{const id=randomUUID(),timestamp=new Date(),raw=JSON.stringify({type,timestamp:occurredAt,data});const signature=new Webhook(process.env.DODO_PAYMENTS_WEBHOOK_KEY!).sign(id,timestamp,raw);const res=await fetch('http://127.0.0.1:3001/api/webhooks/dodo',{method:'POST',headers:{'Content-Type':'application/json','webhook-id':id,'webhook-timestamp':String(Math.floor(timestamp.getTime()/1000)),'webhook-signature':signature},body:raw});assert.equal(res.status,200,await res.text());};
+ const payment={payload_type:'Payment',payment_id:'pay-sub-'+randomUUID(),subscription_id:subscriptionId,created_at:at(0,1),customer:{customer_id:customer},metadata:{userId:subUid},status:'succeeded',total_amount:900,currency:'USD'};
  await send('payment.succeeded',payment);
- const sub={payload_type:'Subscription',subscription_id:subscriptionId,product_id:'test-monthly',status:'active',next_billing_date:'2026-11-01T00:00:00Z',previous_billing_date:'2026-10-01T00:00:00Z',cancel_at_next_billing_date:false,customer:{customer_id:customer},metadata:{userId:subUid}};
+ const sub={payload_type:'Subscription',subscription_id:subscriptionId,product_id:'test-monthly',status:'active',next_billing_date:at(30),previous_billing_date:at(0),cancel_at_next_billing_date:false,customer:{customer_id:customer},metadata:{userId:subUid}};
  await send('subscription.active',sub);
  await send('payment.failed',{...payment,payment_id:'unrelated',status:'failed'});
  assert.equal((await db.doc('users/'+subUid).get()).data()?.subscriptionTier,'pro');
  assert.equal((await db.collection('analytics_events').where('uid','==',subUid).get()).size,1);
- await send('subscription.cancelled',{...sub,status:'cancelled',cancel_at_next_billing_date:true},'2026-10-10T00:00:00Z');
+ await send('subscription.cancelled',{...sub,status:'cancelled',cancel_at_next_billing_date:true},at(2));
  assert.equal((await db.doc('users/'+subUid).get()).data()?.subscriptionTier,'pro');
- await send('refund.succeeded',{payload_type:'Refund',refund_id:randomUUID(),payment_id:payment.payment_id,customer:{customer_id:customer},status:'succeeded',is_partial:false},'2026-10-17T00:00:00Z');
+ await send('refund.succeeded',{payload_type:'Refund',refund_id:randomUUID(),payment_id:payment.payment_id,customer:{customer_id:customer},status:'succeeded',is_partial:false},at(4));
  assert.equal((await db.doc('users/'+subUid).get()).data()?.subscriptionTier,'free');
  const forged=await fetch('http://127.0.0.1:3001/api/webhooks/dodo',{method:'POST',headers:{'Content-Type':'application/json','webhook-id':randomUUID(),'webhook-timestamp':String(Math.floor(Date.now()/1000)),'webhook-signature':'v1,forged'},body:JSON.stringify({type:'payment.succeeded',data:payment})});assert.equal(forged.status,400);
  console.log('PASS signed webhook HTTP product mapping, scheduled cancellation, unrelated failure, full refund and forged signature rejection');

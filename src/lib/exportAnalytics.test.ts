@@ -8,6 +8,7 @@ import {
   qualifiesAsActivation,
   type ExportEventContext,
 } from './exportAnalytics';
+import { classifyExportFailure } from './exportFailure';
 
 const ctx: ExportEventContext = {
   exportId: 'export-1',
@@ -42,9 +43,12 @@ describe('export event builders', () => {
   });
 
   it('exportFailedEvent carries only the sanitized stage tag, never raw text', () => {
-    const event = exportFailedEvent(ctx, 'ffmpeg_exit');
+    const event = exportFailedEvent(ctx, classifyExportFailure(new Error('ffmpeg exited with code 1\n/Users/me/secret.mp4')));
     expect(event.name).toBe('export_failed');
-    expect(event.props?.stage).toBe('ffmpeg_exit');
+    expect(event.props?.stage).toBe('processing');
+    expect(event.props?.errorCode).toBe('encoder_failed');
+    expect(event.props?.retryable).toBe(true);
+    expect(JSON.stringify(event)).not.toContain('secret');
     // Every prop value must be a primitive from the allowlisted shape — no
     // nested objects/arrays, which is exactly what would happen if a raw
     // error object were passed through instead of a stage tag.
@@ -91,7 +95,7 @@ describe('export event builders', () => {
   });
 
   it('event sequence for a failed export never reaches render_completed or download_initiated', () => {
-    const sequence = [exportStartedEvent(ctx).name, exportFailedEvent(ctx, 'unknown').name];
+    const sequence = [exportStartedEvent(ctx).name, exportFailedEvent(ctx, classifyExportFailure('boom')).name];
     expect(sequence).toEqual(['export_started', 'export_failed']);
     expect(sequence).not.toContain('export_render_completed');
     expect(sequence).not.toContain('download_initiated');

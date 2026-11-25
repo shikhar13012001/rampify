@@ -256,6 +256,19 @@ describe('vercel.json security headers', () => {
     expect(byKey['Cross-Origin-Opener-Policy']).toBe('same-origin');
     expect(byKey['Cross-Origin-Embedder-Policy']).toBe('credentialless');
   });
+
+  it('Permissions-Policy disables powerful capabilities the app never requests', () => {
+    const config = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf-8'));
+    const headers = config.headers[0].headers as { key: string; value: string }[];
+    const policy = headers.find((h) => h.key === 'Permissions-Policy')?.value ?? '';
+    for (const feature of ['camera', 'microphone', 'geolocation', 'payment']) {
+      expect(policy).toContain(`${feature}=()`);
+    }
+    // Guard against locking out something the app really uses: if any of these
+    // APIs is ever adopted, this test must be updated together with the header.
+    const src = readFileSync(join(root, 'src', 'lib', 'browserCapabilities.ts'), 'utf-8') + readFileSync(join(root, 'src', 'main.tsx'), 'utf-8');
+    expect(src).not.toMatch(/getUserMedia|navigator\.geolocation|PaymentRequest/);
+  });
 });
 
 describe('FourKExportFeature — false format/resolution/frame-rate claims removed', () => {

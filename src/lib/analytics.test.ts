@@ -267,3 +267,308 @@ describe('trackEvent', () => {
     expect(() => trackEvent({ name: 'landing_view' })).not.toThrow();
   });
 });
+
+// ─── Phase 1A: identity, sessions, segmentation, duplicate suppression ───────
+
+describe('authenticated analytics — uid linkage (root cause of historical null uids)', () => {
+  type FetchCall = [string, RequestInit];
+  const bodies = (fetchMock: ReturnType<typeof vi.fn>) =>
+    (fetchMock.mock.calls as FetchCall[]).map(([, init]) => JSON.parse(init.body as string) as Record<string, unknown>);
+  const headersOf = (fetchMock: ReturnType<typeof vi.fn>, i: number) =>
+    ((fetchMock.mock.calls as FetchCall[])[i][1].headers ?? {}) as Record<string, string>;
+
+  async function setUser(getIdToken: () => Promise<string>, uid = 'user-1') {
+    const { useEditorStore } = await import('@/store/editorStore');
+    useEditorStore.setState({ user: { uid, email: null, displayName: null, photoURL: null, getIdToken } });
+    return useEditorStore;
+  }
+
+  beforeEach(async () => {
+    installBrowserGlobals({ pathname: '/editor' });
+    const { __resetIdentityForTests } = await import('./analytics');
+    __resetIdentityForTests();
+  });
+  afterEach(async () => {
+    const { useEditorStore } = await import('@/store/editorStore');
+    useEditorStore.setState({ user: null });
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    clearBrowserGlobals();
+  });
+
+  it('anonymous events are sent immediately with no Authorization header', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'editor_opened' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(headersOf(fetchMock, 0).Authorization).toBeUndefined();
+  });
+
+  it('signed-in events carry the Firebase ID token so the server can verify and record uid', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    await setUser(async () => 'id-token-abc');
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'export_started', exportId: 'exp-1' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(headersOf(fetchMock, 0).Authorization).toBe('Bearer id-token-abc');
+    expect(bodies(fetchMock)[0].exportId).toBe('exp-1');
+  });
+
+  it('falls back to an anonymous send when the token fetch rejects — the event is never lost', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    await setUser(async () => { throw new Error('auth/network-request-failed'); });
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'editor_opened' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(headersOf(fetchMock, 0).Authorization).toBeUndefined();
+  });
+
+  it('does not wait forever on a hung token fetch: sends anonymously after the wait budget', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    await setUser(() => new Promise<string>(() => { /* never settles */ }));
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'editor_opened' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(headersOf(fetchMock, 0).Authorization).toBeUndefined();
+  });
+
+  it('sends exactly once even if the token resolves right after the timeout', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    let resolveToken!: (t: string) => void;
+    await setUser(() => new Promise<string>((r) => { resolveToken = r; }));
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'editor_opened' });
+    await vi.advanceTimersByTimeAsync(2100);
+    resolveToken('late-token');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('attaches the shared properties, with a bounded route and closed-set labels', async () => {
+    installBrowserGlobals({ pathname: '/editor', search: '?curve=SECRET' });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const { trackEvent, ANALYTICS_EVENT_VERSION } = await import('./analytics');
+    trackEvent({ name: 'editor_opened' });
+    const body = bodies(fetchMock)[0];
+    expect(body.eventVersion).toBe(ANALYTICS_EVENT_VERSION);
+    expect(body.route).toBe('/editor');
+    expect(['production', 'staging', 'development']).toContain(body.environment);
+    expect(['customer', 'founder', 'development', 'staging']).toContain(body.trafficClass);
+    expect(['chrome', 'edge', 'firefox', 'safari', 'opera', 'other']).toContain(body.browserFamily);
+    expect(['mobile', 'tablet', 'desktop']).toContain(body.deviceClass);
+    expect(JSON.stringify(body)).not.toContain('SECRET');
+  });
+
+  it('flags non-customer traffic (here the dev/test runner) as a test session', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'editor_opened' });
+    const body = bodies(fetchMock)[0];
+    expect(body.trafficClass).not.toBe('customer');
+    expect(body.isTestSession).toBe(true);
+  });
+
+  it('suppresses a duplicate page_view fired twice in a row (StrictMode / re-render) but not a different page', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'page_view', props: { path: '/pricing' } });
+    trackEvent({ name: 'page_view', props: { path: '/pricing' } });
+    trackEvent({ name: 'page_view', props: { path: '/docs' } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('never suppresses export lifecycle events, even back-to-back with the same exportId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'export_started', exportId: 'e1' });
+    trackEvent({ name: 'export_started', exportId: 'e1' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the same session within the idle window and starts a new one after 30 minutes idle', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-23T10:00:00Z'));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const { trackEvent } = await import('./analytics');
+    trackEvent({ name: 'editor_opened' });
+    vi.setSystemTime(new Date('2026-11-23T10:20:00Z'));
+    trackEvent({ name: 'clip_loaded' });
+    vi.setSystemTime(new Date('2026-11-23T10:55:00Z')); // 35 min after the last event
+    trackEvent({ name: 'curve_changed' });
+    const [a, b, c] = bodies(fetchMock);
+    expect(b.sessionId).toBe(a.sessionId);
+    expect(c.sessionId).not.toBe(a.sessionId);
+    expect(c.anonId).toBe(a.anonId); // the anonymous identity itself is stable
+  });
+
+  describe('holding first-load events until Firebase reports who is signed in (expectAuthState)', () => {
+    it('REGRESSION: events fired before the session is restored are sent WITH the verified uid, not anonymously', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const { trackEvent, expectAuthState, notifyAuthState } = await import('./analytics');
+      expectAuthState();
+      // Fired on first render, BEFORE the persisted session is restored: store has no user yet.
+      trackEvent({ name: 'page_view', props: { path: '/editor' } });
+      trackEvent({ name: 'editor_opened' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      // Firebase then reports the user; App.tsx calls setUser() THEN notifyAuthState().
+      await setUser(async () => 'restored-token', 'user-1');
+      notifyAuthState('user-1');
+      await vi.waitFor(() => expect(fetchMock.mock.calls.filter(([, i]) => (i as RequestInit).headers && ((i as RequestInit).headers as Record<string, string>).Authorization === 'Bearer restored-token').length).toBeGreaterThanOrEqual(2));
+      const names = bodies(fetchMock).map((b) => b.name);
+      expect(names).toEqual(expect.arrayContaining(['page_view', 'editor_opened']));
+      for (const [i, [, init]] of (fetchMock.mock.calls as FetchCall[]).entries()) {
+        if (bodies(fetchMock)[i].name === 'identity_linked') continue;
+        expect((init.headers as Record<string, string>).Authorization, `${bodies(fetchMock)[i].name} lost its credential`).toBe('Bearer restored-token');
+      }
+    });
+
+    it('a visitor who turns out to be signed out gets their held events sent anonymously, in order', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const { trackEvent, expectAuthState, notifyAuthState } = await import('./analytics');
+      expectAuthState();
+      trackEvent({ name: 'landing_view' });
+      trackEvent({ name: 'page_view', props: { path: '/' } });
+      notifyAuthState(null);
+      expect(bodies(fetchMock).map((b) => b.name)).toEqual(['landing_view', 'page_view']);
+      expect(headersOf(fetchMock, 0).Authorization).toBeUndefined();
+    });
+
+    it('never holds events longer than the wait budget when auth never reports (Firebase down)', async () => {
+      vi.useFakeTimers();
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const { trackEvent, expectAuthState, AUTH_WAIT_MS } = await import('./analytics');
+      expectAuthState();
+      trackEvent({ name: 'landing_view' });
+      await vi.advanceTimersByTimeAsync(AUTH_WAIT_MS - 50);
+      expect(fetchMock).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // And afterwards events flow immediately again.
+      trackEvent({ name: 'editor_opened' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('flushes held events when the page is hidden so a quick bounce loses nothing', async () => {
+      const handlers: Record<string, () => void> = {};
+      (globalThis as unknown as { window: Record<string, unknown> }).window.addEventListener = (type: string, fn: () => void) => { handlers[type] = fn; };
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const { trackEvent, expectAuthState } = await import('./analytics');
+      expectAuthState();
+      trackEvent({ name: 'landing_view' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      handlers.pagehide();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not hold anything unless expectAuthState() was called (non-app contexts, tests)', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const { trackEvent } = await import('./analytics');
+      trackEvent({ name: 'landing_view' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('identity linking and rotation (notifyAuthState)', () => {
+    it('sends one server-verified identity_linked event when a user is first seen', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      await setUser(async () => 'tok');
+      const { notifyAuthState, getAnonId } = await import('./analytics');
+      const anon = getAnonId();
+      notifyAuthState('user-1');
+      notifyAuthState('user-1'); // repeated auth callback
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const body = bodies(fetchMock)[0];
+      expect(body.name).toBe('identity_linked');
+      expect(body.anonId).toBe(anon);
+      expect(headersOf(fetchMock, 0).Authorization).toBe('Bearer tok');
+    });
+
+    it('does not re-link the same browser identity + account on a later page load', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      await setUser(async () => 'tok');
+      const { notifyAuthState, __resetIdentityForTests } = await import('./analytics');
+      notifyAuthState('user-1');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      __resetIdentityForTests(); // simulates a fresh page load (module state gone, storage kept)
+      notifyAuthState('user-1');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing for a normal signed-out visitor', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const { notifyAuthState, getAnonId } = await import('./analytics');
+      const anon = getAnonId();
+      notifyAuthState(null);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(getAnonId()).toBe(anon);
+    });
+
+    it('rotates the anonymous identity and session on sign-out so a shared browser is never merged', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      await setUser(async () => 'tok');
+      const { notifyAuthState, getAnonId, getSessionId } = await import('./analytics');
+      const anonBefore = getAnonId();
+      const sessionBefore = getSessionId();
+      notifyAuthState('user-1');
+      const { useEditorStore } = await import('@/store/editorStore');
+      useEditorStore.setState({ user: null });
+      notifyAuthState(null);
+      expect(getAnonId()).not.toBe(anonBefore);
+      expect(getSessionId()).not.toBe(sessionBefore);
+    });
+
+    it('links the NEW account to the NEW identity when accounts switch', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      await setUser(async () => 'tok-a', 'user-a');
+      const { notifyAuthState } = await import('./analytics');
+      notifyAuthState('user-a');
+      await setUser(async () => 'tok-b', 'user-b');
+      notifyAuthState('user-b');
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      const [first, second] = bodies(fetchMock);
+      expect(second.anonId).not.toBe(first.anonId);
+      expect((fetchMock.mock.calls as FetchCall[])[1][1].headers).toMatchObject({ Authorization: 'Bearer tok-b' });
+    });
+
+    it('never throws into the auth listener, even with broken storage', async () => {
+      const broken: Storage = {
+        get length(): number { throw new Error('x'); },
+        clear(): void { throw new Error('x'); },
+        getItem(): string { throw new Error('x'); },
+        key(): string { throw new Error('x'); },
+        removeItem(): void { throw new Error('x'); },
+        setItem(): void { throw new Error('x'); },
+      };
+      (globalThis as unknown as { localStorage: Storage }).localStorage = broken;
+      (globalThis as unknown as { sessionStorage: Storage }).sessionStorage = broken;
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+      const { notifyAuthState } = await import('./analytics');
+      expect(() => { notifyAuthState('u'); notifyAuthState(null); }).not.toThrow();
+    });
+  });
+});

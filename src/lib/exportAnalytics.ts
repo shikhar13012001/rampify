@@ -6,7 +6,8 @@
  * event, then passes the result straight to trackEvent().
  */
 import type { PlanTier } from './planConfig';
-import type { AnalyticsEvent, ErrorStage } from './analytics';
+import type { AnalyticsEvent } from './analytics';
+import type { ExportFailure } from './exportFailure';
 
 export interface ExportEventContext {
   exportId: string;
@@ -20,6 +21,21 @@ export interface ExportEventContext {
    *  it false). Used by qualifiesAsActivation() below to exclude demo runs
    *  from own-clip activation counting. */
   isDemoClip: boolean;
+  /** Set when this attempt follows a failed one — links retries into one chain. */
+  retryOfExportId?: string | null;
+  /** 1-based attempt number within the retry chain. */
+  attempt?: number;
+  /** Bounded buckets only (see exportFailure.ts) — never exact size/duration. */
+  fileSizeBucket?: 'lt50' | '50_200' | '200_500' | 'gt500' | 'unknown';
+  durationBucket?: 'lt10' | '10_30' | '30_60' | '60_180' | 'gt180' | 'unknown';
+}
+
+/** Props every export_* event shares, so any one of them can be joined to its chain. */
+function chainProps(ctx: ExportEventContext) {
+  return {
+    ...(ctx.retryOfExportId ? { retryOfExportId: ctx.retryOfExportId } : {}),
+    ...(ctx.attempt && ctx.attempt > 1 ? { attempt: ctx.attempt } : {}),
+  };
 }
 
 export function exportStartedEvent(ctx: ExportEventContext): AnalyticsEvent {
@@ -32,6 +48,9 @@ export function exportStartedEvent(ctx: ExportEventContext): AnalyticsEvent {
       blurEnabled: ctx.blurEnabled,
       ofEnabled: ctx.ofEnabled,
       isDemoClip: ctx.isDemoClip,
+      ...(ctx.fileSizeBucket ? { fileSizeBucket: ctx.fileSizeBucket } : {}),
+      ...(ctx.durationBucket ? { durationBucket: ctx.durationBucket } : {}),
+      ...chainProps(ctx),
     },
   };
 }
@@ -54,11 +73,12 @@ export function exportRenderCompletedEvent(
       // validateRenderOutput) — never conflated with `false`, since a timeout
       // isn't evidence the output is bad, just that we couldn't confirm it.
       validated,
+      ...chainProps(ctx),
     },
   };
 }
 
-export function exportFailedEvent(ctx: ExportEventContext, stage: ErrorStage): AnalyticsEvent {
+export function exportFailedEvent(ctx: ExportEventContext, failure: ExportFailure): AnalyticsEvent {
   return {
     name: 'export_failed',
     exportId: ctx.exportId,
@@ -66,12 +86,25 @@ export function exportFailedEvent(ctx: ExportEventContext, stage: ErrorStage): A
       tier: ctx.tier,
       resolution: ctx.resolution,
       isDemoClip: ctx.isDemoClip,
-      stage,
+      // Closed-set values only — never the raw error text (see exportFailure.ts).
+      stage: failure.stage,
+      errorCode: failure.code,
+      retryable: failure.retryable,
+      ...chainProps(ctx),
     },
   };
 }
 
-export function exportCancelledEvent(ctx: ExportEventContext, elapsedMs: number): AnalyticsEvent {
+/**
+ * `reason: 'user'` = the Cancel button; `'abandoned'` = the modal was closed or
+ * the page left while a render was still running (previously this produced NO
+ * terminal event at all, leaving the attempt permanently unresolved).
+ */
+export function exportCancelledEvent(
+  ctx: ExportEventContext,
+  elapsedMs: number,
+  reason: 'user' | 'abandoned' = 'user',
+): AnalyticsEvent {
   return {
     name: 'export_cancelled',
     exportId: ctx.exportId,
@@ -80,17 +113,21 @@ export function exportCancelledEvent(ctx: ExportEventContext, elapsedMs: number)
       resolution: ctx.resolution,
       isDemoClip: ctx.isDemoClip,
       elapsedMs: Math.round(Math.max(0, elapsedMs)),
+      reason,
+      ...chainProps(ctx),
     },
   };
 }
 
-export function downloadInitiatedEvent(ctx: ExportEventContext): AnalyticsEvent {
+export function downloadInitiatedEvent(ctx: ExportEventContext, repeat = false): AnalyticsEvent {
   return {
     name: 'download_initiated',
     exportId: ctx.exportId,
     props: {
       tier: ctx.tier,
       isDemoClip: ctx.isDemoClip,
+      // A manual "Download again" on an already-downloaded export.
+      ...(repeat ? { repeat: true } : {}),
     },
   };
 }

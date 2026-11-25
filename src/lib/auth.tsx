@@ -94,6 +94,9 @@ export async function signInEmulatorTestUser(email: string, password: string): P
 if (import.meta.env.DEV && typeof window !== 'undefined' && window.__RAMPCUT_EMULATOR_TEST__ === true) {
   (window as unknown as { __rampcutTestSignIn?: typeof signInEmulatorTestUser }).__rampcutTestSignIn =
     signInEmulatorTestUser;
+  // Test-only, same gate: lets the identity integration test sign out without
+  // driving the account-menu UI (test/browser/identity.mjs).
+  (window as unknown as { __rampcutTestSignOut?: () => Promise<void> }).__rampcutTestSignOut = () => signOut();
 }
 
 export async function signOut(): Promise<void> {

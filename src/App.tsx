@@ -26,7 +26,7 @@ import { CurvesIndex } from '@/pages/CurvesIndex';
 import { CurvePage } from '@/pages/CurvePage';
 import { useEditorStore } from '@/store/editorStore';
 import { onAuthChange } from '@/lib/auth';
-import { trackEvent } from '@/lib/analytics';
+import { notifyAuthState, trackEvent } from '@/lib/analytics';
 import { auth, getFirebaseInitError } from '@/lib/firebase';
 import type { AuthUser } from '@/store/editorStore';
 
@@ -44,6 +44,8 @@ function App() {
     const initError = getFirebaseInitError();
     if (initError) {
       console.error('[Auth] Firebase init failed:', initError);
+      // No auth callback will ever come; release held analytics events now.
+      notifyAuthState(null);
       return;
     }
 
@@ -63,6 +65,9 @@ function App() {
           getIdToken:  () => firebaseUser.getIdToken(),
         };
         setUser(user);
+        // After setUser so the store already holds the user whose ID token the
+        // identity_linked event is authenticated with.
+        notifyAuthState(uid);
         void retryPendingExports();
         setAuthLoading(true);
         try {
@@ -103,6 +108,7 @@ function App() {
         }
       } else {
         setUser(null);
+        notifyAuthState(null);
         setIsPro(false);
         setAuthLoading(false);
       }

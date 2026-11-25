@@ -5,6 +5,7 @@
  * instead of failing on whichever one happens to be read first.
  */
 import { z } from 'zod';
+import { assertEnvironmentIsolation } from './_isolation.js';
 
 const ServerEnvSchema = z.object({
   DODO_PAYMENTS_API_KEY: z.string().min(1, 'DODO_PAYMENTS_API_KEY is required'),
@@ -22,6 +23,11 @@ const ServerEnvSchema = z.object({
   // the removed STRIPE_WEBHOOK_DEV_BYPASS.
   DODO_WEBHOOK_DEV_BYPASS: z.string().optional(),
   ALLOWED_ORIGINS: z.string().min(1, 'ALLOWED_ORIGINS is required'),
+  // The production Firebase project id, set identically on EVERY environment so a
+  // non-production deployment can recognise (and refuse) production credentials.
+  PRODUCTION_FIREBASE_PROJECT_ID: z.string().optional(),
+  // Comma-separated Firebase UIDs treated as founder/internal analytics traffic.
+  ANALYTICS_INTERNAL_UIDS: z.string().optional(),
   FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY: z.string().optional(), // falls back to api/keys/keys.json locally
 });
 
@@ -45,6 +51,12 @@ export function getServerEnv(): ServerEnv {
       .join('\n');
     throw new Error(`Invalid or missing environment variables:\n${issues}`);
   }
+
+  // Fails closed: live payments on a non-production deployment never start.
+  assertEnvironmentIsolation({
+    vercelEnv: process.env.VERCEL_ENV,
+    dodoEnvironment: result.data.DODO_PAYMENTS_ENVIRONMENT,
+  });
 
   cached = result.data;
   return cached;

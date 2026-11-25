@@ -1,0 +1,109 @@
+{
+  "source_archive": "rampify-full-export-2026-11-17T13-42-42-437Z.zip",
+  "analytics_events": 3126,
+  "null_uid": 3126,
+  "test_flag_values": {
+    "False": 3126
+  },
+  "fields_present": [
+    "acquisition",
+    "anonId",
+    "appVersion",
+    "capabilities",
+    "exportId",
+    "isTestSession",
+    "name",
+    "props",
+    "receivedAt",
+    "sessionId",
+    "source",
+    "timestamp",
+    "uid"
+  ],
+  "event_counts": {
+    "page_view": 1187,
+    "landing_view": 568,
+    "ui_error": 86,
+    "editor_opened": 305,
+    "curve_changed": 715,
+    "export_started": 42,
+    "clip_loaded": 139,
+    "export_render_completed": 14,
+    "export_cancelled": 9,
+    "export_failed": 16,
+    "signup_completed": 6,
+    "upgrade_viewed": 18,
+    "pwa_installed": 4,
+    "download_initiated": 16,
+    "curve_link_copied": 1
+  },
+  "export_lifecycle": {
+    "download_initiated": {
+      "events": 16,
+      "with_export_id": 16,
+      "unique_export_ids": 14,
+      "property_keys": [
+        "isDemoClip",
+        "tier"
+      ]
+    },
+    "export_cancelled": {
+      "events": 9,
+      "with_export_id": 9,
+      "unique_export_ids": 9,
+      "property_keys": [
+        "elapsedMs",
+        "isDemoClip",
+        "resolution",
+        "tier"
+      ]
+    },
+    "export_failed": {
+      "events": 16,
+      "with_export_id": 16,
+      "unique_export_ids": 16,
+      "property_keys": [
+        "isDemoClip",
+        "resolution",
+        "stage",
+        "tier"
+      ]
+    },
+    "export_render_completed": {
+      "events": 14,
+      "with_export_id": 14,
+      "unique_export_ids": 14,
+      "property_keys": [
+        "durationMs",
+        "isDemoClip",
+        "resolution",
+        "tier",
+        "validated"
+      ]
+    },
+    "export_started": {
+      "events": 42,
+      "with_export_id": 42,
+      "unique_export_ids": 42,
+      "property_keys": [
+        "blurEnabled",
+        "isDemoClip",
+        "ofEnabled",
+        "resolution",
+        "tier"
+      ]
+    },
+    "ui_error": {
+      "events": 86,
+      "with_export_id": 0,
+      "unique_export_ids": 0,
+      "property_keys": [
+        "stage"
+      ]
+    }
+  },
+  "failure_stages": {
+    "unknown": 9,
+    "worker_load": 7
+  }
+}

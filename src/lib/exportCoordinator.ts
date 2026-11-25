@@ -8,6 +8,7 @@ import { getPlanTier, checkExportAllowed, recordExport } from './exportLimits';
 import { buildTimeMap } from './renderPlan';
 import { resolveOutputSize } from './videoFilters';
 import type { ExportEngine, ExportProgressEvent } from './ExportEngine';
+import { ExportPreflightError } from './exportFailure';
 export type { ExportJob, ExportCheck };
 export interface ExportArtifact { ownerUid:string|null;id: string; blob: Blob; duration: number; width: number; height: number }
 export async function preflight(job: ExportJob): Promise<ExportCheck> {
@@ -38,7 +39,7 @@ export function createExportCoordinator(deps: {
     try {
       const snapshot = structuredClone(job);
       const check = await Promise.race([deps.check(snapshot), cancelled]);
-      if (!check.ok) throw new Error(check.message);
+      if (!check.ok) throw new ExportPreflightError(check.code, check.message);
       if((deps.owner?.()??null)!==ownerUid)throw new Error('Account changed during export checks. Start again with the current account.');
       if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       engine = deps.engine();

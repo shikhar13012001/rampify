@@ -1,4 +1,5 @@
 import {entitlementForUser} from './_billingState.js';
+import {enforceRateLimit,RATE_RULES} from './_rateLimit.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   initAdmin,
@@ -29,6 +30,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  if (await enforceRateLimit(adminDb(), res, RATE_RULES.recordExport, decoded.uid)) return;
 
   const body = (req.body ?? {}) as { exportId?: unknown };
   const exportId = typeof body.exportId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.exportId) ? body.exportId : null;

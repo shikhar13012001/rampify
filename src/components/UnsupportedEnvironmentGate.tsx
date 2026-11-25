@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { checkExportCapabilities, detectInAppBrowser, type InAppBrowserName } from '@/lib/browserCapabilities';
+import { checkExportCapabilities, describeUnsupportedBrowser, detectInAppBrowser, type InAppBrowserName } from '@/lib/browserCapabilities';
 
 const DISMISS_KEY = 'rampcut_inapp_banner_dismissed';
 
@@ -63,10 +63,8 @@ export function UnsupportedEnvironmentGate() {
         </h1>
         <p style={{ fontSize: 14, color: 'var(--color-text-muted)', maxWidth: 420, margin: 0, lineHeight: 1.5 }}>
           {inAppName && `You're viewing this inside ${inAppName}. `}
-          Rampcut processes video entirely on your device, which needs a full
-          browser — not an app's built-in browser view. Tap the <strong>•••</strong> or{' '}
-          <strong>share</strong> menu and choose <strong>"Open in Chrome"</strong> or{' '}
-          <strong>"Open in Safari"</strong>, or copy the link below.
+          Rampcut processes video entirely on your device, which needs browser features
+          that this one doesn't provide. {describeUnsupportedBrowser(navigator.userAgent).advice}
         </p>
         <button
           type="button"

@@ -72,7 +72,7 @@ export async function readVideoMetadata(file: File): Promise<VideoFile> {
       done = true;
       cleanup();
       URL.revokeObjectURL(url);
-      reject(new Error('Failed to read video metadata'));
+      reject(new Error("This video couldn't be read. The file may be damaged, or it uses a codec this browser can't decode. Try re-exporting it as an H.264 MP4, or choose a different file."));
     };
 
     const timeout = setTimeout(() => {
@@ -84,7 +84,7 @@ export async function readVideoMetadata(file: File): Promise<VideoFile> {
       done = true;
       cleanup();
       URL.revokeObjectURL(url);
-      reject(new Error('No video track could be decoded from this file.'));
+      reject(new Error('No video track could be decoded from this file. Try an H.264 MP4 or a WebM file, or choose a different video.'));
     }, 8000);
 
     video.addEventListener('loadedmetadata', onMetadata);

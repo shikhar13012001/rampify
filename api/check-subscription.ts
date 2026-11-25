@@ -1,4 +1,5 @@
 import {entitlementForUser,billingStateForUser} from './_billingState.js';
+import {enforceRateLimit,RATE_RULES} from './_rateLimit.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   initAdmin,
@@ -31,6 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const db = adminDb();
+  if (await enforceRateLimit(db, res, RATE_RULES.checkSubscription, decoded.uid)) return;
   const userDoc = await db.collection('users').doc(decoded.uid).get();
   const userData = userDoc.data() ?? {};
 

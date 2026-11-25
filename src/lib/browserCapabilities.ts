@@ -62,3 +62,52 @@ export function detectInAppBrowser(): InAppBrowserName | null {
 
   return null;
 }
+
+export type UnsupportedKind = 'apple-mobile' | 'safari' | 'in-app' | 'other';
+
+export interface UnsupportedAdvice {
+  kind: UnsupportedKind;
+  /** What to tell the user to do next - never a suggestion that fails the same check. */
+  advice: string;
+}
+
+/**
+ * Picks accurate next-step advice for a browser that FAILED the capability
+ * check. Found by the cross-browser matrix (test/browser/compat.mjs): WebKit
+ * is not cross-origin isolated (it does not implement COEP `credentialless`),
+ * so Safari fails this check too. The previous copy told every failing browser
+ * to "Open in Safari" - circular advice for exactly the people it affects.
+ * On iPhone/iPad every browser uses WebKit, so switching browser there does
+ * not help either.
+ * UA matching is best-effort; the message is advice, not a security control.
+ * Verified against Playwright's WebKit build; NOT yet on a physical iOS device.
+ */
+export function describeUnsupportedBrowser(userAgent: string): UnsupportedAdvice {
+  const ua = userAgent || '';
+  const inApp = /Instagram|FBAN|FBAV|FB_IAB|BytedanceWebview|musical_ly|TikTok|Snapchat|\bLine\//i.test(ua);
+  const appleMobile = /iPhone|iPad|iPod/.test(ua);
+  const safari = /Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Android/.test(ua);
+
+  if (appleMobile) {
+    return {
+      kind: 'apple-mobile',
+      advice: "iPhone and iPad browsers (Safari, and Chrome or Firefox on iOS, which use the same engine) can't run Rampcut yet. Open this link on a computer in Chrome, Edge or Firefox.",
+    };
+  }
+  if (inApp) {
+    return {
+      kind: 'in-app',
+      advice: 'Tap the ••• or share menu and choose "Open in Chrome" (or the main browser on your phone), or copy the link below and open it there. A computer with Chrome, Edge or Firefox works best.',
+    };
+  }
+  if (safari) {
+    return {
+      kind: 'safari',
+      advice: "Safari can't run Rampcut's on-device video engine yet. Open this link in Chrome, Edge or Firefox.",
+    };
+  }
+  return {
+    kind: 'other',
+    advice: 'Open this link in a current version of Chrome, Edge or Firefox.',
+  };
+}

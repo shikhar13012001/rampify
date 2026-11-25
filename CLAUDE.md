@@ -230,9 +230,97 @@ User manages/cancels from the account menu
 `UpgradeSuccess.tsx` handles this with the 30-second polling window (unchanged —
 this page is provider-agnostic, it only calls Rampcut's own `/api/check-subscription`).
 
-**Event ordering**: per Dodo's docs, `subscription.cancelled` can arrive before
-`subscription.active` under network delay. `api/webhooks/dodo.ts` doesn't currently
-guard against this — a real risk to test before trusting this in production.
+**Event ordering**: Dodo does not guarantee delivery order (`subscription.cancelled` can
+arrive before `subscription.active`). This is handled, not a risk: `normalizeBillingEvent`
+turns each event into a fact, `applyBillingFact` (`api/_billingLedger.ts`) stores it in a
+transaction, and `latestBillingFacts` (`api/_billingState.ts`) picks the winning fact per
+subscription by **billing-period revision, then event timestamp, then terminal-status rank** —
+never by arrival order. Entitlement is re-derived from all stored facts on every event and
+re-evaluated against `paidThrough` on every read. Proven by `test/billing/dodo-lifecycle.test.ts`
+(every delivery permutation of active / cancelled / on-hold / renewed / expired, duplicates,
+customer-mapping conflicts, sandbox outbox). Not yet exercised against real Dodo deliveries —
+do a test-mode checkout → cancel → portal run before enabling live mode.
+
+## Analytics (first-party)
+
+`src/lib/analytics.ts` → `POST /api/track-event` → `analytics_events` (Admin SDK only).
+- **Identity**: `trackEvent` attaches the Firebase ID token when signed in; the server
+  verifies it and stores `uid` + `authState` (`verified` / `anonymous` / `token_invalid`).
+  Never trust a client-sent uid. `notifyAuthState(uid)` (called from `App.tsx`) emits one
+  `identity_linked` event per (anonId, uid) and **rotates anonId + session on sign-out /
+  account switch** so a shared browser is never merged.
+- **Sessions**: per-tab, rotate after 30 min idle (`analyticsContext.ts`).
+- **Traffic class** (`customer` | `founder` | `development` | `staging`) is derived client-side
+  (hostname, `?rampcut_internal=1` persistent opt-in, `?rampcut_test=1`) and re-derived
+  server-side (`deriveServerTraffic`: `VERCEL_ENV`, emulator, `ANALYTICS_INTERNAL_UIDS`).
+  `isTestSession = trafficClass !== 'customer'`. Real funnels count `customer` only.
+  The Dodo payment mode is deliberately NOT an input — payment sandboxing is flagged on
+  `payment_succeeded` events themselves.
+- **Export lifecycle** (`exportAttempt.ts`): exactly one terminal event per `exportId`
+  (completed / failed / cancelled), including modal-close/page-hide (`reason: 'abandoned'`).
+  A retry after a failure gets a new `exportId` plus `retryOfExportId` and `attempt`.
+- **Failures** (`exportFailure.ts`): one classifier drives both the user message and the
+  event (`stage`, `errorCode`, `retryable`). Add a row to its test table for any new failure.
+- **Errors**: `globalErrors.ts` reports uncaught errors/rejections as `ui_error`
+  (error class only, ≤5 per page load). No third-party monitor is installed.
+- New props must be added to BOTH `src/lib/analytics.ts` types and the strict server schema
+  in `api/_analyticsEvents.ts`, or the server will reject the event.
+
+## Three environments, kept apart (Phase 1F.1)
+
+| | Local | Preview | Production |
+|---|---|---|---|
+| Firebase | emulators (`GCLOUD_PROJECT=demo-…`) or `rampify-preview` | `rampify-preview` | `rampify-720b4` |
+| Dodo | **test_mode** only | **test_mode** only | live (when approved) |
+| Where config lives | `.env.local` (git-ignored) | Vercel **Preview** scope, staged from `.env.preview.values` | Vercel **Production** scope |
+
+- **Enforced in code** (`api/_isolation.ts`): `live_mode` and the production Firebase project's Admin credential are
+  refused everywhere except the Vercel production deployment — preview, `vercel dev` and **plain local runs**. The
+  production project id is also built in (`KNOWN_PRODUCTION_FIREBASE_PROJECT_IDS`). Emulator runs are unaffected.
+- `api/keys/keys.json` is the PRODUCTION Admin key (the local fallback for the API). It is git-ignored and the guard
+  stops the API from using it locally; `scripts/export-analytics-events.mjs` still reads it (owner tooling).
+- Secrets never go through chat/echo: `scripts/set-preview-value.ts` (hidden prompt) writes `.env.preview.values`
+  (git-ignored; `.gitignore` ignores `.env` and `.env.*` except `.env.example`). `scripts/push-preview-env.ts` pushes
+  only allowlisted names to the Preview scope, after the preflight rules pass. Check local config with
+  `npx tsx scripts/preview-preflight.ts .env.local --target=local`.
+
+## Preview / production safety (Phase 1E)
+
+- **Isolation guards** (`api/_isolation.ts`): a non-production deployment refuses to start with
+  `DODO_PAYMENTS_ENVIRONMENT=live_mode` or with the production Firebase project's Admin credential.
+  Needs `PRODUCTION_FIREBASE_PROJECT_ID` set to the same value on **every** Vercel environment.
+  Scope every other secret per environment — Vercel defaults to "All Environments".
+- **Before any preview deploy**: `vercel env pull .env.preview --environment=preview` then
+  `npx tsx scripts/preview-preflight.ts .env.preview --target=preview` (prints verdicts, never values).
+  It also catches a production-first `ALLOWED_ORIGINS` (checkout falls back to the first entry, so a
+  preview test payment would redirect to production).
+- **Rate limits** (`api/_rateLimit.ts`): per-user on checkout/portal/record-export/check-subscription,
+  per-IP (HMAC key, raw IP never stored) on analytics; fails open; app-level abuse bounds only — add a
+  Vercel Firewall rule for volumetric protection. Add Firestore TTL policies on `expiresAt` for
+  `rate_limits` and `analytics_limits`.
+- **Dodo test-mode**: `docs/rampify/DODO_TEST_MODE_RUNBOOK.md`; `scripts/replay-test-webhooks.ts`
+  (dry-run by default; refuses production hosts and live mode).
+- **CSP** ships as `Content-Security-Policy-Report-Only`. `test/browser/csp.mjs` enforces the same
+  string on the real app. Enforce only after a preview shows no report-only violations through Google
+  sign-in, upgrade and captions. Workers take CSP from their own response (FFmpeg WASM compiles in one).
+- **Browser support** (verified, Windows headless): Chromium and Firefox export; WebKit/Safari/iOS cannot
+  cross-origin isolate and are blocked with an explanation. Clips are limited to 30 s. Details in
+  `docs/rampify/BROWSER_SUPPORT.md`.
+- **Real-browser harness** `node test/browser/run.mjs` (local emulators, ~10 min). Focused stages:
+  `--identity-only`, `--media-edge-only`, `--compat-only`, `--csp-only`, `--jobs-only`, `--billing-only`.
+  Needs `ffmpeg`/`ffprobe` on PATH, Java (or `RAMPCUT_JAVA`), the Firestore emulator jar
+  (`RAMPCUT_FIRESTORE_EMULATOR_JAR`), and Playwright (Firefox/WebKit via the Playwright driver's
+  `install firefox webkit`).
+- **CI**: `.github/workflows/ci.yml` (created locally, never run on GitHub; commit/push needs approval).
+  Tests need a system `ffmpeg`. `test/security/import-case.test.ts` guards Linux case-sensitivity.
+- Shell gotcha in this environment: avoid backslash escapes in inline Python; `\\` can be collapsed. Build
+  special bytes from codes or write files with the Write tool.
+
+## Windows test note
+
+Run `npx vitest run` / `npm test` from **PowerShell or cmd**. Git Bash's lowercase `/d/...`
+working directory makes every test file fail with "Vitest failed to find the current suite".
+`npm run verify` runs typecheck + lint + tests (the SEO tests run a real production build).
 
 ## Firestore schema
 

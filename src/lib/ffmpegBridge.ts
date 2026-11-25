@@ -2,6 +2,7 @@ import { curveToFFmpegFilter, getSpeedAtTime, interpolateSpeed, remapTime } from
 import { extractFrames } from './frameExtractor';
 import { getBlurIntensity, getTransitionFrameCount } from './blurMath';
 import { abortable } from './abortable';
+import { workerErrorMessage } from './workerError';
 import { processOutputTimeline, disposeWorker } from './slowMotionPipeline';
 import { buildColorFilter, buildCropFilter, resolveOutputSize, buildSubtitlesFilter } from './videoFilters';
 import { buildTimeMap } from './renderPlan';
@@ -408,9 +409,10 @@ export class FFmpegBridge {
     const { colorFilter, cropFilter } = resolvePostFilters(colorSettings, cropSettings, resolution, file);
     const { captionsSrt, subtitlesFilter } = resolveCaptions(captionSettings, captionCues, project);
 
-    this.worker.onmessage = (event) => this.handleMessage(event.data);
+    let heardFromWorker = false;
+    this.worker.onmessage = (event) => { heardFromWorker = true; this.handleMessage(event.data); };
     this.worker.onerror = (event) => {
-      callbacks.onError(event.message ?? 'Worker error');
+      callbacks.onError(workerErrorMessage(event, heardFromWorker));
       this.resetCallbacks();
     };
 
@@ -490,9 +492,10 @@ export class FFmpegBridge {
     video.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none';
     video.src=file.url;video.muted=true;video.preload='auto';document.body.appendChild(video);
     const worker=createWorker();this.ofFfmpegWorker=worker;
+    let heardFromWorker=false;
     const rpc=(message:object,transfer:Transferable[]=[])=>abortable(new Promise<Record<string,unknown>>((resolve,reject)=>{
-      worker.onmessage=event=>{if(event.data.type==='error')reject(new Error(event.data.message));else if(['chunkDone','done'].includes(event.data.type))resolve(event.data);};
-      worker.onerror=event=>reject(new Error(event.message));worker.postMessage(message,transfer);
+      worker.onmessage=event=>{heardFromWorker=true;if(event.data.type==='error')reject(new Error(event.data.message));else if(['chunkDone','done'].includes(event.data.type))resolve(event.data);};
+      worker.onerror=event=>reject(new Error(workerErrorMessage(event,heardFromWorker)));worker.postMessage(message,transfer);
     }),signal);
     let frames:FrameFile[]=[],chunk=0;
     const flush=async()=>{if(!frames.length)return;const batch=frames;frames=[];await rpc({type:'aiChunk',frames:batch,index:chunk++,crf:ofSettings.quality==='ultra'?18:ofSettings.quality==='quality'?23:26},batch.map(f=>f.data.buffer as ArrayBuffer));};
@@ -635,8 +638,10 @@ export class FFmpegBridge {
     // Collect transferable ArrayBuffers so the postMessage doesn't copy the JPEG bytes.
     const transferables: ArrayBuffer[] = blurFrames.map((bf) => bf.data.buffer as ArrayBuffer);
 
+    let heardFromBlurWorker = false;
     const blob = await abortable(new Promise<Blob>((resolve, reject) => {
       worker.onmessage = (e) => {
+        heardFromBlurWorker = true;
         const data = e.data as Record<string, unknown>;
 
         if (data.type === 'progress') {
@@ -658,7 +663,7 @@ export class FFmpegBridge {
         }
       };
 
-      worker.onerror = (ev) => reject(new Error(ev.message ?? 'Worker error'));
+      worker.onerror = (ev) => reject(new Error(workerErrorMessage(ev, heardFromBlurWorker)));
 
       worker.postMessage(
         {
@@ -781,8 +786,10 @@ export class FFmpegBridge {
       this.concatWorker=worker;
       const transferables = parts.map((p) => p.data.buffer as ArrayBuffer);
 
+      let heardFromConcatWorker = false;
       const finalBlob = await abortable(new Promise<Blob>((resolve, reject) => {
         worker.onmessage = (e) => {
+          heardFromConcatWorker = true;
           const data = e.data as Record<string, unknown>;
           if (data.type === 'done') {
             resolve(new Blob([data.buffer as ArrayBuffer], { type: 'video/mp4' }));
@@ -790,7 +797,7 @@ export class FFmpegBridge {
             reject(new Error(data.message as string));
           }
         };
-        worker.onerror = (ev) => reject(new Error(ev.message ?? 'Worker error'));
+        worker.onerror = (ev) => reject(new Error(workerErrorMessage(ev, heardFromConcatWorker)));
         worker.postMessage({ type: 'concat', parts, canvas:resolveOutputSize(clips[0].file,resolution??'1080p',clips[0].settings?.cropSettings??cropSettings??{enabled:false,preset:'original'}),outputName: 'output.mp4', returnMode: 'buffer' }, transferables);
       }),this.lifecycle.signal).finally(() => {worker.terminate();this.concatWorker=null;});
 

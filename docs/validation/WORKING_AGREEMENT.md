@@ -7,7 +7,7 @@
 
 ## 1. Preserve the existing stack and user changes
 
-- No framework rewrite, no migration, no replacing React/Vite/Firebase/Stripe with
+- No framework rewrite, no migration, no replacing React/Vite/Firebase/Dodo Payments with
   alternatives. The sprint validates the product as built.
 - Do not revert, "clean up", or overwrite uncommitted user work without investigating
   it first. If you find unfamiliar committed or uncommitted state, read it and report
@@ -30,7 +30,7 @@
 ## 3. Reuse existing dependencies and services
 
 - Before adding any package or service, check whether an existing dependency
-  (Stripe, Firebase, ffmpeg.wasm, ONNX Runtime, vitest) or an existing but unwired
+  (Dodo Payments, Firebase, ffmpeg.wasm, ONNX Runtime, vitest) or an existing but unwired
   module in this repo (e.g. `planConfig.ts`, `exportQuota.ts` — see STATUS.md) already
   covers the need before writing something new.
 - New dependencies require justification in the task report and explicit user
@@ -44,8 +44,8 @@ was already given is not sufficient:
 
 - `git commit`, `git push`, branch creation/deletion, or history rewriting.
 - Deploying (including `vercel deploy` / CI-triggered deploys).
-- Charging customers, refunding, or modifying Stripe configuration (prices,
-  webhooks, coupons) in live mode.
+- Charging customers, refunding, or modifying Dodo Payments configuration (products,
+  webhooks, discounts) in live mode.
 - Sending outreach: emails, support replies, social posts, changelog announcements.
 - Changing production data: Firestore documents, user records, export logs.
 - Modifying CI/CD pipelines or shared infrastructure.
@@ -59,17 +59,18 @@ having already happened unless it is actually visible in this conversation.
 
 ## 5. Test environments for billing and destructive operations
 
-- All Stripe work happens in test mode (test keys, `stripe listen` forwarding,
-  card 4242 4242 4242 4242) unless the user explicitly requests live-mode work.
+- All Dodo Payments work happens in test mode (`DODO_PAYMENTS_ENVIRONMENT=test_mode`,
+  test API key, Dodo Dashboard "Send test event" against the `vercel dev` tunnel,
+  Dodo's sandbox test payment methods) unless the user explicitly requests live-mode work.
 - Destructive operations (deleting test data, resetting Firestore collections)
   happen only in a Firebase test/emulator project, never in the production
   project, and only after the user confirms the target.
-- `STRIPE_WEBHOOK_DEV_BYPASS` stays out of production/preview environments.
+- `DODO_WEBHOOK_DEV_BYPASS` stays out of production/preview environments.
 
 ## 6. No secrets exposure; no invented testimonials, metrics, or test results
 
-- Never print, copy, or commit secrets (.env files, service account JSON, Stripe
-  keys). Reference them by name only.
+- Never print, copy, or commit secrets (.env files, service account JSON, Dodo Payments
+  API/webhook keys). Reference them by name only.
 - Never fabricate social proof, performance numbers, user counts, test results, or
   claims that a decision was "approved" or a change was "implemented" without it
   being directly verifiable in the actual code or in this conversation.

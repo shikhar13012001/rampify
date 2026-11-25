@@ -8,6 +8,7 @@ import {
   handlePreflight,
   applyCors,
 } from './_adminInit.js';
+import { enforceRateLimit, RATE_RULES } from './_rateLimit.js';
 
 /**
  * Generates a Dodo Customer Portal session URL so a signed-in Pro user can
@@ -39,6 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const db = adminDb();
+  if (await enforceRateLimit(db, res, RATE_RULES.portal, decoded.uid)) return;
   const userDoc = await db.collection('users').doc(decoded.uid).get();
   const dodoCustomerId = userDoc.data()?.dodoCustomerId as string | undefined;
 

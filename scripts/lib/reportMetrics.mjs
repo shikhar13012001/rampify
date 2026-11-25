@@ -380,3 +380,127 @@ export function splitBranded(rows, brandTerms = DEFAULT_BRAND_TERMS) {
   }
   return { branded, nonBranded };
 }
+
+// ─── Export attempt outcomes (ANALYTICS_CONTRACT.md "Export lifecycle") ─────
+// Groups events by exportId and reports each attempt's TERMINAL outcome
+// separately: completed / failed / cancelled — plus the two states that make a
+// naive "success rate" lie: unresolved (started long ago, no terminal event)
+// and conflicting (more than one distinct terminal outcome). Attempts still
+// inside the maturity window are in-flight, not failures.
+
+const TERMINAL_EVENTS = {
+  export_render_completed: 'completed',
+  export_failed: 'failed',
+  export_cancelled: 'cancelled',
+};
+
+/**
+ * @param {object[]} events analytics_events documents
+ * @param {{ now?: number, matureAfterMs?: number }} [options]
+ */
+export function computeExportAttemptOutcomes(events, options = {}) {
+  const now = options.now ?? Date.now();
+  const matureAfterMs = options.matureAfterMs ?? 30 * 60 * 1000;
+  const attempts = new Map();
+  let withoutExportId = 0;
+
+  for (const event of events ?? []) {
+    if (!isQualifiedEvent(event)) continue;
+    const isStart = event.name === 'export_started';
+    const terminal = TERMINAL_EVENTS[event.name];
+    if (!isStart && !terminal) continue;
+    if (!event.exportId) {
+      withoutExportId += 1;
+      continue;
+    }
+    const at = toMillis(event.timestamp);
+    const attempt = attempts.get(event.exportId) ?? {
+      startedAt: null, terminals: new Set(), failure: null, abandoned: false, retryOf: null, isDemoClip: false,
+    };
+    if (isStart) {
+      if (at !== null) attempt.startedAt = attempt.startedAt === null ? at : Math.min(attempt.startedAt, at);
+      attempt.retryOf = event.props?.retryOfExportId ?? attempt.retryOf;
+      attempt.isDemoClip = event.props?.isDemoClip === true;
+    } else {
+      attempt.terminals.add(terminal);
+      if (event.name === 'export_failed') {
+        // Legacy (pre-Phase-1) failures carry only `stage`; flag them so they aren't mistaken for new codes.
+        attempt.failure = `${event.props?.stage ?? 'unknown'}/${event.props?.errorCode ?? '(legacy: no code)'}`;
+      }
+      if (event.name === 'export_cancelled' && event.props?.reason === 'abandoned') attempt.abandoned = true;
+    }
+    attempts.set(event.exportId, attempt);
+  }
+
+  const result = {
+    attempts: 0, completed: 0, failed: 0, cancelled: 0, cancelledAbandoned: 0,
+    conflicting: 0, unresolved: 0, inFlight: 0, terminalWithoutStart: 0, retries: 0,
+    // Denominator is stated explicitly (small cohorts: counts first, ratio second).
+    completedOfTerminal: { completed: 0, denominator: 0 },
+    failuresByCause: {}, withoutExportId,
+  };
+
+  for (const attempt of attempts.values()) {
+    if (attempt.startedAt === null) {
+      result.terminalWithoutStart += 1;
+      continue;
+    }
+    result.attempts += 1;
+    if (attempt.retryOf) result.retries += 1;
+    const outcomes = [...attempt.terminals];
+    if (outcomes.length > 1) {
+      result.conflicting += 1;
+    } else if (outcomes.length === 0) {
+      if (now - attempt.startedAt >= matureAfterMs) result.unresolved += 1;
+      else result.inFlight += 1;
+    } else {
+      const outcome = outcomes[0];
+      result[outcome] += 1;
+      if (outcome === 'cancelled' && attempt.abandoned) result.cancelledAbandoned += 1;
+      if (outcome === 'failed') {
+        const cause = attempt.failure ?? 'unknown/(none)';
+        result.failuresByCause[cause] = (result.failuresByCause[cause] ?? 0) + 1;
+      }
+    }
+  }
+  result.completedOfTerminal = {
+    completed: result.completed,
+    denominator: result.completed + result.failed + result.cancelled,
+  };
+  return result;
+}
+
+// ─── Identity coverage ("did uid linkage start working?") ──────────────────
+// Splits events by how their identity was established. `authState` only exists
+// on events recorded after the Phase 1 identity fix; older events are counted
+// as `legacy` and can never be retro-attributed (see METRICS.md).
+
+export function computeIdentityCoverage(events) {
+  const counts = { verified: 0, anonymous: 0, token_invalid: 0, legacy: 0 };
+  const identifiedAnon = new Set();
+  const allAnon = new Set();
+  let withUidLegacy = 0;
+  for (const event of events ?? []) {
+    if (!isQualifiedEvent(event)) continue;
+    const state = event.authState;
+    if (state === 'verified' || state === 'anonymous' || state === 'token_invalid') counts[state] += 1;
+    else {
+      counts.legacy += 1;
+      if (event.uid) withUidLegacy += 1;
+    }
+    if (event.anonId) {
+      allAnon.add(event.anonId);
+      if (event.uid) identifiedAnon.add(event.anonId);
+    }
+  }
+  const eligible = counts.verified + counts.token_invalid; // signed-in clients
+  return {
+    ...counts,
+    // token_invalid means a signed-in client whose token the server rejected —
+    // the thing to alert on; it should stay near zero.
+    signedInEventsWithVerifiedUid: { verified: counts.verified, denominator: eligible },
+    legacyEventsWithUid: withUidLegacy,
+    anonIdsSeen: allAnon.size,
+    anonIdsLinkedToUid: identifiedAnon.size,
+  };
+}

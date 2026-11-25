@@ -11,6 +11,7 @@ import { join } from 'path';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import DodoPayments from 'dodopayments';
 import { getServerEnv } from './_env.js';
+import { assertEnvironmentIsolation } from './_isolation.js';
 
 // vercel dev sets VERCEL but VERCEL_ENV === 'development', so we must only
 // skip .env.local loading in real production/preview deployments.
@@ -73,6 +74,14 @@ export function initAdmin() {
       }
     }
 
+    // Refuse to run a preview/dev deployment against the production Firebase project.
+    const result = assertEnvironmentIsolation({
+      vercelEnv: process.env.VERCEL_ENV,
+      firebaseProjectId: (serviceAccount as { project_id?: string }).project_id ?? null,
+      productionFirebaseProjectId: process.env.PRODUCTION_FIREBASE_PROJECT_ID ?? null,
+    });
+    for (const warning of result.warnings) console.warn(`[isolation] ${warning}`);
+
     initializeApp({ credential: cert(serviceAccount as Parameters<typeof cert>[0]) });
   }
 }
@@ -110,8 +119,12 @@ export const PRO_EXPORT_REMAINING = 999;
 
 /**
  * Resolve the allowed origin for Dodo Checkout return URLs and CORS.
- * Allowlist: ALLOWED_ORIGINS env (comma-separated), VERCEL_URL, localhost dev.
- * Falls back to the first ALLOWED_ORIGINS entry if the request origin is not allowed.
+ * Allowlist: ALLOWED_ORIGINS env (comma-separated), VERCEL_URL and VERCEL_BRANCH_URL
+ * (this deployment's own hostnames), localhost dev.
+ * Falls back to the first ALLOWED_ORIGINS entry if the request origin is not allowed -
+ * EXCEPT on a Vercel preview, where it falls back to the deployment itself. Otherwise a
+ * preview reached through a hostname that is not listed (e.g. a branch alias) would send a
+ * test payer back to whatever ALLOWED_ORIGINS lists first, which is normally production.
  */
 export function resolveAllowedOrigin(reqOrigin: string | undefined): string | null {
   const allowed = new Set<string>();
@@ -121,9 +134,13 @@ export function resolveAllowedOrigin(reqOrigin: string | undefined): string | nu
     .filter(Boolean);
   for (const o of envList) allowed.add(o);
   if (process.env.VERCEL_URL) allowed.add(`https://${process.env.VERCEL_URL}`);
+  if (process.env.VERCEL_BRANCH_URL) allowed.add(`https://${process.env.VERCEL_BRANCH_URL}`);
   allowed.add('http://localhost:5173');
   allowed.add('http://localhost:3000');
   if (reqOrigin && allowed.has(reqOrigin)) return reqOrigin;
+  if (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
   if (envList[0]) {
     if (reqOrigin && !allowed.has(reqOrigin)) {
       console.warn('[origin] request origin not in allowlist, falling back:', reqOrigin);

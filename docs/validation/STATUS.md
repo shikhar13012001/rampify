@@ -2931,3 +2931,183 @@ Commit groups:2e860cd (audited billing, inventory, export/analytics accounting a
 Manual verification: inspect the three new commits on origin/main and compare its SHA to local HEAD. The existing live deployment is https://rampcut.astralbuild.dev; this Git handoff does not claim a new manual deployment. For rollback, review and revert the relevant commit groups in reverse order rather than resetting shared history; an app rollback remains the retained Ready deployment described above. Existing intermittent-recovery, commercial/security/device/license limitations remain unchanged and documented.
 
 The final staged whitespace check caught a trailing blank line in the implementation plan; it was removed before the documentation commit. No source behavior changed.
+
+## 2026-11-23 Stripe → Dodo Payments audit and doc cleanup
+
+Request: "replace stripe with dodo payments". Audit finding: the code migration was already complete and committed (see the retroactive correction under "Implementation status"). `package.json` has `dodopayments` and no `stripe`; billing runs through `api/create-checkout-session.ts`, `api/webhooks/dodo.ts`, `api/customer-portal.ts`, `api/check-subscription.ts`. A case-insensitive search of `api/`, `src/`, `test/`, `scripts/`, config and `.env.example` finds no functional Stripe code — only three explanatory comments (`api/_env.ts`, `api/create-checkout-session.ts`, `api/customer-portal.ts`), a CSS "accent stripe" comment, and the historical `stripe_events` line in `src/pages/Changelog.tsx` (left as-is: it records what the shipped 2.x release actually did).
+
+Changed in this task (documentation/reference only, no application behavior): `docs/validation/WORKING_AGREEMENT.md` (§1, §3, §4, §5, §6 — test-mode rules now Dodo: `DODO_PAYMENTS_ENVIRONMENT=test_mode`, `DODO_WEBHOOK_DEV_BYPASS`, no `stripe listen`/4242 card), `CLAUDE_PROMPT.md`, `ACCEPTANCE_TESTS.md`, `IMPLEMENTATION_PLAN.md`, `DESIGN.md`, `READINESS_CHECKLIST.md` (secret names, doc links, live-activation wording), `.env copy.example` (Dodo env var names). Deliberately left: `BUILD_PLAN_PHASE2.md` (historical Phase 2 session prompts that describe the original Stripe build), the "former Stripe processor / sandbox records" historical statements in `READINESS_CHECKLIST.md`, `README copy.md`, `CLAUDE_PROMPT.md`, and the migration notes in this file.
+
+Verification (PowerShell, `D:\claude-work\rampify\rampify`): `npx tsc -p tsconfig.api.json --noEmit` exit 0; `npx tsc -p tsconfig.app.json --noEmit` exit 0; `npx vitest run` 49 files / 398 tests PASS. Tooling note: running vitest from Git Bash (`cd /d/...`, lowercase `d:` path) makes every file fail with "Vitest failed to find the current suite" (duplicate module instances from drive-letter case); run it from PowerShell/cmd instead.
+
+Not verified: no live or test-mode Dodo API call, checkout, or webhook delivery was made in this task, so end-to-end Dodo behavior (including the documented `subscription.cancelled`-before-`subscription.active` ordering risk) is unchanged from what `docs/validation/BILLING.md` records. No commit, push, deploy, or production-data change. Rollback: `git checkout -- docs/validation/WORKING_AGREEMENT.md DESIGN.md` (and drop this STATUS.md section); the `.env copy.example`, `CLAUDE_PROMPT.md`, `ACCEPTANCE_TESTS.md`, `IMPLEMENTATION_PLAN.md`, `READINESS_CHECKLIST.md` files are untracked, so revert those by hand).
+
+## 2026-11-23 Phase 1 — analytics identity, export reliability, Dodo lifecycle proof, security hardening (local only)
+
+Authorization: explicit "begin executing" for implementation; NOT authorized and NOT done: deploy, commit/push, live Dodo, production Firestore access, emails. No production data was read or written. Everything below is in the working tree.
+
+### Root causes found (verified in code, not assumed)
+1. **uid null in all 3,126 events**: `trackEvent` put `uid` in the body but never sent an `Authorization` header; `api/track-event.ts` only trusts a verified token. Fixed (client sends the Firebase ID token; server stores verified uid + `authState`).
+2. **isTestSession always false / wrong**: client set it only for `import.meta.env.DEV` or a query flag; the server ALSO forced it true whenever `DODO_PAYMENTS_ENVIRONMENT=test_mode`, which would have hidden all real production traffic while Dodo is in test mode. Replaced by `trafficClass` (customer/founder/development/staging); Dodo mode removed as an input. **This is a behaviour change — see risks.**
+3. **Unresolved export attempts**: closing the modal / leaving the page mid-render aborted the work but emitted no terminal event; a late failure after cancel could write a conflicting second terminal. Fixed with `exportAttempt.ts` (single terminal outcome per exportId, `reason: 'abandoned'`).
+4. **`unknown` export failures with an empty "Technical details"**: `ErrorEvent.message` is `''` (not null) when a worker dies without a JS error (WASM OOM); `ev.message ?? 'Worker error'` produced `Error('')`. Fixed at 7 sites via `workerError.ts`; the new classifier maps ~28 real pipeline error strings to stage/code/retryable plus a user-facing next step.
+5. **CLAUDE.md "known issue" (cancelled before active) was stale**: the ledger already orders by billing-period revision → event timestamp → terminal rank, never arrival order. Proven by tests (below) and mutation-checked (a last-delivery-wins mutation fails 3 tests). CLAUDE.md corrected.
+6. **Pre-existing time bomb**: `test/browser/billing.ts` hard-coded `next_billing_date: 2026-11-01`; on 2026-11-23 the harness failed because the server (correctly) reported the lapsed subscription as free. Fixture dates are now relative to `Date.now()`.
+
+### Changed files
+Modified: `src/lib/analytics.ts`, `src/lib/exportAnalytics.ts`, `src/lib/exportCoordinator.ts`, `src/lib/ffmpegBridge.ts`, `src/lib/LocalWasmEngine.ts`, `src/lib/slowMotionPipeline.ts`, `src/features/export/ExportModal.tsx`, `src/App.tsx`, `src/main.tsx`, `api/_analyticsEvents.ts`, `api/_analyticsBudget.ts`, `api/track-event.ts`, `vercel.json` (Permissions-Policy), `package.json` (`typecheck`, `verify` scripts), `.env.example` (`ANALYTICS_INTERNAL_UIDS`), `scripts/lib/reportMetrics.mjs`, `CLAUDE.md`, `docs/validation/METRICS.md`, `READINESS_CHECKLIST.md` (annotated), `test/browser/billing.ts`, `test/seo/prerendered-routes.test.ts`, `src/lib/analytics.test.ts`, `src/lib/exportAnalytics.test.ts`.
+New: `src/lib/analyticsContext.ts`, `exportFailure.ts`, `exportAttempt.ts`, `workerError.ts`, `globalErrors.ts` (+ a `.test.ts` each), `api/_analyticsIngest.test.ts`, `test/analytics-contract.test.ts`, `test/billing/{fakeFirestore.ts,dodo-lifecycle.test.ts,export-quota-api.test.ts,webhook-security.test.ts}`, `test/reporting/exportOutcomes.test.ts`, `test/security/firestore-rules.test.ts`, `scripts/report-export-health.mjs`, `docs/rampify/ci.workflow.proposed.yml` (NOT active).
+
+### Tests (PowerShell, `D:\claude-work\rampify\rampify`)
+- `npm run typecheck` (app + API): exit 0. `npm run lint`: exit 0.
+- `npx vitest run`: **61 files / 601 tests PASS** (baseline before this task: 49 / 398). Includes the real production build and prerender/SEO assertions.
+- `node test/browser/run.mjs` (local Firebase emulators, `demo-` project, Dodo test mode, isolated app build): **exit 0**. PASS: real Firestore billing replay / one-payment dedupe / seat-cap concurrency; signed-webhook HTTP lifecycle incl. forged-signature rejection; durable analytics budget; emulator export accounting; emulator rules; **guest, signed-in and trimmed real-browser exports, each downloaded and fully decoded**; UI variant queue, sequential downloads, mobile account menus, source relink and recovered export. The first attempt FAILED (item 6 above), was fixed, and re-ran twice with exit 0. The only HTTP >=400 responses in the final run were the local 404 for `/_vercel/insights/script.js` and the Auth emulator's `signInWithPassword` 400 (harness account flow); **no `/api/*` error responses**.
+- Mutation checks (temporary, reverted, `git diff` clean afterwards): ordering logic changed to "last delivery wins" fails 3 lifecycle tests; removing `errorCode` from the server schema fails 3 contract tests.
+- New coverage: identity transitions and uid linkage, session idle rotation, duplicate gate, traffic classification (client + server), attempt single-terminal / abandon / retry chain, failure taxonomy (28 real strings), worker-crash regression, client-to-server contract for every event, full Dodo lifecycle in all delivery orders, duplicates, customer-mapping conflict, forged/tampered/replayed/oversized webhooks, free-tier 3/month cap + idempotent retry + Pro bypass + expiry + month rollover, Firestore rules static guard, report functions.
+
+### NOT verified (do not read these as done)
+- No live or test-mode **Dodo API** call, checkout, portal session or webhook delivery from Dodo itself — fixtures only. `customer-portal.ts` and `create-checkout-session.ts` were audited by reading, not by test.
+- None of the analytics changes have been seen on deployed data; `identity_linked` / `authState` populate only after deploy.
+- The real-browser export harness ran with the Chromium it ships with, on this Windows machine only. No Safari/Firefox/mobile device run.
+- Firestore rules are checked statically plus by the existing emulator stage; no new user-A/user-B emulator matrix.
+- Memory-exhaustion handling is classification + guidance only; no test actually OOMs a worker.
+
+### Remaining / risks for deploy
+- **Behaviour change**: production events will now be `isTestSession:false` (previously `true` whenever the server env was `test_mode`). Funnel numbers will start counting real visitors; founder traffic must be tagged (`?rampcut_internal=1` once per browser, and/or `ANALYTICS_INTERNAL_UIDS`) BEFORE reading funnels, or your own exports count as customers.
+- Old cached clients keep working (schema fields are optional; legacy stage values accepted).
+- No CI exists; the proposed workflow is staged at `docs/rampify/ci.workflow.proposed.yml` (needs approval to enable).
+- No per-user rate limiting on checkout/portal/record-export and no App Check; analytics ingestion is bounded by a durable global/session budget only.
+- No CSP header (COEP `credentialless` + ffmpeg wasm + Firebase popup make a blind CSP risky); `Permissions-Policy` was added. Draft and test a Report-Only CSP before enforcing.
+- Privacy page / consent banner not reviewed against the new fields (`browserFamily`, `deviceClass`, `route` are coarse, no PII; still update the privacy copy if it lists collected fields).
+- Not started: onboarding/demo/first-run UX review beyond ExportModal accessibility; mobile layout; landing-page SEO/GEO beyond existing tests. PostHog evaluated, not adopted — the first-party pipeline now covers identity, funnel and attempt outcomes, and a third-party processor adds a data flow and a consent decision.
+
+### Manual verification steps
+1. After deploy, in one browser: open the site, sign in, export once. In Firestore `analytics_events` confirm events after sign-in have `uid` + `authState: "verified"` and an `identity_linked` doc exists.
+2. Sign out → confirm the next event has a NEW `anonId`.
+3. Start an export and close the modal → confirm exactly one `export_cancelled` with `reason: "abandoned"` for that `exportId`.
+4. `node scripts/report-export-health.mjs validation-data/<export>.json --since=<deploy time>`.
+5. Dodo test mode: checkout → `/upgrade/success` → Pro; cancel in the portal → still Pro until period end; confirm the webhook deliveries in the Dodo dashboard return 200.
+
+### Rollback
+`git checkout -- <file>` per modified tracked file above; delete the new files listed. Nothing was deployed or committed, so there is no remote state to undo. Edits in the untracked files (`.env copy.example`, `CLAUDE_PROMPT.md`, `ACCEPTANCE_TESTS.md`, `IMPLEMENTATION_PLAN.md`, `READINESS_CHECKLIST.md`) must be reverted by hand.
+
+### Continuation checkpoint (next phase)
+1. Deploy to a **preview** (not production) and run manual steps 1–4 there; fix anything the real Auth-token path reveals.
+2. Run a real Dodo **test-mode** checkout → portal → cancel; confirm webhook deliveries.
+3. Approve/enable CI (file staged). Add per-user rate limits + App Check; draft a Report-Only CSP.
+4. UX: observe 5 real users (UX-08); first-run/demo flow, curve-editor numeric inputs, mobile (UX-06/07); help/report action carrying an error reference (GROW-01).
+5. SEO/GEO per READINESS_CHECKLIST (Search Console / Bing verification are owner-only steps).
+
+## 2026-11-23 Phase 1E — preview readiness, CI, real-auth/media/browser/CSP validation (local only)
+
+Authorization: owner approved creating the CI workflow **locally**. NOT done and NOT authorized: deploy, commit, push, production data, live or real Dodo calls. The Vercel CLI is not installed here, so no Vercel environment variable was read; no Dodo request of any kind was made. Everything below ran against local emulators / fixtures.
+
+### New defects found by the new tests (all fixed)
+1. **First events of every page load lost their `uid`.** `trackEvent` fired before Firebase restored the persisted session, so a signed-in user's `landing_view`/`page_view`/`editor_opened` went out anonymous on every load. Found by `test/browser/identity.mjs`. Fix: `expectAuthState()` (main.tsx) holds events until the first auth callback, a 2 s cap, or `pagehide`; they are then sent with the verified credential (`src/lib/analytics.ts`). Unit-tested incl. the timeout and bounce paths.
+2. **Unsupported-browser copy told Safari users to "Open in Safari".** Found by the cross-browser matrix: WebKit is not cross-origin isolated, so Safari (and every iPhone/iPad browser) fails the capability check the copy was shown for. Now `describeUnsupportedBrowser()` gives accurate advice (`src/lib/browserCapabilities.ts`, `UnsupportedEnvironmentGate.tsx`). Verified on Playwright WebKit 26.5 for Windows only, **not a physical iPhone**.
+3. **Undecodable/corrupt uploads showed only "Failed to read video metadata"** — no cause, no next step. Messages now explain and suggest an H.264 MP4 (`videoMetadata.ts`). The DropZone error container had no `role="alert"`; added.
+4. **A regex bug I introduced and lint caught**: a literal backspace byte where `\b` was intended in the LINE in-app-browser pattern. Fixed and pinned by a test (including a false-positive case).
+5. **A CSP test that passed when it should have failed**: the first version sent the header only on HTML; workers take CSP from their own response, and FFmpeg's WASM compiles in a worker, so removing `'wasm-unsafe-eval'` was not detected. Now sent on every response like `vercel.json`'s `/(.*)`; the mutation is detected (`WebAssembly.instantiate(): CompileError`) and the real policy passes.
+
+### Implemented
+* **Isolation guards** (`api/_isolation.ts`): non-production deployments refuse to start with `DODO_PAYMENTS_ENVIRONMENT=live_mode` or with the production Firebase project's Admin credential (needs `PRODUCTION_FIREBASE_PROJECT_ID` on every environment). **Preflight** `scripts/preview-preflight.ts` (values never printed) also fails a production-first `ALLOWED_ORIGINS` (a preview test payment would redirect to production), `DODO_WEBHOOK_DEV_BYPASS`, admin/client project mismatch.
+* **CI**: `.github/workflows/ci.yml` (typecheck, lint, tests incl. production build, secret scan; `ubuntu-24.04`, Node 24, installs system `ffmpeg` that several tests need). `browser` job is manual-dispatch + non-blocking (never run on Linux). `docs/rampify/ci.workflow.proposed.yml` removed (superseded). **Not run on GitHub; not committed.**
+* **Rate limiting** (`api/_rateLimit.ts`): per-user (checkout 10/10 min, portal 10/10 min, record-export 60/10 min, check-subscription 120/10 min) and per-IP analytics (300/min, HMAC key, raw IP never stored, inside the existing transaction); fails open.
+* **Dodo tooling**: `scripts/replay-test-webhooks.ts` (+lib): signed Dodo-shaped scenarios, dry-run by default, refuses production hosts / live mode; runbook `docs/rampify/DODO_TEST_MODE_RUNBOOK.md`.
+* **CSP**: `Content-Security-Policy-Report-Only` added to `vercel.json` (cannot break the app); `test/browser/csp.mjs` enforces the same string.
+* **Harness**: `test/browser/run.mjs` now has stages `identity`, `media-edge`, `compat`, `csp` (+ `--identity-only`, `--media-edge-only`, `--compat-only`, `--csp-only`), portable Java/jar paths (`RAMPCUT_JAVA`, `RAMPCUT_FIRESTORE_EMULATOR_JAR`); test-only `__rampcutTestSignOut` hook (same DEV+emulator gate as sign-in).
+* **Docs**: `docs/rampify/{PREVIEW_READINESS,DODO_TEST_MODE_RUNBOOK,SECURITY_REVIEW,BROWSER_SUPPORT}.md`; `CLAUDE.md`, `.env.example` updated.
+* **Linux-CI proxy**: `test/security/import-case.test.ts` (mutation-checked) — exact-case relative imports, since Windows hides case mismatches.
+
+### Tests and builds (PowerShell, `D:\claude-work\rampify\rampify`)
+* `npm run typecheck` exit 0; `npm run lint` exit 0.
+* `npx vitest run`: **68 files / 695 tests PASS** (Phase 1 baseline 61 / 601; original 49 / 398). Includes the real production build.
+* `node test/browser/run.mjs` (full, local emulators): **exit 0, 24 PASS lines, 0 `/api/*` error responses, 0 page errors.** New stages: real Auth-emulator identity (anonymous → sign-in → account switch → sign-out; forged/tampered/edited/spoofed tokens; no token or email in stored events or API log); real-media edge cases with **output validated as files** (15 s 720p+audio, silent, cancel→re-export, induced worker-load failure→retry, unsupported/corrupt/over-30 s uploads, one terminal event per attempt across all 6 attempts); cross-browser matrix; enforced CSP.
+* Cross-browser (`compat-matrix.json`): Chromium 151 export OK; **Firefox 153 export OK (16 s)**; WebKit 26.5 blocked up front with an explanation.
+* Mutation checks (temporary, reverted, `git diff` clean): wrong-case import → import-case test fails; removing `errorCode` from server schema → contract test fails (Phase 1); removing `'wasm-unsafe-eval'` → CSP test fails.
+
+### NOT verified
+* **No hosted run of anything.** No Vercel, no real Firebase project, no real Google sign-in, no real Dodo checkout/webhook/portal (runbook written, not executed). No Vercel env var inspected.
+* CI has never run on GitHub or on Linux (import-case test is a proxy only; the `browser` job is untested).
+* CSP: Google Sign-In popup, GA and the Hugging Face captions model were not exercised; policy stays report-only.
+* Firefox/WebKit tested headless on Windows only; no Safari/iOS/Android device; no long-duration or 4K stress; memory exhaustion is classified, not provoked.
+* Per-IP limiting depends on Vercel's real `x-vercel-forwarded-for`; only simulated locally.
+* Replay scenarios cover the six lifecycle paths, not disputes/chargebacks.
+
+### Decision
+* **Preview deployment: GO — conditional.** Conditions: (1) a separate preview Firebase project and Dodo **test** credentials, scoped to Preview only; (2) `scripts/preview-preflight.ts` on the pulled preview env returns GO; (3) your explicit approval to deploy. The code is ready and the highest-risk misconfigurations now fail closed.
+* **Production promotion / public promotion: NO-GO** until the preview shows: real sign-in links identity, a real Dodo test checkout→portal→cancel passes with 200 webhooks, no report-only CSP violations through sign-in/upgrade/captions, and the Vercel Firewall rate-limit rule is set.
+
+### Manual verification (on the approved preview)
+1. `vercel env pull .env.preview --environment=preview` → `npx tsx scripts/preview-preflight.ts .env.preview --target=preview` → GO.
+2. Sign in with real Google; in `analytics_events` confirm events (including the FIRST `page_view` after a reload) have `authState: "verified"` and a `uid`; one `identity_linked`.
+3. Sign out → next event has a new `anonId`.
+4. Export; close the modal mid-render → exactly one `export_cancelled` `reason: "abandoned"`.
+5. DevTools console through sign-in/upgrade/captions: no `[Report Only]` CSP messages (else add the host).
+6. Run `docs/rampify/DODO_TEST_MODE_RUNBOOK.md` §1–4.
+7. `node scripts/report-export-health.mjs validation-data/<export>.json --since=<deploy time>`.
+
+### Rollback
+No remote state exists. Local: `git checkout -- <file>` for modified tracked files; delete new files (`api/_isolation.ts`, `api/_rateLimit.ts`, `scripts/{preview-preflight,replay-test-webhooks}.ts`, `scripts/lib/{previewPreflight,webhookReplay}.ts`, `.github/`, `docs/rampify/*.md`, `test/browser/{identity,media-edge,compat,csp}.mjs`, `test/security/*`, new `test/billing/*` and tests). On a preview later: delete the deployment; it only ever wrote to the preview project.
+
+### Continuation checkpoint
+1. Create the preview Firebase project + Dodo test setup (your accounts) → approve preview deploy → run the manual verification above and the Dodo runbook.
+2. Commit/push when you approve; first CI run will reveal any Linux-only failure.
+3. Add the Vercel Firewall rate-limit rule and Firestore TTL policies (`rate_limits`, `analytics_limits` on `expiresAt`).
+4. After a clean report-only CSP on preview, enforce it.
+5. Then Phase 2: onboarding/first-run UX (usability sessions), SEO/GEO, conversion experiments — using the now-trustworthy analytics.
+
+## 2026-11-23 Phase 1F — preview environment audit, safe fixes, hosted-validation tooling (local only)
+
+Authorization: audit + safe local fixes + docs. NOT done / NOT authorized: deploy, commit, push, production data, live or real Dodo calls. **No hosted result exists; nothing below was verified on Vercel, a real Firebase project, real Google sign-in, or Dodo.**
+
+### Audit findings (what exists, verified by reading/running locally)
+* **Vercel**: CLI 54.14.2 is installed but **not logged in**; the repo is **not linked** to a project (`.vercel/` holds only a README). My read-only `vercel whoami` started an interactive login, which I cancelled. No Vercel variable could be read.
+* **GitHub CI has never run**: `.github/` is untracked and `main` equals `origin/main`; `gh` is not installed so Actions could not be queried regardless.
+* **`.env.local` preflight (`--target=preview`) = NO-GO**, and the cause is a real finding: `DODO_PAYMENTS_ENVIRONMENT` is `live_mode`; first `ALLOWED_ORIGINS` entry is the production site; `PRODUCTION_FIREBASE_PROJECT_ID` and `FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY` unset; GA id set. Anything loading `.env.local` here (e.g. `vercel dev`) targets LIVE payments; the Phase 1E guard makes `vercel dev` refuse to start, but the owner must correct the file (not edited by me). This was NOT a Preview environment, so it is not a preview preflight result.
+* **`.gitignore` gap (fixed)**: only `*.local` was ignored, so the documented `.env.preview` / `.env.production` were NOT ignored. Now `.env` and `.env.*` are ignored except `.env.example` (verified both examples remain trackable).
+* **Pre-existing, not changed**: `.claude/settings.local.json` is tracked in git although it matches `*.local`; consider `git rm --cached` (owner decision).
+* **Origin fallback gap (fixed)**: `resolveAllowedOrigin` auto-allowed only `VERCEL_URL`; a preview reached via its branch alias fell back to `ALLOWED_ORIGINS[0]` (normally production) for checkout return URL/CORS. Now `VERCEL_BRANCH_URL` is auto-allowed and, on `VERCEL_ENV=preview`, an unlisted origin falls back to the deployment itself, never a production entry (`api/_adminInit.ts`; `api/_origin.test.ts`, 6 tests incl. regression and attacker-origin). Production behaviour unchanged. The preflight's production-first check is therefore a WARN, not a FAIL.
+* Verified by tests that Preview cannot reach production Firebase or live Dodo: `api/_isolation.test.ts` (refuses live_mode and the production Admin project on non-production), `scripts/verify-hosted-journey.ts` refuses production credentials (smoke-tested both refusal paths).
+
+### Added
+* `scripts/verify-hosted-journey.ts` + `scripts/lib/journeyVerifier.ts` — read-only check of one hosted journey from stored data (anonymous pre-signup events joined by `identity_linked`; every post-sign-in event carries the verified uid; no rejected tokens; funnel order; one terminal event per export; validated export + download; upgrade funnel; `payment_succeeded` server-written/`test_mode`/sandbox; `users/{uid}` Pro via test_mode only; preview events are non-customer; first-touch attribution stable; no token/email stored). Refuses without `PRODUCTION_FIREBASE_PROJECT_ID` or against that project. `test/security/journey-verifier.test.ts` (15 tests, each defect class detected, incl. the first-load-anonymous regression and a live-looking payment on a preview).
+* `docs/rampify/PREVIEW_SETUP_STEPS.md` (manual Firebase / Google Cloud / Dodo / Vercel / GitHub steps with exact variable names and ordering, including making existing variables Production-only before adding Preview ones) and `docs/rampify/HOSTED_VALIDATION_CHECKLIST.md`.
+
+### Tests (PowerShell)
+`npm run typecheck` 0; `npm run lint` 0; `npx vitest run` **70 files / 716 tests PASS**; `node test/browser/run.mjs --identity-only` exit 0, 7 PASS (re-run because the origin change touches shared CORS code). The full harness was not re-run (it passed 24/24 earlier in Phase 1E; this phase touched only `api/_adminInit.ts` origin logic, scripts, docs and `.gitignore`).
+
+### Decision: NO-GO to deploy right now; GO once the 🔴 items are done
+Not deployable today because there is no preview environment to deploy to: no preview Firebase project, no Dodo test credentials in Vercel, project not linked, no Preview-scoped variables, preflight not yet run on a Preview. The code is ready (guards fail closed). Re-assess after: `PREVIEW_SETUP_STEPS.md` §0–5 complete, `preview-preflight.ts` on the pulled Preview env returns GO, and the owner approves the deployment. Public promotion remains NO-GO until `HOSTED_VALIDATION_CHECKLIST.md` passes on the preview.
+
+### Continuation checkpoint
+1. Owner: fix `.env.local` (test mode), create the preview Firebase project, Dodo test products/webhook, Vercel Preview variables, `vercel link`, pull env, run the preflight → paste only the PASS/WARN/FAIL lines back.
+2. On GO + approval: deploy the preview and walk `HOSTED_VALIDATION_CHECKLIST.md`; run `verify-hosted-journey.ts`.
+3. Commit/push (approval) to get the first real CI run.
+4. Then the growth phase (onboarding, first-export conversion, SEO/GEO, recent-signup analysis) on trustworthy analytics.
+
+## 2026-11-23 Phase 1F.1 — local safety, preview Firebase project created, env tooling (no hosted run, no deploy)
+
+Owner decisions this phase: create the Firebase PREVIEW project via CLI as `rampify-preview`; leave `api/keys/keys.json` where it is (guard blocks the API); untrack `.claude/settings.local.json` (pre-approved). NOT done: deploy, commit, push, live Dodo, any change to `rampify-720b4` or to Vercel.
+
+### Real exposure found and closed (code)
+`.env.local` is `live_mode` AND `api/keys/keys.json` + the local client config are the PRODUCTION Firebase project (`rampify-720b4`, a public id). My Phase 1E guard applied only when `VERCEL_ENV` was set, so a plain local run bypassed it: running the API locally could take live payments and write production Firestore. Now (`api/_isolation.ts`): `live_mode` and the production Firebase Admin credential are refused on every run except the Vercel production deployment — preview, `vercel dev` AND local — and the production project id is built in (`KNOWN_PRODUCTION_FIREBASE_PROJECT_IDS`), so it works even if `PRODUCTION_FIREBASE_PROJECT_ID` is unset. Emulator runs (`demo-` project) are unaffected. The old test that asserted the loophole ("does nothing off Vercel") was replaced; new tests cover local runs, built-in id, and `getServerEnv`. **The owner's files were not edited**; `npx tsx scripts/preview-preflight.ts .env.local --target=local` currently reports NO-GO (live_mode; keys.json is production; client config is production; first origin not localhost).
+
+### Actions taken with authenticated local tools
+* Firebase CLI (logged in; account owns `rampify-720b4`, 21 other projects, no prior preview project): `firebase projects:create rampify-preview`; `firebase apps:create web` (app id `1:57266049371:web:c1b68b428ac3703cdf0a7e`); every command carried `--project rampify-preview`, and there is no `.firebaserc` default that could point at production.
+* **Blocked:** `firestore:databases:create` returned 403 — the Firestore API is not enabled in the new project and `gcloud` is not installed. The console's "Create database" enables it (owner step), after which the rules deploy and TTL policies follow.
+* Wrote `.env.preview.values` (git-ignored) with the six `VITE_FIREBASE_*` values + `PRODUCTION_FIREBASE_PROJECT_ID`; values never printed.
+* `git rm --cached .claude/settings.local.json` (staged deletion; local file intact; no secret patterns in the file or its 6-commit history, so no rotation). No tracked env/secret-bearing files remain (`git ls-files -ci` empty).
+* Vercel: CLI installed, **not authenticated** (`vercel whoami` waits on an interactive login; stopped). Not linked. Owner must `vercel login` + `vercel link`. Nothing read from or written to Vercel.
+
+### Added
+`scripts/preview-preflight.ts --target=local` (+`evaluateLocalEnv`, also inspects the `keys.json` fallback project id); `scripts/set-preview-value.ts` (hidden prompt / `--from-file --delete-source`, refuses non-ignored file, refuses a service-account key from another project, enforces test_mode); `scripts/push-preview-env.ts` + `scripts/lib/previewPush.ts` (Preview scope only, allowlist, preflight rules gate every push, values on stdin; **apply path untested** — it needs `vercel login`/`link`); `scripts/lib/envValues.ts`. Fixed along the way: unset payment mode is "pending" not "blocked" in the staged-push planner; a doubled-newline bug in the values-file writer (caught by its test). Docs: fast path at the top of `docs/rampify/PREVIEW_SETUP_STEPS.md`; environment matrix in `CLAUDE.md`.
+
+### Tests
+`npm run typecheck` 0; `npm run lint` 0; `npx vitest run` **72 files / 746 tests PASS**; `node test/browser/run.mjs --billing-only` exit 0 (3 PASS) and `--identity-only` exit 0 (7 PASS) against the real handlers + emulators. The full harness was not re-run (unchanged since 24/24 in Phase 1E; this phase changed only the isolation guard, scripts, docs).
+
+### Readiness gate
+Firebase Preview: **BLOCKED** (project + web app exist; Firestore DB, Google sign-in, Admin key, authorized domains, TTL pending) · Google OAuth: **BLOCKED** · Dodo test mode: **BLOCKED** (no test products/keys/webhook; webhook needs the stable URL) · Vercel Preview configuration: **BLOCKED** (not logged in/linked, no Preview variables) · Environment isolation: **PASS in code** (guards + tests; local `.env.local` itself is still NO-GO until the owner fixes it) · Preflight on a real Preview env: **not run** (no Preview env exists). Deployment: **NO-GO**.
+
+### 2026-11-24 Phase 1F.1 (continued) — preview Firestore + Admin key configured
+Owner asked me to configure Firebase myself. Using the owner's logged-in Firebase CLI session, scoped to `rampify-preview` only: enabled Firestore/IAM/Identity Toolkit APIs, created the `(default)` Firestore database (native, us-central1), deployed `firestore.rules`, created the preview Admin SDK key and stored it in git-ignored `.env.preview.values` (value never printed; temp file deleted). The owner-supplied Google client ID (`607382673372-…`) and the key files found locally all belong to PRODUCTION (`rampify-720b4`) and were deliberately NOT used; preview keeps its own project. Added `*firebase-adminsdk*.json` to `.gitignore` (a production key sat untracked and un-ignored in the repo root). Blocked: TTL policies and Firebase Auth initialisation both require the Blaze (billing) plan; Google sign-in needs the console "Get started" for Authentication on `rampify-preview`. Deployment remains NO-GO.

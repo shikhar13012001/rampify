@@ -1,6 +1,7 @@
 import MixWorker from '../workers/ffmpegWorker.ts?worker';
 import {abortable} from './abortable';
 import {buildTimeMap} from './renderPlan';
+import {workerErrorMessage} from './workerError';
 /**
  * Wraps the existing FFmpegBridge (standard / blur / optical-flow pipelines)
  * behind the ExportEngine interface. This is the only engine wired up today —
@@ -31,10 +32,10 @@ export class LocalWasmEngine implements ExportEngine {
     this.bridge?.cancel();this.bridge=null;
     onProgress({phase:'encoding',percent:0,message:'Mixing soundtrack…'});
     const [video,music]=await Promise.all([result.blob.arrayBuffer(),fetch(request.soundtrack.url,{signal}).then(r=>{if(!r.ok)throw new Error('Soundtrack is unavailable.');return r.arrayBuffer();})]);signal.throwIfAborted();
-    const worker=new MixWorker();this.mixing=worker;
+    const worker=new MixWorker();this.mixing=worker;let heardFromMixer=false;
     try{return await abortable(new Promise<ExportResult>((resolve,reject)=>{
-      worker.onmessage=event=>{if(event.data.type==='done')resolve({blob:new Blob([event.data.buffer],{type:'video/mp4'})});else if(event.data.type==='error')reject(new Error(event.data.message));else if(event.data.type==='progress')onProgress({phase:'encoding',percent:event.data.progress,message:'Mixing soundtrack…'});};
-      worker.onerror=event=>reject(new Error(event.message));
+      worker.onmessage=event=>{heardFromMixer=true;if(event.data.type==='done')resolve({blob:new Blob([event.data.buffer],{type:'video/mp4'})});else if(event.data.type==='error')reject(new Error(event.data.message));else if(event.data.type==='progress')onProgress({phase:'encoding',percent:event.data.progress,message:'Mixing soundtrack…'});};
+      worker.onerror=event=>reject(new Error(workerErrorMessage(event,heardFromMixer)));
       worker.postMessage({type:'mix',video:new Uint8Array(video),music:new Uint8Array(music),track:request.soundtrack,duration:buildTimeMap(request.clips??[{id:'active',...request.project}]).duration},[video,music]);
     }),signal);}finally{worker.terminate();this.mixing=null;}
   }

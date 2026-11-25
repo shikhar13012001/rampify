@@ -460,3 +460,95 @@ approval, apply bounded batches in an authorized environment, verify the selecte
 records and indexes, and keep a minimal non-content audit receipt. Do not run
 production deletes from this document. All newly added billing/analytics
 collections remain denied to direct clients by the default Firestore rules.
+
+## Phase 1 data-contract changes — 2026-11-23 (local only, not yet deployed)
+
+These supersede the matching statements above where they conflict.
+
+**Identity (fixes "uid null in all 3,126 events").** Root cause: `trackEvent` sent `uid` in the
+body but the server (correctly) only trusts a uid it verifies from an `Authorization` header,
+and the client never sent one. The client now attaches the Firebase ID token whenever a user is
+signed in (never blocking more than 2 s; it falls back to an anonymous send so the event is
+never lost). The server records `uid` (verified only) and `authState`:
+`verified` | `anonymous` | `token_invalid`. Events recorded before this change have no
+`authState` — they are "legacy" and can never be retro-attributed; do not guess identity from
+IP/email similarity.
+`identity_linked` (new event) is sent once per (anonId, uid) when a user is first seen; it is
+the join edge between pre-signup activity and the account. On sign-out or direct account
+switch the browser's `anonId` and session are rotated so two people sharing a browser are
+never merged.
+
+**Sessions.** `sessionId` is per tab and now rotates after 30 minutes without an event
+(previously a tab left open was one "session" forever). A new session also restarts first-touch
+acquisition.
+
+**Traffic class (replaces "isTestSession is always false").** New fields on every event:
+`environment` (`production`|`staging`|`development`) and `trafficClass`
+(`customer`|`founder`|`development`|`staging`). `isTestSession = trafficClass !== 'customer'`.
+Derivation: hostname (localhost → development, `*.vercel.app` → staging); founder via the
+persistent `?rampcut_internal=1` browser opt-in (clear with `=0`), `?rampcut_test=1`, or a
+verified uid listed in the server env `ANALYTICS_INTERNAL_UIDS`; the server then re-derives
+from `VERCEL_ENV` / emulator so a client cannot label a preview deployment as `customer`.
+**Behaviour change:** the server previously also forced `isTestSession=true` whenever
+`DODO_PAYMENTS_ENVIRONMENT=test_mode`. That conflated payment sandboxing with traffic and
+would have hidden every real production visitor while Dodo is in test mode. It was removed;
+sandbox payments remain flagged on `payment_succeeded` events themselves.
+Other shared fields: `eventVersion` (2), `route` (pathname only), `browserFamily`,
+`deviceClass` — closed sets, never the UA string or query.
+
+**Export attempt lifecycle.** Exactly one terminal event per `exportId`:
+`export_render_completed` | `export_failed` | `export_cancelled`. Closing the modal or leaving
+the page mid-render now emits `export_cancelled` with `reason: 'abandoned'` (previously: no
+terminal event, an unresolved attempt forever). A render that finished but whose playability
+probe was still pending is recorded as completed with `validated: null`. A retry after a
+failure gets a new `exportId`, `retryOfExportId`, and `attempt`. `export_started` carries
+bucketed `fileSizeBucket`/`durationBucket`. A manual "Download again" sends
+`download_initiated` with `repeat: true`; the automatic download is sent once.
+
+**Failure taxonomy.** `export_failed` now carries `stage` ∈ {`worker_load`, `input_validation`,
+`processing`, `muxing`, `output_validation`, `download_preparation`, `unknown`}, a stable
+snake_case `errorCode`, and `retryable`. Legacy stage values (`video_decode`,
+`output_too_small`, `ffmpeg_exit`, `already_running`) remain valid for historical events.
+Reproducible defect fixed: a worker that dies without a JS error (typical WASM
+out-of-memory) reports `ErrorEvent.message === ''`; the old `ev.message ?? 'Worker error'`
+produced `Error('')` → stage `unknown`, a generic toast and a hidden "Technical details".
+It now becomes `worker_crashed` (mid-job) or a `worker_load` failure (never started).
+
+**Errors outside React.** Uncaught errors and unhandled rejections are reported as `ui_error`
+with `stage: 'ui_unhandled' | 'ui_rejection'` and an `errorCode` from a closed set of error
+classes (never message text), at most 5 per page load. This is first-party counting, not stack
+traces.
+
+**Duplicate suppression.** `page_view` (1.5 s per path), `editor_opened`, `clip_loaded`,
+`curve_changed`, `upgrade_viewed` are windowed; `landing_view`, `pwa_installed`,
+`identity_linked` are once per session. Export lifecycle events are never gated. The server
+still dedupes by `eventId`.
+
+**Verifying after deploy.** `node scripts/report-export-health.mjs validation-data/<events>.json
+--since=<deploy time>` reports attempt outcomes (completed / failed / cancelled / unresolved /
+conflicting) and identity coverage (verified uid vs anonymous vs `token_invalid`). Expect
+unresolved → ~0, conflicting = 0, and `token_invalid` ≈ 0 for signed-in sessions.
+
+## Phase 1E data-contract additions — 2026-11-23 (local only, not yet deployed)
+
+**First-load events now carry the verified uid.** Verified against the real Auth emulator: previously
+the first events of every page load (`landing_view`, `page_view`, `editor_opened`) fired before
+Firebase restored the persisted session and were recorded `authState: "anonymous"` even for a
+signed-in user. `main.tsx` now calls `expectAuthState()`; events are held until the first auth
+callback (`notifyAuthState`), 2 s, or `pagehide`, then sent with the credential. Consequence for
+analysis: after this ships, a signed-in user's page-load events should be `authState: "verified"`;
+events from before it remain legacy/anonymous and are joinable only through `identity_linked`.
+
+**Invariant to monitor:** no `anonId` is associated with more than one `uid` (asserted in
+`test/browser/identity.mjs`; query it on live data after deploy — a violation means shared-browser
+rotation is failing).
+
+**Per-IP ceiling.** `analytics_limits` now also holds `ip:<hmac>:<minute>` counters (300 events/min
+per IP). The key is an HMAC under a server secret; raw IPs are never stored. Events over the ceiling
+are throttled (HTTP 429) exactly like the per-session and global budgets. Add a Firestore TTL policy on
+`analytics_limits.expiresAt`.
+
+**Local/preview traffic classification.** Any hostname `localhost`, `127.0.0.1`, `*.local`, or
+`*.vercel.app` is `development`/`staging` → `isTestSession: true`, so a preview deployment's events
+never count as customers. The founder on the production hostname uses `?rampcut_internal=1` or
+`ANALYTICS_INTERNAL_UIDS`. This label is advisory for metrics, **not a security control**.

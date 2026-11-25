@@ -53,7 +53,10 @@ if (!existsSync('.vercel/project.json')) {
 let failed = 0;
 for (const name of plan.push) {
   // `name` is validated against an allowlist and /^[A-Z][A-Z0-9_]*$/, so the shell is safe here.
-  const r = spawnSync('vercel', ['env', 'add', name, 'preview', '--force'], { input: env[name]!, encoding: 'utf8', shell: process.platform === 'win32' });
+  // Vercel refuses a credential-looking VITE_ name unless its type is stated. The Firebase web API key
+  // is public by design (it ships in the browser bundle), so it is explicitly a `config` value.
+  const typeArgs = name === 'VITE_FIREBASE_API_KEY' ? ['--type', 'config'] : [];
+  const r = spawnSync('vercel', ['env', 'add', name, 'preview', '--force', ...typeArgs], { input: env[name]!, encoding: 'utf8', shell: process.platform === 'win32' });
   const ok = r.status === 0;
   if (!ok) failed += 1;
   console.log(`${ok ? 'pushed ' : 'FAILED '} ${name}${ok ? '' : `  (exit ${r.status}; first line: ${String(r.stderr ?? '').split('\n')[0].slice(0, 120)})`}`);

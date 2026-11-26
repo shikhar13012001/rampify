@@ -49,8 +49,12 @@ export function initGoogleAnalytics(): void {
     loaded = true;
 
     window.dataLayer = window.dataLayer || [];
-    window.gtag = function gtag(...args: unknown[]) {
-      window.dataLayer!.push(args);
+    // gtag.js only processes the `arguments` object pushed onto dataLayer.
+    // A rest-parameter array is silently ignored, so GA would load but record
+    // nothing (every report stays at 0). Do not "modernise" this to ...args.
+    window.gtag = function gtag() {
+      // eslint-disable-next-line prefer-rest-params
+      window.dataLayer!.push(arguments);
     };
     window.gtag('js', new Date());
     // send_page_view: false — this is a client-routed SPA (react-router);

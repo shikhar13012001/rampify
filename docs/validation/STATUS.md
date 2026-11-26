@@ -3136,3 +3136,18 @@ Owner asked me to configure Firebase myself. Using the owner's logged-in Firebas
 * Removed the old synthetic "A real export — Hero Moment preset" (fractal) section and its component/assets (`BeforeAfterDemo.tsx`, `hero-moment-after.mp4`, before/after posters). `sample-clip.mp4` stays: the editor's demo clip uses it.
 * Empty editor redesigned: centred drop zone as the hero (Choose a video / Try a demo clip, 30 s + 100 MB limits stated, "stays on this device"), saved-project tools demoted to a compact "Have a saved project?" row (`ProjectTools compact`). The drop zone is now keyboard-operable (role=button, Enter/Space, focus ring). Checked in Chromium at 1440 and 390 px: no horizontal scroll, Choose opens the picker, demo clip loads.
 * Phase 1F audit: all code/config items are done and recorded above. Still open and needing a human in a browser: Google sign-in (add the Preview origin to the OAuth client's Authorized JavaScript origins), an export, a Dodo test checkout + webhook delivery, the `HOSTED_VALIDATION_CHECKLIST.md` boxes (all unticked), TTL policies (Blaze), and rotating the pasted Dodo test key.
+
+## 2026-11-26 — GA4 recorded nothing; billing-portal message (local, not deployed)
+
+- **Finding:** production loaded gtag.js with the right measurement id but sent no hits, so GA4 showed 0.
+  `initGoogleAnalytics` pushed a rest-parameter Array onto `dataLayer`; gtag.js only reads `arguments` objects.
+  Reproduced against the live site (no `/g/collect`), and a control with `arguments` sent hits.
+- **Fix:** `src/lib/googleAnalytics.ts` shim uses `arguments`. Regression test `src/lib/googleAnalytics.test.ts`
+  (fails on the old code, passes on the fix).
+- **Still true after the fix:** GA only receives non-test sessions (`!isTestSession`), so founder/internal traffic
+  (`?rampcut_internal=1`, `ANALYTICS_INTERNAL_UIDS`) stays out of GA by design. Realtime shows hits within seconds;
+  standard reports lag 24-48 h.
+- **Billing portal:** `/api/customer-portal` returned 404 for a Pro account with no `dodoCustomerId`. The account
+  menu now says no billing account is linked instead of "try again" (`src/lib/auth.tsx`). Cause of the missing id
+  not confirmed (production data not read).
+- **Rollback:** revert the commit. **Needs:** approval to commit, push and deploy.

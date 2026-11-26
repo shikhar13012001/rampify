@@ -123,13 +123,13 @@ export function UserButton({ user }: UserButtonProps) {
   const [open, setOpen] = useState(false);
   const [signOutError, setSignOutError] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [portalError, setPortalError] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const isPro = useEditorStore(s => s.isPro);
 
   const handleManageSubscription = async () => {
     setPortalLoading(true);
-    setPortalError(false);
+    setPortalError(null);
     try {
       const token = await getCurrentUserIdToken();
       if (!token) throw new Error('Not signed in');
@@ -137,12 +137,18 @@ export function UserButton({ user }: UserButtonProps) {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json() as { url?: string; error?: string };
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string };
+      if (res.status === 404) {
+        // Pro without a Dodo customer on file (e.g. a manually granted or lifetime account): nothing to manage.
+        setPortalError('No billing account is linked to this account, so there is nothing to manage. Contact support if you expected one.');
+        setPortalLoading(false);
+        return;
+      }
       if (!res.ok || !data.url) throw new Error(data.error ?? 'Could not open billing portal');
       window.location.href = data.url;
     } catch (err) {
       console.error('[customer-portal]', err);
-      setPortalError(true);
+      setPortalError("Couldn't open billing portal — try again.");
       setPortalLoading(false);
     }
   };
@@ -285,7 +291,7 @@ export function UserButton({ user }: UserButtonProps) {
           )}
           {portalError && (
             <div style={{ padding: '6px 14px', fontSize: 11, color: '#ff4d8b' }}>
-              Couldn't open billing portal — try again.
+              {portalError}
             </div>
           )}
           <button

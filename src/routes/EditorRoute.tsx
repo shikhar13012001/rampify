@@ -354,13 +354,20 @@ export default function EditorRoute() {
         <main
           style={{
             flex: 1,
-            padding: 28,
+            padding: 'clamp(16px, 4vw, 40px)',
             display: 'flex',
             flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
           }}
         >
-          <ProjectTools />
-          <DropZone />
+          <div style={{ width: '100%', maxWidth: 760, height: 'clamp(340px, 56vh, 520px)' }}>
+            <DropZone />
+          </div>
+          <div style={{ width: '100%', maxWidth: 760 }}>
+            <ProjectTools compact />
+          </div>
         </main>
       )}
 

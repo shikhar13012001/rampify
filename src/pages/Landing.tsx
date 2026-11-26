@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { ClayNav } from '@/components/marketing/ClayNav';
 import { Footer } from '@/components/marketing/Footer';
 import { PricingTable } from '@/components/marketing/PricingTable';
-import { BeforeAfterDemo } from '@/components/marketing/BeforeAfterDemo';
 import { DemoClips } from '@/components/marketing/DemoClips';
 import { Seo } from '@/components/Seo';
 import { trackEvent } from '@/lib/analytics';
@@ -30,11 +29,7 @@ export function Landing() {
       {/* ── Hero band ────────────────────────────────────────────────────── */}
       <HeroBand />
 
-      {/* ── Before/after — renders nothing until a real export asset exists;
-           see BeforeAfterDemo.tsx and docs/validation/HOMEPAGE.md ────────── */}
-      <BeforeAfterDemo />
-
-      {/* ── Two extra demo clips (third-party footage; check rights before deploy) ── */}
+      {/* ── Same clip before/after with its speed curve (third-party footage; check rights before deploy) ── */}
       <DemoClips />
 
       {/* ── Feature grid (saturated cards) ──────────────────────────────── */}

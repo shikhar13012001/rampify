@@ -253,10 +253,22 @@ export function DropZone() {
 
   return (
     <div
+      className="dropzone"
+      role="button"
+      tabIndex={isLoading ? -1 : 0}
+      aria-label="Choose a video to edit. You can also drop a file here."
+      aria-busy={isLoading}
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onClick={() => !isLoading && inputRef.current?.click()}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || isLoading) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -363,8 +375,29 @@ export function DropZone() {
             {isDragging ? 'Drop to load video' : 'Drop your video here'}
           </p>
 
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-subtle)', letterSpacing: '0.01em' }}>
-            or click to browse — MP4, MOV, WebM
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--color-text-muted)', letterSpacing: '0.01em' }}>
+            MP4, MOV or WebM · up to 30 seconds and 100 MB
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 22 }}>
+            <button
+              type="button"
+              className="dropzone-button dropzone-button--primary"
+              onClick={(event) => { event.stopPropagation(); inputRef.current?.click(); }}
+            >
+              Choose a video
+            </button>
+            <button
+              type="button"
+              className="dropzone-button"
+              onClick={(event) => { event.stopPropagation(); void loadDemoClip(); }}
+            >
+              Try a demo clip
+            </button>
+          </div>
+
+          <p style={{ margin: '18px 0 0', fontSize: 12, color: 'var(--color-text-subtle)' }}>
+            Your video stays on this device. Nothing is uploaded.
           </p>
 
           {!capabilities.supported && (

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- exports the DEMO_CLIPS
-   list alongside the component, same accepted pattern as BeforeAfterDemo.tsx */
+   list alongside the component, same accepted pattern as src/lib/auth.tsx */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { interpolateSpeed, remapTime } from '@/lib/curveMath';
 import { heroMoment } from '@/lib/presets';

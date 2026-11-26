@@ -102,3 +102,20 @@ textarea.editor-tool-input { resize: vertical; min-height: 64px; }
 }
 @media (max-width: 380px) { .editor-topbar:has(.editor-hamburger) .editor-logo { display: none !important; } }
 @media (prefers-reduced-motion: reduce) { .editor-tool-button, .editor-tool-input { transition: none; } }
+
+/* Empty editor: the drop zone is the hero, saved-project tools are a quiet secondary row. */
+.editor-tools-section--compact { padding: 10px 14px; background: transparent; border-style: dashed; }
+.editor-tools-compact-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.editor-tools-compact-label { color: var(--color-text-muted); font-size: 13px; font-weight: 600; }
+.dropzone:focus-visible { outline: 2px solid var(--color-clay-teal); outline-offset: 3px; }
+.dropzone-button {
+  min-height: 40px; padding: 9px 18px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--color-border-strong); background: var(--color-bg); color: var(--color-text);
+  font: 600 14px/1.2 var(--font-sans);
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
+}
+.dropzone-button:hover { background: var(--color-surface); border-color: var(--color-text-muted); }
+.dropzone-button--primary { background: var(--color-primary); color: var(--color-bg); border-color: var(--color-primary); }
+.dropzone-button--primary:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.dropzone-button:focus-visible { outline: 2px solid var(--color-clay-teal); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .dropzone-button { transition: none; } }
